@@ -6,7 +6,27 @@ __pycache__/
 *.pyc
 .venv/
 venv/
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
 
 # Local database
 *.db
 *.sqlite3
+
+# Virtual environments
+.venv/
+venv/
+
+# The app's own database and logs (made-up demo data is reseeded on first start)
+data/*.db
+data/*.db-journal
+data/*.db-wal
+data/*.db-shm
+*.log
+
+# Editors and OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
