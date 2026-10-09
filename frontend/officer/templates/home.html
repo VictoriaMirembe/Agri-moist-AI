@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% block title %}Home{% endblock %}
+{% block content %}
+<h1>Home</h1>
+<div class="row">
+  <div class="card"><strong>{{ drafts_total }}</strong><div class="muted">drafts waiting for approval</div></div>
+  <div class="card"><strong>{{ open_flags_total }}</strong><div class="muted">open visit flags</div></div>
+  <div class="card"><strong>{{ unchecked_reports }}</strong><div class="muted">unchecked farmer reports</div></div>
+</div>
+
+<h2>Household groups</h2>
+<table>
+  <thead>
+    <tr><th>Group</th><th>Village</th><th>Households</th><th>Open flags</th><th>Drafts waiting</th><th></th></tr>
+  </thead>
+  <tbody>
+    {% for g in groups %}
+    <tr>
+      <td>G-{{ g.group_id }}</td>
+      <td>{{ g.village }}</td>
+      <td>{{ g.household_count }}</td>
+      <td>{% if g.open_flags %}<span class="pill red">{{ g.open_flags }}</span>{% else %}0{% endif %}</td>
+      <td>{% if g.drafts_waiting %}<span class="pill amber">{{ g.drafts_waiting }}</span>{% else %}0{% endif %}</td>
+      <td><a class="btn secondary" href="/groups/{{ g.group_id }}">Open</a></td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

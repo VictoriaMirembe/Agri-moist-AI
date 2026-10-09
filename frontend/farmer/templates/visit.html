@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block title %}Ask for a visit{% endblock %}
+{% block content %}
+<p><a href="/farmer/home?phone={{ phone|urlencode }}">&larr; Back</a></p>
+<h1>Ask for an officer visit</h1>
+<form id="form">
+  <label for="reason">Why?</label>
+  <select id="reason">
+    <option value="Pests">Pests</option>
+    <option value="Little food left">Little food left</option>
+    <option value="Other">Other</option>
+  </select>
+  <p id="error" class="pill red" style="display:none;margin-top:0.8rem;"></p>
+  <button class="btn big" type="submit" style="margin-top:1rem;">Send</button>
+</form>
+<div id="done" class="card" style="display:none;">Request sent. Your officer will plan a visit.</div>
+
+<script>
+const phone = {{ phone|tojson }};
+document.getElementById("form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const errorEl = document.getElementById("error");
+  errorEl.style.display = "none";
+  try {
+    await postJSON("/api/visit-requests", { phone, reason: document.getElementById("reason").value });
+    document.getElementById("form").style.display = "none";
+    document.getElementById("done").style.display = "block";
+  } catch (err) {
+    showError(errorEl, err);
+  }
+});
+</script>
+{% endblock %}

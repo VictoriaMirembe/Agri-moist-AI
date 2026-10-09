@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% block title %}Visit flags{% endblock %}
+{% block content %}
+<h1>Visit flags</h1>
+<p class="muted">Groups flagged by the assistant or by farmers for an officer visit.</p>
+<div id="list" class="muted">Loading...</div>
+
+<script>
+function renderFlag(f) {
+  return `
+  <div class="card" data-id="${f.id}">
+    <p><strong>Group G-${f.group_id}</strong> <span class="pill ${f.status === 'open' ? 'red' : 'green'}">${f.status}</span> <span class="muted">${f.raised_by} - ${f.created_at}</span></p>
+    <p>${f.reason}</p>
+    ${f.status === 'open' ? `<button class="btn secondary" onclick="markVisited(${f.id})">Mark visited</button>` : ""}
+  </div>`;
+}
+
+async function load() {
+  const listEl = document.getElementById("list");
+  try {
+    const items = await getJSON("/api/flags");
+    listEl.innerHTML = items.length ? items.map(renderFlag).join("") : "<p class='muted'>No visit flags.</p>";
+  } catch (err) {
+    listEl.textContent = "Could not load: " + err.message;
+  }
+}
+
+async function markVisited(id) {
+  try {
+    await postJSON(`/api/flags/${id}/visited`, {});
+    load();
+  } catch (err) { alert(err.message); }
+}
+
+load();
+</script>
+{% endblock %}

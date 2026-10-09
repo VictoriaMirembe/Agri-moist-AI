@@ -1,0 +1,80 @@
+{% extends "base.html" %}
+{% block title %}Approval queue{% endblock %}
+{% block content %}
+<h1>Approval queue</h1>
+<p class="muted">Only advice approved here, by a named officer, can ever reach a farmer.</p>
+
+<label for="officer">Acting as</label>
+<select id="officer" style="max-width:320px;">
+  {% for o in officers %}
+  <option value="{{ o.id }}">{{ o.name }} ({{ o.role }})</option>
+  {% endfor %}
+</select>
+
+<div id="list" class="muted" style="margin-top:1rem;">Loading...</div>
+
+<script>
+const officerSelect = document.getElementById("officer");
+
+function renderAdvice(a) {
+  const sourcesHtml = a.sources.map(s =>
+    `<li class="${s.is_gap ? 'gap' : ''}">${s.fact} <span class="muted">[${s.source_type}: ${s.source_ref}]</span></li>`
+  ).join("");
+  return `
+  <div class="card" data-id="${a.id}">
+    <p><strong>Group G-${a.group_id}</strong> <span class="pill amber">${a.status}</span> <span class="muted">${a.created_at}</span></p>
+    <p>${a.draft_text}</p>
+    <p class="muted"><em>Why this advice:</em> ${a.why_text || ""}</p>
+    <ul class="source-list">${sourcesHtml}</ul>
+    <textarea class="edit-text" placeholder="Edit the advice text before approving (optional)">${a.draft_text}</textarea>
+    <div class="row" style="margin-top:0.6rem;">
+      <button class="btn" onclick="approve(${a.id})">Approve</button>
+      <button class="btn secondary" onclick="editApprove(${a.id})">Save edit &amp; approve</button>
+      <button class="btn danger secondary" onclick="reject(${a.id})">Reject</button>
+    </div>
+    <p class="error pill red" style="display:none;margin-top:0.6rem;"></p>
+  </div>`;
+}
+
+async function load() {
+  const listEl = document.getElementById("list");
+  try {
+    const items = await getJSON("/api/approvals?status=pending_review");
+    listEl.innerHTML = items.length ? items.map(renderAdvice).join("") : "<p class='muted'>Nothing waiting for approval.</p>";
+  } catch (err) {
+    listEl.textContent = "Could not load: " + err.message;
+  }
+}
+
+function cardError(id, err) {
+  const card = document.querySelector(`[data-id="${id}"] .error`);
+  showError(card, err);
+}
+
+async function approve(id) {
+  try {
+    await postJSON(`/api/approvals/${id}/approve`, { officer_id: parseInt(officerSelect.value, 10) });
+    load();
+  } catch (err) { cardError(id, err); }
+}
+
+async function editApprove(id) {
+  const text = document.querySelector(`[data-id="${id}"] .edit-text`).value;
+  try {
+    await postJSON(`/api/approvals/${id}/edit`, { officer_id: parseInt(officerSelect.value, 10), final_text: text });
+    load();
+  } catch (err) { cardError(id, err); }
+}
+
+async function reject(id) {
+  const reason = prompt("Reason for rejecting this advice:");
+  if (!reason) return;
+  try {
+    await postJSON(`/api/approvals/${id}/reject`, { officer_id: parseInt(officerSelect.value, 10), reason });
+    load();
+  } catch (err) { cardError(id, err); }
+}
+
+load();
+</script>
+{% endblock %}

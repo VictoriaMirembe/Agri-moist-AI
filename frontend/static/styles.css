@@ -1,0 +1,159 @@
+/* AgriMoist AI - plain CSS. Large text and buttons, high contrast, no build step,
+   works in bright sunlight on a basic phone screen or a laptop. */
+
+:root {
+  --green: #0a7d33;
+  --green-bg: #e6f6ea;
+  --amber: #8a5a00;
+  --amber-bg: #fff3d6;
+  --red: #b3261e;
+  --red-bg: #fdeceb;
+  --ink: #1a1a1a;
+  --muted: #5a5a5a;
+  --border: #d8d8d8;
+  --bg: #fafafa;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  font-family: -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+  font-size: 18px;
+  line-height: 1.45;
+  color: var(--ink);
+  background: var(--bg);
+}
+
+.topbar {
+  background: var(--green);
+  color: #fff;
+  padding: 0.75rem 1rem;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 1rem;
+}
+
+.topbar .brand {
+  font-size: 1.3rem;
+  font-weight: 700;
+  color: #fff;
+  text-decoration: none;
+}
+
+.topbar nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.9rem;
+}
+
+.topbar nav a {
+  color: #eafff0;
+  text-decoration: none;
+  font-size: 0.95rem;
+}
+
+.topbar nav a:hover { text-decoration: underline; }
+
+.container {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 1.25rem 1rem 3rem;
+}
+
+h1 { font-size: 1.6rem; margin: 0 0 1rem; }
+h2 { font-size: 1.25rem; margin: 1.5rem 0 0.6rem; }
+
+.card {
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 1rem;
+  margin-bottom: 1rem;
+}
+
+.btn {
+  display: inline-block;
+  font-size: 1.05rem;
+  padding: 0.7rem 1.1rem;
+  border-radius: 8px;
+  border: 2px solid var(--green);
+  background: var(--green);
+  color: #fff;
+  cursor: pointer;
+  text-decoration: none;
+  min-height: 48px;
+}
+
+.btn.secondary { background: #fff; color: var(--green); }
+.btn.danger { background: var(--red); border-color: var(--red); }
+.btn.danger.secondary { background: #fff; color: var(--red); }
+.btn.big { display: block; width: 100%; text-align: center; font-size: 1.3rem; padding: 1.1rem; margin-bottom: 0.9rem; }
+.btn:disabled { opacity: 0.6; cursor: not-allowed; }
+
+label { display: block; font-weight: 600; margin: 0.8rem 0 0.3rem; }
+input, select, textarea {
+  width: 100%;
+  font-size: 1.05rem;
+  padding: 0.6rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  min-height: 44px;
+}
+textarea { min-height: 90px; }
+
+table { width: 100%; border-collapse: collapse; margin-top: 0.5rem; }
+th, td { text-align: left; padding: 0.5rem; border-bottom: 1px solid var(--border); font-size: 0.95rem; }
+th { color: var(--muted); font-weight: 600; }
+
+.pill {
+  display: inline-block;
+  padding: 0.15rem 0.6rem;
+  border-radius: 999px;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+.pill.green { background: var(--green-bg); color: var(--green); }
+.pill.amber { background: var(--amber-bg); color: var(--amber); }
+.pill.red { background: var(--red-bg); color: var(--red); }
+
+.gap { background: var(--red-bg); color: var(--red); padding: 0.1rem 0.4rem; border-radius: 4px; }
+.source-list { font-size: 0.9rem; color: var(--muted); margin: 0.4rem 0 0; padding-left: 1.1rem; }
+
+.muted { color: var(--muted); font-size: 0.9rem; }
+.row { display: flex; gap: 0.6rem; flex-wrap: wrap; }
+.row > * { flex: 1; min-width: 160px; }
+
+.event-log {
+  background: #10151a;
+  color: #cdeccf;
+  font-family: ui-monospace, Consolas, monospace;
+  font-size: 0.85rem;
+  padding: 1rem;
+  border-radius: 8px;
+  max-height: 420px;
+  overflow-y: auto;
+  white-space: pre-wrap;
+}
+.event-log .err { color: #ff9b93; }
+.event-log .ok { color: #8be39c; }
+
+/* Farmer pages: fewer words, bigger targets */
+.farmer body, body.farmer { background: #fff; }
+.farmer-container { max-width: 480px; margin: 0 auto; padding: 1.25rem 1rem 3rem; }
+.farmer-container h1 { font-size: 1.5rem; }
+
+.ussd-screen {
+  background: #12210f;
+  color: #c8ffb0;
+  font-family: ui-monospace, Consolas, monospace;
+  font-size: 1.05rem;
+  padding: 1rem;
+  border-radius: 10px;
+  min-height: 160px;
+  white-space: pre-wrap;
+  margin-bottom: 1rem;
+}
+.keypad { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.5rem; }
+.keypad button { font-size: 1.3rem; padding: 0.9rem; border-radius: 8px; border: 1px solid var(--border); background: #fff; }

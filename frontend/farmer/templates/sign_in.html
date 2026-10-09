@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block title %}AgriMoist AI{% endblock %}
+{% block content %}
+<h1>AgriMoist AI</h1>
+<p>Enter your phone number to continue.</p>
+<form id="sign-in-form">
+  <label for="phone">Phone number</label>
+  <input id="phone" type="tel" placeholder="+256700000001" required>
+  <p id="error" class="pill red" style="display:none;margin-top:0.8rem;"></p>
+  <button class="btn big" type="submit" style="margin-top:1rem;">Continue</button>
+</form>
+<p class="muted">Demo numbers: +256700000001 to +256700000010 (made-up households).</p>
+
+<script>
+document.getElementById("sign-in-form").addEventListener("submit", (e) => {
+  e.preventDefault();
+  const phone = document.getElementById("phone").value.trim();
+  window.location.href = "/farmer/home?phone=" + encodeURIComponent(phone);
+});
+</script>
+{% endblock %}

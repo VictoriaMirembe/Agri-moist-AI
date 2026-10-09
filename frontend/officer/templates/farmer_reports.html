@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+{% block title %}Farmer reports{% endblock %}
+{% block content %}
+<h1>Farmer reports</h1>
+<p class="muted">Reports from USSD and the farmer web page. Unchecked until an officer confirms them.</p>
+
+<label for="officer">Acting as</label>
+<select id="officer" style="max-width:320px;">
+  {% for o in officers %}
+  <option value="{{ o.id }}">{{ o.name }}</option>
+  {% endfor %}
+</select>
+
+<div id="list" class="muted" style="margin-top:1rem;">Loading...</div>
+
+<script>
+const officerSelect = document.getElementById("officer");
+
+function renderReport(r) {
+  return `
+  <div class="card" data-id="${r.id}">
+    <p><strong>${r.household_code}</strong> via ${r.source} <span class="pill ${r.checked === 'checked' ? 'green' : 'amber'}">${r.checked}</span> <span class="muted">${r.observed_on}</span></p>
+    <p>${r.crop ? "Crop: " + r.crop + ". " : ""}${r.pest_seen ? "Pest: " + r.pest_seen + ". " : ""}${r.rain_last_7_days ? "Rain: " + r.rain_last_7_days + ". " : ""}${r.notes || ""}</p>
+    ${r.checked === 'unchecked' ? `<button class="btn secondary" onclick="markChecked(${r.id})">Mark checked</button>` : ""}
+  </div>`;
+}
+
+async function load() {
+  const listEl = document.getElementById("list");
+  try {
+    const items = await getJSON("/api/farmer-reports");
+    listEl.innerHTML = items.length ? items.map(renderReport).join("") : "<p class='muted'>No farmer reports yet.</p>";
+  } catch (err) {
+    listEl.textContent = "Could not load: " + err.message;
+  }
+}
+
+async function markChecked(id) {
+  try {
+    await postJSON(`/api/farmer-reports/${id}/check`, { officer_id: parseInt(officerSelect.value, 10) });
+    load();
+  } catch (err) { alert(err.message); }
+}
+
+load();
+</script>
+{% endblock %}

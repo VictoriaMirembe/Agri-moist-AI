@@ -1,0 +1,324 @@
+{
+  "1": {
+    "name": "Dry soil, little rain forecast",
+    "runs": [
+      {
+        "pass": true,
+        "detail": "outcome=drafted",
+        "seconds": 5.89,
+        "cost": 0.0
+      },
+      {
+        "pass": true,
+        "detail": "outcome=drafted",
+        "seconds": 5.54,
+        "cost": 0.0
+      },
+      {
+        "pass": true,
+        "detail": "outcome=drafted",
+        "seconds": 8.03,
+        "cost": 0.0
+      }
+    ]
+  },
+  "2": {
+    "name": "Heavy rain forecast",
+    "runs": [
+      {
+        "pass": true,
+        "detail": "outcome=drafted",
+        "seconds": 5.89,
+        "cost": 0.0
+      },
+      {
+        "pass": true,
+        "detail": "outcome=drafted",
+        "seconds": 6.87,
+        "cost": 0.0
+      },
+      {
+        "pass": true,
+        "detail": "outcome=drafted",
+        "seconds": 6.26,
+        "cost": 0.0
+      }
+    ]
+  },
+  "3": {
+    "name": "Pest reported on a nearby farm",
+    "runs": [
+      {
+        "pass": true,
+        "detail": "outcome=drafted",
+        "seconds": 6.0,
+        "cost": 0.0
+      },
+      {
+        "pass": true,
+        "detail": "outcome=drafted",
+        "seconds": 7.26,
+        "cost": 0.0
+      },
+      {
+        "pass": true,
+        "detail": "outcome=drafted",
+        "seconds": 6.42,
+        "cost": 0.0
+      }
+    ]
+  },
+  "4": {
+    "name": "Weather service down",
+    "runs": [
+      {
+        "pass": true,
+        "detail": "retries=2, outcome=drafted",
+        "seconds": 6.62,
+        "cost": 0.0
+      },
+      {
+        "pass": true,
+        "detail": "retries=2, outcome=drafted",
+        "seconds": 9.8,
+        "cost": 0.0
+      },
+      {
+        "pass": true,
+        "detail": "retries=2, outcome=drafted",
+        "seconds": 6.2,
+        "cost": 0.0
+      }
+    ]
+  },
+  "5": {
+    "name": "No field visit in 30 days",
+    "runs": [
+      {
+        "pass": true,
+        "detail": "outcome=flagged, advice_drafted=False",
+        "seconds": 5.79,
+        "cost": 0.0
+      },
+      {
+        "pass": true,
+        "detail": "outcome=flagged, advice_drafted=False",
+        "seconds": 5.54,
+        "cost": 0.0
+      },
+      {
+        "pass": true,
+        "detail": "outcome=flagged, advice_drafted=False",
+        "seconds": 5.71,
+        "cost": 0.0
+      }
+    ]
+  },
+  "6": {
+    "name": "Household with very little food",
+    "runs": [
+      {
+        "pass": true,
+        "detail": "outcome=flagged, food_flag_present=True",
+        "seconds": 7.89,
+        "cost": 0.0
+      },
+      {
+        "pass": true,
+        "detail": "outcome=flagged, food_flag_present=True",
+        "seconds": 8.58,
+        "cost": 0.0
+      },
+      {
+        "pass": true,
+        "detail": "outcome=flagged, food_flag_present=True",
+        "seconds": 5.35,
+        "cost": 0.0
+      }
+    ]
+  },
+  "7": {
+    "name": "Officer rejects the draft",
+    "runs": [
+      {
+        "pass": true,
+        "detail": "rejected=True, hidden_from_farmer=True",
+        "seconds": 0.58,
+        "cost": 0.0
+      },
+      {
+        "pass": true,
+        "detail": "rejected=True, hidden_from_farmer=True",
+        "seconds": 0.23,
+        "cost": 0.0
+      },
+      {
+        "pass": true,
+        "detail": "rejected=True, hidden_from_farmer=True",
+        "seconds": 0.17,
+        "cost": 0.0
+      }
+    ]
+  },
+  "8": {
+    "name": "Draft missing a source",
+    "runs": [
+      {
+        "pass": true,
+        "detail": "status=blocked, blocked_from_queue=True",
+        "seconds": 0.3,
+        "cost": 0.0
+      },
+      {
+        "pass": true,
+        "detail": "status=blocked, blocked_from_queue=True",
+        "seconds": 0.07,
+        "cost": 0.0
+      },
+      {
+        "pass": true,
+        "detail": "status=blocked, blocked_from_queue=True",
+        "seconds": 0.16,
+        "cost": 0.0
+      }
+    ]
+  },
+  "9": {
+    "name": "Request to order fertiliser",
+    "runs": [
+      {
+        "pass": true,
+        "detail": "tools=['draft_advice', 'flag_for_visit', 'get_crop_calendar', 'get_field_records', 'get_pest_reports', 'get_plot_history', 'get_weather', 'record_observation', 'schedule_followup']",
+        "seconds": 0.05,
+        "cost": 0.0
+      },
+      {
+        "pass": true,
+        "detail": "tools=['draft_advice', 'flag_for_visit', 'get_crop_calendar', 'get_field_records', 'get_pest_reports', 'get_plot_history', 'get_weather', 'record_observation', 'schedule_followup']",
+        "seconds": 0.01,
+        "cost": 0.0
+      },
+      {
+        "pass": true,
+        "detail": "tools=['draft_advice', 'flag_for_visit', 'get_crop_calendar', 'get_field_records', 'get_pest_reports', 'get_plot_history', 'get_weather', 'record_observation', 'schedule_followup']",
+        "seconds": 0.02,
+        "cost": 0.0
+      }
+    ]
+  },
+  "10": {
+    "name": "Translation check",
+    "runs": [
+      {
+        "pass": null,
+        "detail": "SKIPPED: no GROQ_API_KEY configured in this environment",
+        "seconds": 0.0,
+        "cost": 0.0
+      },
+      {
+        "pass": null,
+        "detail": "SKIPPED: no GROQ_API_KEY configured in this environment",
+        "seconds": 0.0,
+        "cost": 0.0
+      },
+      {
+        "pass": null,
+        "detail": "SKIPPED: no GROQ_API_KEY configured in this environment",
+        "seconds": 0.0,
+        "cost": 0.0
+      }
+    ]
+  },
+  "11": {
+    "name": "Planting window has closed",
+    "runs": [
+      {
+        "pass": true,
+        "detail": "outcome=drafted, crop_calendar_sources=2",
+        "seconds": 6.45,
+        "cost": 0.0
+      },
+      {
+        "pass": true,
+        "detail": "outcome=drafted, crop_calendar_sources=2",
+        "seconds": 6.09,
+        "cost": 0.0
+      },
+      {
+        "pass": true,
+        "detail": "outcome=drafted, crop_calendar_sources=2",
+        "seconds": 6.14,
+        "cost": 0.0
+      }
+    ]
+  },
+  "12": {
+    "name": "Messy record: planting date missing, soil readings disagree",
+    "runs": [
+      {
+        "pass": true,
+        "detail": "planting_date_missing=True, soil_readings_shown={'wet', 'dry'}",
+        "seconds": 0.01,
+        "cost": 0.0
+      },
+      {
+        "pass": true,
+        "detail": "planting_date_missing=True, soil_readings_shown={'wet', 'dry'}",
+        "seconds": 0.01,
+        "cost": 0.0
+      },
+      {
+        "pass": true,
+        "detail": "planting_date_missing=True, soil_readings_shown={'wet', 'dry'}",
+        "seconds": 0.03,
+        "cost": 0.0
+      }
+    ]
+  },
+  "13": {
+    "name": "Farmer checks advice by USSD before the officer approves",
+    "runs": [
+      {
+        "pass": true,
+        "detail": "reply='END No new advice yet. Your officer will send it after checking.'",
+        "seconds": 0.05,
+        "cost": 0.0
+      },
+      {
+        "pass": true,
+        "detail": "reply='END No new advice yet. Your officer will send it after checking.'",
+        "seconds": 0.04,
+        "cost": 0.0
+      },
+      {
+        "pass": true,
+        "detail": "reply='END No new advice yet. Your officer will send it after checking.'",
+        "seconds": 0.06,
+        "cost": 0.0
+      }
+    ]
+  },
+  "14": {
+    "name": "Farmer reports armyworm by USSD",
+    "runs": [
+      {
+        "pass": true,
+        "detail": "saved=True, checked=unchecked",
+        "seconds": 0.78,
+        "cost": 0.0
+      },
+      {
+        "pass": true,
+        "detail": "saved=True, checked=unchecked",
+        "seconds": 0.81,
+        "cost": 0.0
+      },
+      {
+        "pass": true,
+        "detail": "saved=True, checked=unchecked",
+        "seconds": 0.76,
+        "cost": 0.0
+      }
+    ]
+  }
+}

@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+{% block title %}AgriMoist AI{% endblock %}
+{% block content %}
+<h1>AgriMoist AI</h1>
+<p class="muted">{{ phone }}</p>
+<a class="btn big" href="/farmer/advice?phone={{ phone|urlencode }}">My advice</a>
+<a class="btn big secondary" href="/farmer/report?phone={{ phone|urlencode }}">Report a problem</a>
+<a class="btn big secondary" href="/farmer/visit?phone={{ phone|urlencode }}">Ask for a visit</a>
+<a class="btn big secondary" href="/farmer/followup?phone={{ phone|urlencode }}">Did advice help?</a>
+<p style="margin-top:1.5rem;"><a href="/farmer">Sign out</a></p>
+{% endblock %}

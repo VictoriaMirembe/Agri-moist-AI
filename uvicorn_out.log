@@ -1,0 +1,47 @@
+INFO:     127.0.0.1:52610 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52640 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52640 - "GET /static/styles.css HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52641 - "GET /static/app.js HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52641 - "GET /favicon.ico HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:52655 - "GET /groups/1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52657 - "GET /approvals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52662 - "GET /approvals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52662 - "GET /farmer-reports HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52662 - "GET /flags HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52662 - "GET /log HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52666 - "GET /ussd HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52666 - "POST /ussd HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52669 - "POST /ussd HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52675 - "POST /ussd HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52688 - "GET /ussd HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52687 - "GET /farmer HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52690 - "GET /farmer/home?phone=0767024343 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52694 - "GET /farmer/advice?phone=0767024343 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52696 - "GET /farmer/report?phone=0767024343 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52700 - "POST /api/farmer-reports HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:52703 - "GET /farmer/home?phone=0767024343 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52705 - "GET /farmer/visit?phone=0767024343 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52705 - "POST /api/visit-requests HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:52705 - "GET /farmer/home?phone=0767024343 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52705 - "GET /farmer/followup?phone=0767024343 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52705 - "GET /farmer/home?phone=0767024343 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52707 - "GET /farmer/home?phone=%2B256700000001 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52707 - "GET /farmer/report?phone=%2B256700000001 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52709 - "POST /api/farmer-reports HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52709 - "GET /farmer/home?phone=%2B256700000001 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52717 - "GET /log HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52726 - "GET /log?run_id=1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52734 - "GET /approvals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52739 - "GET /groups HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:52752 - "GET /groups/1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52778 - "GET /approvals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52782 - "GET /log HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52782 - "GET /log HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52782 - "GET /ussd HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52786 - "GET /farmer HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52789 - "GET /visits/new HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52793 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52795 - "GET /approvals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52795 - "GET /farmer-reports HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52798 - "GET /flags HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52798 - "GET /log HTTP/1.1" 200 OK
