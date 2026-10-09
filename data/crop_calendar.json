@@ -1,0 +1,22 @@
+[
+  {
+    "zone": "Karamoja agro-pastoral",
+    "crop": "sorghum",
+    "plant_from": "03-15",
+    "plant_to": "06-30",
+    "harvest_from": "08-15",
+    "harvest_to": "12-15",
+    "source_url": "https://fews.net/sites/default/files/documents/reports/Karamoja%20Final_LHZ%20Report.pdf",
+    "source_note": "FEWS NET Uganda-Karamoja Region Livelihood Zones report: land preparation Jan-Mar, planting Mar-Jul, harvesting Aug-Dec for cereals in the agro-pastoral zone."
+  },
+  {
+    "zone": "Karamoja agro-pastoral",
+    "crop": "maize",
+    "plant_from": "03-01",
+    "plant_to": "05-31",
+    "harvest_from": "07-15",
+    "harvest_to": "09-30",
+    "source_url": "https://fews.net/sites/default/files/documents/reports/Karamoja%20Final_LHZ%20Report.pdf",
+    "source_note": "FEWS NET Uganda-Karamoja Region Livelihood Zones report: first-season green maize consumption normally starts early August, so maize is planted and harvested earlier in the season than sorghum."
+  }
+]

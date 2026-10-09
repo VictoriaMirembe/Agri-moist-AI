@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% block title %}Report a problem{% endblock %}
+{% block content %}
+<p><a href="/farmer/home?phone={{ phone|urlencode }}">&larr; Back</a></p>
+<h1>Report a problem</h1>
+<form id="form">
+  <label for="problem">What did you see?</label>
+  <select id="problem">
+    <option value="pests">Pests</option>
+    <option value="no_rain">No rain</option>
+    <option value="heavy_rain">Too much rain</option>
+    <option value="crop_sick">Crop looks sick</option>
+  </select>
+  <label for="crop">Which crop?</label>
+  <select id="crop">
+    <option value="sorghum">Sorghum</option>
+    <option value="maize">Maize</option>
+    <option value="">Other</option>
+  </select>
+  <p id="error" class="pill red" style="display:none;margin-top:0.8rem;"></p>
+  <button class="btn big" type="submit" style="margin-top:1rem;">Send</button>
+</form>
+<div id="done" class="card" style="display:none;">Thank you. Your officer will check this report.</div>
+
+<script>
+const phone = {{ phone|tojson }};
+document.getElementById("form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const errorEl = document.getElementById("error");
+  errorEl.style.display = "none";
+  try {
+    await postJSON("/api/farmer-reports", {
+      phone, problem: document.getElementById("problem").value, crop: document.getElementById("crop").value || null,
+    });
+    document.getElementById("form").style.display = "none";
+    document.getElementById("done").style.display = "block";
+  } catch (err) {
+    showError(errorEl, err);
+  }
+});
+</script>
+{% endblock %}

@@ -1,0 +1,113 @@
+# Tests for the farmer web API and the simulated USSD menu
+# (backend/farmer/router.py, USSD_MENU.md).
+from __future__ import annotations
+
+
+def _ussd(client, session_id: str, phone: str, text: str) -> str:
+    r = client.post("/ussd", json={"sessionId": session_id, "phoneNumber": phone, "text": text})
+    assert r.status_code == 200
+    return r.text
+
+
+def test_unregistered_number_is_rejected(client):
+    reply = _ussd(client, "s1", "+10000000000", "")
+    assert reply == "END This number is not registered. Please ask your extension officer."
+
+
+def test_main_menu(client):
+    reply = _ussd(client, "s1", "+256700000001", "")
+    assert reply.startswith("CON AgriMoist")
+    assert "1. My advice" in reply
+
+
+def test_my_advice_before_approval_shows_no_new_advice(client):
+    # EVALS task 13: an unapproved draft never appears, even to a farmer who checks
+    # before the officer approves it. H-004 is in group 2, which has a seeded
+    # pending_review draft that has NOT been approved yet.
+    reply = _ussd(client, "s1", "+256700000004", "1")
+    assert reply == "END No new advice yet. Your officer will send it after checking."
+
+
+def test_my_advice_after_approval_shows_the_advice(client):
+    pending = client.get("/api/approvals", params={"status": "pending_review"}).json()
+    advice_id = pending[0]["id"]
+    approve = client.post(f"/api/approvals/{advice_id}/approve", json={"officer_id": 1})
+    assert approve.status_code == 200
+
+    reply = _ussd(client, "s1", "+256700000004", "1")
+    assert reply.startswith("END")
+    assert "No new advice yet" not in reply
+
+
+def test_report_pest_via_ussd_is_saved_unchecked(client):
+    # EVALS task 14: farmer reports armyworm by USSD - saved as farmer-reported and
+    # unchecked, and shows in the officer queue.
+    r1 = _ussd(client, "s2", "+256700000008", "2")
+    assert "What did you see?" in r1
+    r2 = _ussd(client, "s2", "+256700000008", "2*1")
+    assert "Which crop?" in r2
+    r3 = _ussd(client, "s2", "+256700000008", "2*1*2")
+    assert r3 == "END Thank you. Your officer will check this report."
+
+    reports = client.get("/api/farmer-reports", params={"checked": "unchecked"}).json()
+    report = next(r for r in reports if r["household_code"] == "H-008")
+    assert report["pest_seen"] == "farmer-reported pest"
+    assert report["source"] == "farmer_ussd"
+
+    # And an officer can mark it checked.
+    check = client.post(f"/api/farmer-reports/{report['id']}/check", json={"officer_id": 1})
+    assert check.status_code == 200
+    assert check.json()["checked"] == "checked"
+
+
+def test_visit_request_via_ussd_creates_an_open_flag(client):
+    r1 = _ussd(client, "s3", "+256700000009", "3")
+    assert "Why?" in r1
+    r2 = _ussd(client, "s3", "+256700000009", "3*2")
+    assert r2 == "END Request sent. Your officer will plan a visit."
+
+    flags = client.get("/api/flags", params={"status": "open"}).json()
+    assert any("Little food left" in f["reason"] and f["raised_by"] == "farmer_ussd" for f in flags)
+
+
+def test_followup_flow_via_ussd(client):
+    # Group 1's household H-001 has a seeded, already-approved advice.
+    r1 = _ussd(client, "s4", "+256700000001", "4")
+    assert "Did you follow" in r1
+    r2 = _ussd(client, "s4", "+256700000001", "4*1")
+    assert "Did it help" in r2
+    r3 = _ussd(client, "s4", "+256700000001", "4*1*1")
+    assert r3 == "END Thank you. This helps improve advice."
+
+
+def test_web_report_rejects_unregistered_phone(client):
+    r = client.post("/api/farmer-reports", json={"phone": "+19999999999", "problem": "pests"})
+    assert r.status_code == 404
+
+
+def test_web_report_rejects_unknown_problem_type(client):
+    r = client.post("/api/farmer-reports", json={"phone": "+256700000001", "problem": "locusts"})
+    assert r.status_code == 400
+
+
+def test_no_tool_exists_to_order_inputs_or_request_credit(client):
+    # EVALS task 9 / RULES.md: the assistant can only draft; it can never act. There
+    # is no endpoint of any kind that could order fertiliser, seed or credit.
+    for path in ("/api/order", "/api/order-fertiliser", "/api/credit", "/api/request-credit", "/api/sms/send"):
+        r = client.post(path, json={})
+        assert r.status_code == 404
+
+    from backend.mcp_server.server import mcp as agrimoist_mcp
+
+    tool_names = set(agrimoist_mcp._tool_manager._tools.keys())
+    assert tool_names == {
+        "record_observation",
+        "get_field_records",
+        "get_plot_history",
+        "get_crop_calendar",
+        "get_weather",
+        "get_pest_reports",
+        "draft_advice",
+        "flag_for_visit",
+        "schedule_followup",
+    }

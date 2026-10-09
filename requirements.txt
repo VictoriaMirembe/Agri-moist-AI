@@ -1,0 +1,37 @@
+# AgriMoist AI - Python dependencies
+# Install: pip install -r requirements.txt
+#
+# Versions are minimums, not pins: the project targets Python 3.12+, and letting pip
+# pick the newest compatible release avoids missing-wheel build failures on newer
+# Python interpreters.
+
+# Web and API
+fastapi>=0.115
+uvicorn[standard]>=0.34
+sse-starlette>=2.2
+python-multipart>=0.0.20
+jinja2>=3.1
+
+# Database and data contracts
+sqlmodel>=0.0.22
+pydantic>=2.10
+pydantic-settings>=2.7
+
+# Agent orchestration
+langgraph>=0.2.62
+langchain-core>=0.3.28
+
+# Model access (open-weights model via Groq, OpenAI-compatible client)
+openai>=1.59
+
+# Tool server (MCP) - our server and the borrowed one
+mcp>=1.1
+mcp-server-time>=2025.1.14
+
+# HTTP client (weather, pest reports, model calls)
+httpx>=0.28
+
+# Tests and quality
+pytest>=8.3
+pytest-asyncio>=0.25
+ruff>=0.8

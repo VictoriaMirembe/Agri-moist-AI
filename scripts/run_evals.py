@@ -1,0 +1,371 @@
+# Runs the 14 tasks in EVALS.md against the real stack (real SQLite, real MCP
+# subprocesses, a real Open-Meteo call where the scenario needs live weather) - three
+# times each, and writes results to evals_results.json next to this script. EVALS.md
+# is filled in by hand from that file so the numbers in the two always match.
+#
+# Run from the repo root: .venv/Scripts/python.exe scripts/run_evals.py
+from __future__ import annotations
+
+import asyncio
+import json
+import os
+import shutil
+import sys
+import time
+import uuid
+from pathlib import Path
+
+REPO_ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(REPO_ROOT))
+
+RESULTS_FILE = Path(__file__).resolve().parent / "evals_results.json"
+
+
+def fresh_db_url() -> Path:
+    db_dir = REPO_ROOT / "data" / "_eval_runs"
+    db_dir.mkdir(parents=True, exist_ok=True)
+    return db_dir / f"{uuid.uuid4().hex}.db"
+
+
+def reset_env():
+    for key in ("WEATHER_FAIL", "WEATHER_OVERRIDE_PAST_MM", "WEATHER_OVERRIDE_NEXT_MM"):
+        os.environ.pop(key, None)
+
+
+async def new_app(**env_overrides):
+    """Fresh temp DB, fresh engine, fresh settings, seeded. Returns helpers."""
+    reset_env()
+    for k, v in env_overrides.items():
+        os.environ[k] = str(v)
+
+    db_path = fresh_db_url()
+    os.environ["DATABASE_URL"] = f"sqlite:///{db_path}"
+
+    # Only the parent process's database engine needs rebuilding by hand: the two
+    # MCP tool servers are spawned fresh per agent run with a copy of the current
+    # os.environ (see backend/agent/mcp_client.py), so WEATHER_FAIL and the weather
+    # override vars always reach them correctly without any reload gymnastics here.
+    from sqlmodel import create_engine
+
+    import backend.core.database as database_module
+
+    database_module.engine = create_engine(
+        os.environ["DATABASE_URL"], echo=False, connect_args={"check_same_thread": False}
+    )
+    database_module.init_db()
+
+    from backend.db.seed import seed
+
+    with database_module.session_scope() as session:
+        seed(session)
+
+    return database_module
+
+
+async def run_agent(database_module, group_id: int):
+    from backend.db.models import Run
+
+    with database_module.session_scope() as session:
+        run = Run(group_id=group_id, model="rule-based-stub")
+        session.add(run)
+        session.commit()
+        session.refresh(run)
+        run_id = run.id
+
+    from backend.agent.graph import execute_agent_run
+
+    started = time.monotonic()
+    await execute_agent_run(group_id=group_id, run_id=run_id)
+    elapsed = time.monotonic() - started
+    return run_id, elapsed
+
+
+def get_run_and_advice(database_module, run_id: int):
+    from sqlmodel import select
+
+    from backend.db.models import Advice, AdviceSource, Run, ToolLog
+
+    with database_module.session_scope() as session:
+        run = session.get(Run, run_id)
+        advice = session.exec(select(Advice).where(Advice.run_id == run_id)).first()
+        sources = []
+        if advice:
+            sources = session.exec(select(AdviceSource).where(AdviceSource.advice_id == advice.id)).all()
+        logs = session.exec(select(ToolLog).where(ToolLog.run_id == run_id)).all()
+        return (
+            {"outcome": run.outcome, "model": run.model, "cost": run.cost},
+            (
+                {
+                    "status": advice.status,
+                    "draft_text": advice.draft_text,
+                    "why_text": advice.why_text,
+                }
+                if advice
+                else None
+            ),
+            [{"fact": s.fact, "source_type": s.source_type, "source_ref": s.source_ref} for s in sources],
+            [{"tool": row.tool, "error": row.error} for row in logs],
+        )
+
+
+# ---------------------------------------------------------------------------
+# Each task_* function performs ONE run and returns (passed, detail)
+# ---------------------------------------------------------------------------
+async def task_1_dry_soil_little_rain():
+    db = await new_app(WEATHER_OVERRIDE_PAST_MM=1.0, WEATHER_OVERRIDE_NEXT_MM=2.0)
+    run_id, elapsed = await run_agent(db, group_id=3)
+    run, advice, sources, _ = get_run_and_advice(db, run_id)
+    ok = (
+        run["outcome"] == "drafted"
+        and advice is not None
+        and "water" in advice["draft_text"].lower()
+        and any(s["source_type"] == "weather" for s in sources)
+    )
+    return ok, f"outcome={run['outcome']}", elapsed, run["cost"]
+
+
+async def task_2_heavy_rain():
+    db = await new_app(WEATHER_OVERRIDE_PAST_MM=5.0, WEATHER_OVERRIDE_NEXT_MM=45.0)
+    run_id, elapsed = await run_agent(db, group_id=3)
+    run, advice, sources, _ = get_run_and_advice(db, run_id)
+    ok = (
+        run["outcome"] == "drafted"
+        and advice is not None
+        and "no extra watering" in advice["draft_text"].lower()
+    )
+    return ok, f"outcome={run['outcome']}", elapsed, run["cost"]
+
+
+async def task_3_pest_reported():
+    db = await new_app(WEATHER_OVERRIDE_PAST_MM=8.0, WEATHER_OVERRIDE_NEXT_MM=8.0)
+    run_id, elapsed = await run_agent(db, group_id=3)  # H-007 has a farmer-reported pest
+    run, advice, sources, _ = get_run_and_advice(db, run_id)
+    ok = (
+        run["outcome"] == "drafted"
+        and advice is not None
+        and "fall armyworm" in advice["draft_text"]
+        and any(s["source_type"] == "pest_report" for s in sources)
+    )
+    return ok, f"outcome={run['outcome']}", elapsed, run["cost"]
+
+
+async def task_4_weather_down():
+    db = await new_app(WEATHER_FAIL=1)
+    run_id, elapsed = await run_agent(db, group_id=3)
+    run, advice, sources, logs = get_run_and_advice(db, run_id)
+    weather_calls = [row for row in logs if row["tool"] == "get_weather"]
+    weather_source = next((s for s in sources if s["source_type"] == "weather"), None)
+    ok = (
+        len(weather_calls) == 2
+        and all(row["error"] for row in weather_calls)
+        and advice is not None
+        and weather_source is not None
+        and weather_source["source_ref"].startswith("unavailable")
+    )
+    return ok, f"retries={len(weather_calls)}, outcome={run['outcome']}", elapsed, run["cost"]
+
+
+async def task_5_no_visit_30_days():
+    db = await new_app(WEATHER_OVERRIDE_PAST_MM=8.0, WEATHER_OVERRIDE_NEXT_MM=8.0)
+    run_id, elapsed = await run_agent(db, group_id=1)  # H-003 is 42 days stale
+    run, advice, _, _ = get_run_and_advice(db, run_id)
+    ok = run["outcome"] == "flagged" and advice is None
+    return ok, f"outcome={run['outcome']}, advice_drafted={advice is not None}", elapsed, run["cost"]
+
+
+async def task_6_little_food():
+    db = await new_app(WEATHER_OVERRIDE_PAST_MM=8.0, WEATHER_OVERRIDE_NEXT_MM=8.0)
+    run_id, elapsed = await run_agent(db, group_id=2)  # H-005 food_left=none
+    run, advice, _, _ = get_run_and_advice(db, run_id)
+    from sqlmodel import select
+
+    from backend.db.models import VisitFlag
+
+    with db.session_scope() as session:
+        flags = session.exec(select(VisitFlag).where(VisitFlag.group_id == 2)).all()
+    food_flag = any("food" in f.reason.lower() for f in flags)
+    ok = run["outcome"] == "flagged" and advice is None and food_flag
+    return ok, f"outcome={run['outcome']}, food_flag_present={food_flag}", elapsed, run["cost"]
+
+
+async def task_7_officer_rejects():
+    await new_app()  # fresh seeded DB; TestClient's own app reads the same engine
+    from fastapi.testclient import TestClient
+
+    from backend.main import app
+
+    started = time.monotonic()
+    with TestClient(app) as client:
+        pending = client.get("/api/approvals", params={"status": "pending_review"}).json()
+        advice_id = pending[0]["id"]
+        r = client.post(f"/api/approvals/{advice_id}/reject", json={"officer_id": 1, "reason": "Needs recheck"})
+        rejected_ok = r.status_code == 200 and r.json()["status"] == "rejected"
+        farmer = client.get("/api/farmer/advice", params={"phone": "+256700000004"}).json()
+        not_visible = farmer["has_advice"] is False
+    elapsed = time.monotonic() - started
+    ok = rejected_ok and not_visible
+    return ok, f"rejected={rejected_ok}, hidden_from_farmer={not_visible}", elapsed, 0.0
+
+
+async def task_8_blocked_draft():
+    db = await new_app()
+    started = time.monotonic()
+    from backend.tools import agrimoist_tools as impl
+
+    with db.session_scope() as session:
+        result = impl.draft_advice(session, group_id=1, run_id=None, draft_text="x", why_text="y", sources=[])
+    from fastapi.testclient import TestClient
+
+    from backend.main import app
+
+    with TestClient(app) as client:
+        pending = client.get("/api/approvals", params={"status": "pending_review"}).json()
+        not_in_queue = all(a["id"] != result["advice_id"] for a in pending)
+        approve = client.post(f"/api/approvals/{result['advice_id']}/approve", json={"officer_id": 1})
+        gate_held = approve.status_code == 409
+    elapsed = time.monotonic() - started
+    ok = result["status"] == "blocked" and not_in_queue and gate_held
+    return ok, f"status={result['status']}, blocked_from_queue={not_in_queue}", elapsed, 0.0
+
+
+async def task_9_no_order_tool():
+    await new_app()  # fresh seeded DB; TestClient's own app reads the same engine
+    started = time.monotonic()
+    from backend.mcp_server.server import mcp as agrimoist_mcp
+
+    tool_names = set(agrimoist_mcp._tool_manager._tools.keys())
+    expected = {
+        "record_observation", "get_field_records", "get_plot_history", "get_crop_calendar",
+        "get_weather", "get_pest_reports", "draft_advice", "flag_for_visit", "schedule_followup",
+    }
+    from fastapi.testclient import TestClient
+
+    from backend.main import app
+
+    with TestClient(app) as client:
+        no_order_route = client.post("/api/order-fertiliser", json={}).status_code == 404
+    elapsed = time.monotonic() - started
+    ok = tool_names == expected and no_order_route
+    return ok, f"tools={sorted(tool_names)}", elapsed, 0.0
+
+
+async def task_10_translation():
+    # No GROQ_API_KEY is configured in this environment, so no model-based
+    # translation call can actually be made or checked by a speaker. Recorded
+    # honestly as skipped rather than faking a pass. See README "Known gaps".
+    return None, "SKIPPED: no GROQ_API_KEY configured in this environment", 0.0, 0.0
+
+
+async def task_11_planting_closed():
+    db = await new_app(WEATHER_OVERRIDE_PAST_MM=8.0, WEATHER_OVERRIDE_NEXT_MM=8.0)
+    run_id, elapsed = await run_agent(db, group_id=3)
+    run, advice, sources, _ = get_run_and_advice(db, run_id)
+    cal_sources = [s for s in sources if s["source_type"] == "crop_calendar"]
+    ok = (
+        run["outcome"] == "drafted"
+        and advice is not None
+        and "has closed" in advice["draft_text"]
+        and "do not advise planting" in advice["draft_text"].lower()
+        and len(cal_sources) >= 1
+        and all(s["source_ref"].startswith("https://") for s in cal_sources)
+    )
+    return ok, f"outcome={run['outcome']}, crop_calendar_sources={len(cal_sources)}", elapsed, run["cost"]
+
+
+async def task_12_messy_record():
+    db = await new_app()
+    started = time.monotonic()
+    from backend.tools import agrimoist_tools as impl
+
+    with db.session_scope() as session:
+        history = impl.get_plot_history(session, group_id=2)
+        records = impl.get_field_records(session, group_id=2, days=60)
+    h006_history = next(r for r in history["history"] if r["household_code"] == "H-006")
+    h006_soil_readings = {r["soil_wetness"] for r in records["records"] if r["household_code"] == "H-006"}
+    elapsed = time.monotonic() - started
+    ok = h006_history["planting_date_missing"] is True and h006_soil_readings == {"dry", "wet"}
+    return ok, f"planting_date_missing={h006_history['planting_date_missing']}, soil_readings_shown={h006_soil_readings}", elapsed, 0.0
+
+
+async def task_13_farmer_checks_before_approval():
+    await new_app()  # fresh seeded DB; TestClient's own app reads the same engine
+    started = time.monotonic()
+    from fastapi.testclient import TestClient
+
+    from backend.main import app
+
+    with TestClient(app) as client:
+        reply = client.post(
+            "/ussd", json={"sessionId": "eval", "phoneNumber": "+256700000004", "text": "1"}
+        ).text
+    elapsed = time.monotonic() - started
+    ok = reply == "END No new advice yet. Your officer will send it after checking."
+    return ok, f"reply={reply!r}", elapsed, 0.0
+
+
+async def task_14_farmer_reports_armyworm():
+    await new_app()  # fresh seeded DB; TestClient's own app reads the same engine
+    started = time.monotonic()
+    from fastapi.testclient import TestClient
+
+    from backend.main import app
+
+    with TestClient(app) as client:
+        client.post("/ussd", json={"sessionId": "eval", "phoneNumber": "+256700000008", "text": "2"})
+        client.post("/ussd", json={"sessionId": "eval", "phoneNumber": "+256700000008", "text": "2*1"})
+        reply = client.post(
+            "/ussd", json={"sessionId": "eval", "phoneNumber": "+256700000008", "text": "2*1*2"}
+        ).text
+        reports = client.get("/api/farmer-reports", params={"checked": "unchecked"}).json()
+        report = next((r for r in reports if r["household_code"] == "H-008"), None)
+    elapsed = time.monotonic() - started
+    ok = (
+        reply == "END Thank you. Your officer will check this report."
+        and report is not None
+        and report["checked"] == "unchecked"
+        and report["source"] == "farmer_ussd"
+    )
+    return ok, f"saved={report is not None}, checked={report['checked'] if report else None}", elapsed, 0.0
+
+
+TASKS = [
+    ("1", "Dry soil, little rain forecast", task_1_dry_soil_little_rain),
+    ("2", "Heavy rain forecast", task_2_heavy_rain),
+    ("3", "Pest reported on a nearby farm", task_3_pest_reported),
+    ("4", "Weather service down", task_4_weather_down),
+    ("5", "No field visit in 30 days", task_5_no_visit_30_days),
+    ("6", "Household with very little food", task_6_little_food),
+    ("7", "Officer rejects the draft", task_7_officer_rejects),
+    ("8", "Draft missing a source", task_8_blocked_draft),
+    ("9", "Request to order fertiliser", task_9_no_order_tool),
+    ("10", "Translation check", task_10_translation),
+    ("11", "Planting window has closed", task_11_planting_closed),
+    ("12", "Messy record: planting date missing, soil readings disagree", task_12_messy_record),
+    ("13", "Farmer checks advice by USSD before the officer approves", task_13_farmer_checks_before_approval),
+    ("14", "Farmer reports armyworm by USSD", task_14_farmer_reports_armyworm),
+]
+
+
+async def main():
+    results = {}
+    for task_id, name, fn in TASKS:
+        runs = []
+        for i in range(3):
+            try:
+                ok, detail, elapsed, cost = await fn()
+            except Exception as exc:  # noqa: BLE001
+                ok, detail, elapsed, cost = False, f"EXCEPTION: {exc}", 0.0, 0.0
+            runs.append({"pass": ok, "detail": detail, "seconds": round(elapsed, 2), "cost": cost})
+            status = "SKIP" if ok is None else ("PASS" if ok else "FAIL")
+            print(f"Task {task_id} run {i + 1}: {status} - {detail}")
+        results[task_id] = {"name": name, "runs": runs}
+
+    RESULTS_FILE.write_text(json.dumps(results, indent=2), encoding="utf-8")
+    print(f"\nResults written to {RESULTS_FILE}")
+
+    eval_dir = REPO_ROOT / "data" / "_eval_runs"
+    shutil.rmtree(eval_dir, ignore_errors=True)
+
+
+if __name__ == "__main__":
+    asyncio.run(main())

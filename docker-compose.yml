@@ -1,0 +1,13 @@
+services:
+  app:
+    build: .
+    ports:
+      - "${APP_PORT:-8000}:8000"
+    env_file:
+      - .env
+    volumes:
+      - agrimoist-data:/app/data
+    restart: unless-stopped
+
+volumes:
+  agrimoist-data:

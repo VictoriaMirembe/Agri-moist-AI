@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+{% block title %}USSD simulator{% endblock %}
+{% block content %}
+<h1>USSD simulator</h1>
+<p class="muted">Simulates a basic-phone USSD session. Uses the same request and reply shape as a real USSD gateway (see USSD_MENU.md) - this page is the only part that is pretend.</p>
+
+<label for="phone">Phone number</label>
+<input id="phone" type="tel" value="+256700000001">
+<button class="btn" id="dial-btn" style="margin-top:0.8rem;">Dial *123#</button>
+
+<div class="ussd-screen" id="screen" style="margin-top:1rem;">Dial to start a session.</div>
+<div class="keypad" id="keypad" style="display:none;">
+  <button data-k="1">1</button><button data-k="2">2</button><button data-k="3">3</button>
+  <button data-k="4">4</button><button data-k="0">0</button><button data-k="back">&larr; back</button>
+</div>
+
+<script>
+let sessionId = null;
+let steps = [];
+
+function render(text) {
+  document.getElementById("screen").textContent = text.replace(/^(CON|END)\s/, "");
+}
+
+async function send() {
+  const phone = document.getElementById("phone").value.trim();
+  const text = steps.join("*");
+  const res = await fetch("/ussd", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ sessionId: sessionId, phoneNumber: phone, text: text }),
+  });
+  const reply = await res.text();
+  render(reply);
+  const keypad = document.getElementById("keypad");
+  if (reply.startsWith("END")) {
+    keypad.style.display = "none";
+    document.getElementById("dial-btn").textContent = "Dial *123# again";
+  } else {
+    keypad.style.display = "grid";
+  }
+}
+
+document.getElementById("dial-btn").addEventListener("click", () => {
+  sessionId = crypto.randomUUID();
+  steps = [];
+  send();
+});
+
+document.getElementById("keypad").addEventListener("click", (e) => {
+  const k = e.target.dataset.k;
+  if (!k) return;
+  if (k === "back") {
+    steps.pop();
+  } else {
+    steps.push(k);
+  }
+  send();
+});
+</script>
+{% endblock %}

@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% block title %}AgriMoist AI{% endblock %} - Officer</title>
+  <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <a href="/" class="brand">AgriMoist AI</a>
+    <nav>
+      <a href="/">Home</a>
+      <a href="/visits/new">Record visit</a>
+      <a href="/approvals">Approvals</a>
+      <a href="/farmer-reports">Farmer reports</a>
+      <a href="/flags">Visit flags</a>
+      <a href="/log">Log</a>
+      <a href="/ussd">USSD simulator</a>
+      <a href="/farmer">Farmer page</a>
+    </nav>
+  </header>
+  <main class="container">
+    {% block content %}{% endblock %}
+  </main>
+  <script src="/static/app.js"></script>
+  {% block scripts %}{% endblock %}
+</body>
+</html>

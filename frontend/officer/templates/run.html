@@ -1,0 +1,76 @@
+{% extends "base.html" %}
+{% block title %}Agent run {{ run_id }}{% endblock %}
+{% block content %}
+<h1>Agent run #{{ run_id }}</h1>
+<p class="muted">Watching tool calls live. Each line is a real call, with its source. Gaps are marked, never guessed.</p>
+<p><a class="btn secondary" id="back-link" href="#">Back to group</a></p>
+<div id="status" class="pill amber">running</div>
+<div class="event-log" id="log" style="margin-top:0.8rem;">connecting...</div>
+
+<script>
+const runId = {{ run_id }};
+const logEl = document.getElementById("log");
+logEl.textContent = "";
+
+function line(text, cls) {
+  const span = document.createElement("div");
+  if (cls) span.className = cls;
+  span.textContent = text;
+  logEl.appendChild(span);
+  logEl.scrollTop = logEl.scrollHeight;
+}
+
+const source = new EventSource(`/api/runs/${runId}/events`);
+let groupIdSeen = null;
+
+source.addEventListener("plan", (e) => {
+  const d = JSON.parse(e.data);
+  line(`plan: zone=${d.zone} village=${d.village}`);
+});
+source.addEventListener("tool_call", (e) => {
+  const d = JSON.parse(e.data);
+  line(`-> calling ${d.tool} (attempt ${d.attempt || 1}) ${JSON.stringify(d.inputs || {})}`);
+});
+source.addEventListener("tool_result", (e) => {
+  const d = JSON.parse(e.data);
+  line(`   ok ${d.tool}: ${JSON.stringify(d.outputs).slice(0, 220)}`, "ok");
+});
+source.addEventListener("tool_error", (e) => {
+  const d = JSON.parse(e.data);
+  line(`   FAILED ${d.tool}: ${d.error}${d.final ? " (giving up after retry; gap will be marked)" : " (retrying once)"}`, "err");
+});
+source.addEventListener("check_sources", (e) => {
+  const d = JSON.parse(e.data);
+  line(`check_sources: ${d.flag_reason ? "needs a visit - " + d.flag_reason : "no urgent flag; drafting advice"}`);
+});
+source.addEventListener("model_call", () => line("-> drafting with the model"));
+source.addEventListener("model_result", (e) => {
+  const d = JSON.parse(e.data);
+  line(`   model (${d.model}): ${d.advice_preview}...`, "ok");
+});
+source.addEventListener("run_error", (e) => {
+  const d = JSON.parse(e.data);
+  line(`RUN ERROR: ${d.error}`, "err");
+});
+source.addEventListener("run_finished", (e) => {
+  const d = JSON.parse(e.data);
+  line(`run finished: outcome=${d.outcome}`);
+  document.getElementById("status").textContent = d.outcome;
+  document.getElementById("status").className = "pill " + (d.outcome === "drafted" ? "green" : d.outcome === "flagged" ? "amber" : "red");
+  source.close();
+  fetchGroupAndSetLink();
+});
+source.onerror = () => {
+  line("(connection closed)");
+  source.close();
+};
+
+async function fetchGroupAndSetLink() {
+  try {
+    const r = await getJSON(`/api/runs/${runId}`);
+    document.getElementById("back-link").href = "/groups/" + r.group_id;
+  } catch (e) { /* ignore */ }
+}
+fetchGroupAndSetLink();
+</script>
+{% endblock %}
