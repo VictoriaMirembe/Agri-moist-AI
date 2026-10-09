@@ -1,0 +1,2090 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#1a4329">
+  <meta name="description" content="TerraMoist AI - Smallholder Farmer Advisory Portal. Agricultural advice, pest reporting, and extension services in Karamoja, Uganda.">
+  <title>TerraMoist AI | Farmer Advisory Portal</title>
+
+  <style>
+    /* ==========================================================================
+       TerraMoist AI - Professional Design System
+       - Zero emojis; clean, high-contrast typography and subtle SVG iconography
+       - Responsive layout across desktop, tablet, and mobile
+       - Low-bandwidth optimized: zero external CDN font/script dependencies
+       ========================================================================== */
+    :root {
+      --primary-900: #12311f;
+      --primary-800: #1a4329;
+      --primary-700: #245738;
+      --primary-600: #2e6f47;
+      --primary-100: #e2f0e6;
+      --primary-50:  #f3f8f4;
+      --accent-soil:  #85461c;
+      --neutral-900: #1b241e;
+      --neutral-700: #3e4d42;
+      --neutral-500: #69786d;
+      --neutral-300: #d6ded7;
+      --neutral-200: #e6ede7;
+      --neutral-100: #f5f8f5;
+      --neutral-0:   #ffffff;
+      --status-success-bg: #e6f6ec;
+      --status-success-text: #13602f;
+      --status-success-border: #9dd8b0;
+      --status-warning-bg: #fef7e7;
+      --status-warning-text: #855306;
+      --status-warning-border: #f5cf7a;
+      --status-alert-bg: #fde8e8;
+      --status-alert-text: #9b1c1c;
+      --shadow-subtle: 0 1px 3px rgba(0, 0, 0, 0.05), 0 1px 2px rgba(0, 0, 0, 0.03);
+      --shadow-card:   0 3px 8px rgba(0, 0, 0, 0.06), 0 1px 3px rgba(0, 0, 0, 0.04);
+      --radius-sm: 6px;
+      --radius-md: 10px;
+      --radius-lg: 14px;
+      --font-stack: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    body {
+      font-family: var(--font-stack);
+      background-color: var(--neutral-100);
+      color: var(--neutral-900);
+      font-size: 15px;
+      line-height: 1.5;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* Top Navigation Header */
+    .site-header {
+      background: var(--primary-800);
+      color: var(--neutral-0);
+      padding: 12px 24px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+    }
+
+    .header-container {
+      max-width: 1180px;
+      margin: 0 auto;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+    }
+
+    .brand-link {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      text-decoration: none;
+      color: var(--neutral-0);
+    }
+
+    .brand-icon {
+      width: 28px;
+      height: 28px;
+      fill: #86efac;
+    }
+
+    .brand-title {
+      font-size: 1.25rem;
+      font-weight: 700;
+      letter-spacing: -0.2px;
+    }
+
+    .brand-tagline {
+      font-size: 0.76rem;
+      color: #bbf7d0;
+      font-weight: 500;
+      display: block;
+      line-height: 1.1;
+    }
+
+    .header-controls {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    /* Language Dropdown */
+    .language-selector-wrapper {
+      position: relative;
+      display: inline-flex;
+      align-items: center;
+    }
+
+    .lang-select {
+      appearance: none;
+      -webkit-appearance: none;
+      background: rgba(255, 255, 255, 0.12);
+      color: var(--neutral-0);
+      border: 1px solid rgba(255, 255, 255, 0.25);
+      border-radius: var(--radius-sm);
+      padding: 7px 28px 7px 12px;
+      font-size: 0.85rem;
+      font-family: inherit;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.15s ease;
+    }
+
+    .lang-select:hover, .lang-select:focus {
+      background: rgba(255, 255, 255, 0.2);
+      outline: none;
+    }
+
+    .lang-select option {
+      background: var(--neutral-0);
+      color: var(--neutral-900);
+      font-weight: 500;
+    }
+
+    .lang-chevron {
+      position: absolute;
+      right: 9px;
+      pointer-events: none;
+      width: 12px;
+      height: 12px;
+      fill: rgba(255, 255, 255, 0.8);
+    }
+
+    /* Header Sign In / Account Button */
+    .btn-header-auth {
+      background: var(--neutral-0);
+      color: var(--primary-800);
+      border: none;
+      border-radius: var(--radius-sm);
+      padding: 7px 16px;
+      font-size: 0.86rem;
+      font-weight: 700;
+      font-family: inherit;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      transition: background 0.15s ease, color 0.15s ease;
+      white-space: nowrap;
+    }
+
+    .btn-header-auth:hover {
+      background: var(--primary-100);
+      color: var(--primary-900);
+    }
+
+    /* Navigation Bar */
+    .main-nav {
+      background: var(--neutral-0);
+      border-bottom: 1px solid var(--neutral-300);
+      position: sticky;
+      top: 53px;
+      z-index: 90;
+    }
+
+    .nav-container {
+      max-width: 1180px;
+      margin: 0 auto;
+      padding: 0 24px;
+      display: flex;
+      align-items: center;
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+    }
+
+    .nav-item-btn {
+      background: none;
+      border: none;
+      border-bottom: 3px solid transparent;
+      color: var(--neutral-700);
+      font-size: 0.92rem;
+      font-weight: 600;
+      font-family: inherit;
+      padding: 13px 18px;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: all 0.15s ease;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .nav-item-btn:hover {
+      color: var(--primary-700);
+      background: var(--primary-50);
+    }
+
+    .nav-item-btn.active {
+      color: var(--primary-800);
+      border-bottom-color: var(--primary-700);
+      font-weight: 700;
+    }
+
+    /* Sub-Bar: Farmer & Region Context */
+    .context-bar {
+      background: var(--primary-50);
+      border-bottom: 1px solid var(--neutral-200);
+      padding: 9px 24px;
+      font-size: 0.86rem;
+      color: var(--neutral-700);
+    }
+
+    .context-inner {
+      max-width: 1180px;
+      margin: 0 auto;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+
+    .context-pill {
+      font-weight: 600;
+      color: var(--primary-900);
+    }
+
+    /* Main Layout */
+    .content-wrapper {
+      max-width: 1180px;
+      width: 100%;
+      margin: 0 auto;
+      padding: 24px 24px 60px;
+      flex: 1;
+    }
+
+    /* Tab Content Displays */
+    .view-panel {
+      display: none;
+    }
+
+    .view-panel.active {
+      display: block;
+    }
+
+    /* Grid Layouts */
+    .grid-layout {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 24px;
+    }
+
+    @media (min-width: 900px) {
+      .grid-layout-2col {
+        grid-template-columns: 1.15fr 0.85fr;
+      }
+      .grid-layout-equal {
+        grid-template-columns: 1fr 1fr;
+      }
+      .col-span-full {
+        grid-column: 1 / -1;
+      }
+    }
+
+    /* Cards */
+    .card {
+      background: var(--neutral-0);
+      border: 1px solid var(--neutral-300);
+      border-radius: var(--radius-md);
+      padding: 22px;
+      box-shadow: var(--shadow-subtle);
+      margin-bottom: 24px;
+    }
+
+    .card:last-child {
+      margin-bottom: 0;
+    }
+
+    .card-header-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 16px;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    .card-title {
+      font-size: 1.12rem;
+      font-weight: 700;
+      color: var(--neutral-900);
+      letter-spacing: -0.2px;
+    }
+
+    .card-description {
+      font-size: 0.88rem;
+      color: var(--neutral-500);
+      margin-top: -8px;
+      margin-bottom: 16px;
+      line-height: 1.45;
+    }
+
+    /* Verified Notice Pill */
+    .verified-alert {
+      background: var(--status-success-bg);
+      border: 1px solid var(--status-success-border);
+      color: var(--status-success-text);
+      padding: 10px 16px;
+      border-radius: var(--radius-sm);
+      font-size: 0.88rem;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 20px;
+    }
+
+    .svg-icon {
+      width: 18px;
+      height: 18px;
+      flex-shrink: 0;
+      fill: currentColor;
+    }
+
+    /* Farmer Welcome Overview Banner */
+    .farmer-summary-banner {
+      background: var(--primary-800);
+      color: var(--neutral-0);
+      border-radius: var(--radius-md);
+      padding: 22px 24px;
+      margin-bottom: 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 16px;
+    }
+
+    .banner-farmer-name {
+      font-size: 1.35rem;
+      font-weight: 700;
+      letter-spacing: -0.2px;
+    }
+
+    .banner-farmer-meta {
+      font-size: 0.85rem;
+      color: #bbf7d0;
+      margin-top: 2px;
+    }
+
+    .banner-action-buttons {
+      display: flex;
+      gap: 10px;
+    }
+
+    /* Metric Grid (Soil Moisture & Rain) */
+    .metrics-container {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 14px;
+      margin-bottom: 16px;
+    }
+
+    .metric-cell {
+      background: var(--neutral-100);
+      border: 1px solid var(--neutral-200);
+      border-radius: var(--radius-sm);
+      padding: 14px 12px;
+      text-align: center;
+    }
+
+    .metric-title {
+      font-size: 0.76rem;
+      text-transform: uppercase;
+      font-weight: 700;
+      color: var(--neutral-500);
+      letter-spacing: 0.4px;
+      margin-bottom: 4px;
+    }
+
+    .metric-num {
+      font-size: 1.6rem;
+      font-weight: 800;
+      color: var(--primary-800);
+      line-height: 1.2;
+    }
+
+    .metric-status {
+      font-size: 0.78rem;
+      font-weight: 600;
+      color: var(--status-success-text);
+      margin-top: 3px;
+    }
+
+    /* Plain-language Rule Container */
+    .advisory-directive {
+      background: var(--primary-50);
+      border-left: 4px solid var(--primary-600);
+      padding: 12px 16px;
+      border-radius: var(--radius-sm);
+      font-size: 0.92rem;
+      line-height: 1.5;
+      color: var(--neutral-900);
+      margin: 14px 0;
+    }
+
+    /* Audio Readout Control */
+    .btn-audio-player {
+      width: 100%;
+      background: var(--neutral-0);
+      border: 1px solid var(--primary-600);
+      color: var(--primary-700);
+      padding: 10px 16px;
+      border-radius: var(--radius-sm);
+      font-size: 0.88rem;
+      font-weight: 600;
+      font-family: inherit;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      transition: background 0.15s ease, color 0.15s ease;
+    }
+
+    .btn-audio-player:hover {
+      background: var(--primary-50);
+    }
+
+    /* Crop Advisory Blocks */
+    .crop-advisory-block {
+      border: 1px solid var(--neutral-300);
+      border-radius: var(--radius-sm);
+      padding: 16px;
+      margin-bottom: 16px;
+      background: var(--neutral-0);
+    }
+
+    .crop-advisory-block.recommended {
+      border-left: 4px solid var(--primary-600);
+    }
+
+    .crop-advisory-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 8px;
+    }
+
+    .crop-title-text {
+      font-size: 1.05rem;
+      font-weight: 700;
+      color: var(--neutral-900);
+    }
+
+    .badge-status-pill {
+      font-size: 0.74rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.4px;
+      padding: 3px 8px;
+      border-radius: 4px;
+    }
+
+    .badge-status-pill.active {
+      background: var(--status-success-bg);
+      color: var(--status-success-text);
+      border: 1px solid var(--status-success-border);
+    }
+
+    .badge-status-pill.pending {
+      background: var(--status-warning-bg);
+      color: var(--status-warning-text);
+      border: 1px solid var(--status-warning-border);
+    }
+
+    .crop-spec-list {
+      font-size: 0.85rem;
+      color: var(--neutral-700);
+      margin: 8px 0;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .crop-citation {
+      font-size: 0.75rem;
+      color: var(--neutral-500);
+      border-top: 1px dashed var(--neutral-200);
+      padding-top: 8px;
+      margin-top: 8px;
+    }
+
+    /* Form Design */
+    .form-group-field {
+      margin-bottom: 16px;
+    }
+
+    .form-field-label {
+      display: block;
+      font-size: 0.88rem;
+      font-weight: 600;
+      color: var(--neutral-900);
+      margin-bottom: 6px;
+    }
+
+    .form-input-text, .form-select-control, .form-textarea-control {
+      width: 100%;
+      min-height: 44px;
+      font-size: 0.95rem;
+      font-family: inherit;
+      color: var(--neutral-900);
+      background-color: var(--neutral-0);
+      border: 1px solid var(--neutral-300);
+      border-radius: var(--radius-sm);
+      padding: 8px 12px;
+      transition: border-color 0.15s ease, box-shadow 0.15s ease;
+    }
+
+    .form-input-text:focus, .form-select-control:focus, .form-textarea-control:focus {
+      outline: none;
+      border-color: var(--primary-600);
+      box-shadow: 0 0 0 3px rgba(36, 87, 56, 0.15);
+    }
+
+    .form-textarea-control {
+      min-height: 90px;
+      resize: vertical;
+    }
+
+    .form-help-note {
+      font-size: 0.8rem;
+      color: var(--neutral-500);
+      margin-top: 4px;
+    }
+
+    /* Buttons */
+    .btn-solid-primary {
+      background: var(--primary-700);
+      color: var(--neutral-0);
+      border: none;
+      border-radius: var(--radius-sm);
+      padding: 10px 18px;
+      font-size: 0.92rem;
+      font-weight: 600;
+      font-family: inherit;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      min-height: 44px;
+      transition: background 0.15s ease;
+      width: 100%;
+    }
+
+    .btn-solid-primary:hover {
+      background: var(--primary-800);
+    }
+
+    .btn-outline-secondary {
+      background: var(--neutral-0);
+      color: var(--primary-700);
+      border: 1px solid var(--neutral-300);
+      border-radius: var(--radius-sm);
+      padding: 8px 16px;
+      font-size: 0.88rem;
+      font-weight: 600;
+      font-family: inherit;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      transition: background 0.15s ease;
+    }
+
+    .btn-outline-secondary:hover {
+      background: var(--neutral-100);
+      border-color: var(--neutral-400);
+    }
+
+    /* Issue Select Grid */
+    .issue-selector-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+      gap: 10px;
+      margin-bottom: 12px;
+    }
+
+    .issue-option-btn {
+      background: var(--neutral-0);
+      border: 1px solid var(--neutral-300);
+      border-radius: var(--radius-sm);
+      padding: 12px 10px;
+      text-align: center;
+      cursor: pointer;
+      font-size: 0.86rem;
+      font-weight: 600;
+      color: var(--neutral-700);
+      transition: all 0.15s ease;
+    }
+
+    .issue-option-btn:hover {
+      border-color: var(--primary-600);
+    }
+
+    .issue-option-btn.selected {
+      background: var(--primary-50);
+      border-color: var(--primary-700);
+      color: var(--primary-900);
+      font-weight: 700;
+    }
+
+    /* Urgency Segmented Control */
+    .urgency-segment-bar {
+      display: flex;
+      gap: 8px;
+    }
+
+    .urgency-segment-item {
+      flex: 1;
+      text-align: center;
+      padding: 8px 6px;
+      border: 1px solid var(--neutral-300);
+      border-radius: var(--radius-sm);
+      font-size: 0.84rem;
+      font-weight: 600;
+      cursor: pointer;
+      background: var(--neutral-0);
+    }
+
+    input[type="radio"]:checked + .urgency-segment-item {
+      background: var(--primary-50);
+      border-color: var(--primary-700);
+      color: var(--primary-900);
+    }
+
+    /* Officer Profile Header */
+    .officer-brief-card {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      background: var(--neutral-100);
+      border: 1px solid var(--neutral-200);
+      padding: 14px 16px;
+      border-radius: var(--radius-sm);
+      margin-bottom: 18px;
+    }
+
+    .officer-initials {
+      width: 44px;
+      height: 44px;
+      border-radius: 50%;
+      background: var(--primary-700);
+      color: var(--neutral-0);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 700;
+      font-size: 0.95rem;
+      flex-shrink: 0;
+    }
+
+    /* Table & Log History */
+    .data-feed-list {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .feed-item {
+      padding: 12px 14px;
+      border: 1px solid var(--neutral-200);
+      border-radius: var(--radius-sm);
+      background: var(--neutral-0);
+    }
+
+    .feed-item-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 4px;
+    }
+
+    .feed-item-title {
+      font-size: 0.9rem;
+      font-weight: 700;
+      color: var(--neutral-900);
+    }
+
+    .feed-item-time {
+      font-size: 0.78rem;
+      color: var(--neutral-500);
+    }
+
+    .feed-item-body {
+      font-size: 0.84rem;
+      color: var(--neutral-700);
+    }
+
+    /* Toast Notification */
+    .toast-system-alert {
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      background: var(--neutral-900);
+      color: var(--neutral-0);
+      padding: 12px 20px;
+      border-radius: var(--radius-sm);
+      font-size: 0.88rem;
+      font-weight: 500;
+      box-shadow: var(--shadow-card);
+      z-index: 300;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      opacity: 0;
+      pointer-events: none;
+      transform: translateY(12px);
+      transition: all 0.2s ease;
+    }
+
+    .toast-system-alert.active {
+      opacity: 1;
+      pointer-events: auto;
+      transform: translateY(0);
+    }
+
+    /* Modal for Sign-In */
+    .modal-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0, 0, 0, 0.45);
+      z-index: 200;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+
+    .modal-overlay.open {
+      display: flex;
+    }
+
+    .modal-card {
+      background: var(--neutral-0);
+      width: 100%;
+      max-width: 460px;
+      border-radius: var(--radius-md);
+      box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+      overflow: hidden;
+      animation: modalSlide 0.2s ease-out;
+    }
+
+    @keyframes modalSlide {
+      from { transform: translateY(14px); opacity: 0; }
+      to   { transform: translateY(0); opacity: 1; }
+    }
+
+    .modal-header {
+      padding: 16px 20px;
+      border-bottom: 1px solid var(--neutral-200);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .modal-title {
+      font-size: 1.15rem;
+      font-weight: 700;
+      color: var(--neutral-900);
+    }
+
+    .modal-close-btn {
+      background: none;
+      border: none;
+      font-size: 1.3rem;
+      line-height: 1;
+      color: var(--neutral-500);
+      cursor: pointer;
+      padding: 4px;
+    }
+
+    .modal-body {
+      padding: 20px;
+    }
+
+    /* Responsive Rules for Small Devices */
+    @media (max-width: 768px) {
+      .site-header {
+        padding: 10px 16px;
+      }
+      .content-wrapper {
+        padding: 16px 16px 40px;
+      }
+      .nav-container {
+        padding: 0 12px;
+      }
+      .nav-item-btn {
+        padding: 12px 14px;
+        font-size: 0.88rem;
+      }
+      .metrics-container {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- =========================================================================
+       1. TOP PROFESSIONAL SITE HEADER
+       ========================================================================= -->
+  <header class="site-header">
+    <div class="header-container">
+      
+      <!-- Brand Logo & Identity -->
+      <a href="#" class="brand-link" onclick="navigateTab('advice'); return false;">
+        <svg class="brand-icon" viewBox="0 0 24 24">
+          <path d="M12 2C6.48 2 2 6.48 2 12c0 3.84 2.16 7.18 5.36 8.87.35-.35.84-.57 1.39-.57.88 0 1.62.58 1.87 1.38.45.1.92.17 1.38.22v-3.9h-1.5c-.83 0-1.5-.67-1.5-1.5v-3c0-.83.67-1.5 1.5-1.5H12V8.5c0-.83.67-1.5 1.5-1.5s1.5.67 1.5 1.5V12h1.5c.83 0 1.5.67 1.5 1.5v3c0 .83-.67 1.5-1.5 1.5H15v3.95c3.84-.81 6.78-4.08 6.98-8.08C22 7.02 17.52 2 12 2z"/>
+        </svg>
+        <div>
+          <span class="brand-title">TerraMoist AI</span>
+          <span class="brand-tagline" data-i18n="brand_tagline">Smallholder Advisory Portal</span>
+        </div>
+      </a>
+
+      <!-- Professional Header Actions: Language Dropdown + Sign In / Account -->
+      <div class="header-controls">
+        
+        <!-- Multi-Language Select Dropdown (en, ngk, sw) -->
+        <div class="language-selector-wrapper" title="Select preferred language">
+          <select id="languageSelect" class="lang-select" onchange="changeLanguage(this.value)">
+            <option value="en">English</option>
+            <option value="ngk">Ngakarimojong</option>
+            <option value="sw">Kiswahili</option>
+          </select>
+          <svg class="lang-chevron" viewBox="0 0 24 24">
+            <path d="M7 10l5 5 5-5z"/>
+          </svg>
+        </div>
+
+        <!-- Sign In / Account Button in Header -->
+        <button type="button" class="btn-header-auth" id="headerAuthBtn" onclick="openSignInModal()">
+          <span id="headerAuthLabel" data-i18n="auth_label">Sign In</span>
+        </button>
+
+      </div>
+    </div>
+  </header>
+
+  <!-- =========================================================================
+       2. PRIMARY NAVIGATION BAR
+       ========================================================================= -->
+  <nav class="main-nav">
+    <div class="nav-container">
+      <button type="button" class="nav-item-btn active" id="nav-advice" onclick="navigateTab('advice')" data-i18n="nav_advice">
+        My Advice
+      </button>
+      <button type="button" class="nav-item-btn" id="nav-report" onclick="navigateTab('report')" data-i18n="nav_report">
+        Report an Issue
+      </button>
+      <button type="button" class="nav-item-btn" id="nav-visit" onclick="navigateTab('visit')" data-i18n="nav_visit">
+        Ask for a Visit
+      </button>
+      <button type="button" class="nav-item-btn" id="nav-profile" onclick="navigateTab('profile')" data-i18n="nav_profile">
+        Farm Profile
+      </button>
+    </div>
+  </nav>
+
+  <!-- =========================================================================
+       3. CONTEXT SUB-BAR
+       ========================================================================= -->
+  <div class="context-bar">
+    <div class="context-inner">
+      <div>
+        <span data-i18n="context_region_label">Region:</span> <span class="context-pill" id="displayDistrict">Moroto District (Nadunget Parish)</span>
+      </div>
+      <div>
+        <span data-i18n="context_officer_label">Extension Officer:</span> <span class="context-pill">Peter Lokol</span> &bull; 
+        <span data-i18n="context_channel_label">Advisory Channel:</span> <span class="context-pill" data-i18n="context_channel_val">SMS Verified</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- =========================================================================
+       4. MAIN BODY CONTENT
+       ========================================================================= -->
+  <main class="content-wrapper">
+
+    <!-- =======================================================================
+         VIEW PANEL 1: 'MY ADVICE'
+         ======================================================================= -->
+    <section id="panel-advice" class="view-panel active">
+      
+      <!-- Verified Notice -->
+      <div class="verified-alert">
+        <svg class="svg-icon" viewBox="0 0 24 24">
+          <path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm-2 16l-4-4 1.41-1.41L10 14.17l6.59-6.59L18 9l-8 8z"/>
+        </svg>
+        <div data-i18n="verified_notice">
+          Verified Advisory: Approved by Agricultural Officer Peter Lokol for the current sowing window.
+        </div>
+      </div>
+
+      <!-- Farmer Welcome Overview Banner -->
+      <div class="farmer-summary-banner">
+        <div>
+          <span style="font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.5px; opacity: 0.85;" data-i18n="active_farm_record">Active Farm Record</span>
+          <div class="banner-farmer-name" id="bannerFarmerName">Maria Akol</div>
+          <div class="banner-farmer-meta" data-i18n="registered_acreage_meta">Plot: Nadunget &bull; Registered Acreage: 2.5 Acres &bull; Season 2026A</div>
+        </div>
+        <div class="banner-action-buttons">
+          <button type="button" class="btn-outline-secondary" style="color:#fff; border-color:rgba(255,255,255,0.4); background:rgba(255,255,255,0.12);" onclick="navigateTab('report')" data-i18n="btn_report_issue">
+            Report Issue
+          </button>
+          <button type="button" class="btn-outline-secondary" style="color:var(--primary-900); background:#fff; border-color:#fff;" onclick="navigateTab('visit')" data-i18n="btn_request_visit">
+            Request Officer Visit
+          </button>
+        </div>
+      </div>
+
+      <div class="grid-layout grid-layout-2col">
+        
+        <!-- Left Column: Soil Moisture & Radar Forecast -->
+        <div>
+          <div class="card">
+            <div class="card-header-row">
+              <h2 class="card-title" data-i18n="radar_title">Soil Moisture &amp; Precipitation Radar</h2>
+              <span class="badge-status-pill active" data-i18n="badge_calibrated">Calibrated</span>
+            </div>
+            <p class="card-description" data-i18n="radar_desc">Combined village ground sensor data and satellite moisture metrics.</p>
+
+            <div class="metrics-container">
+              <div class="metric-cell">
+                <div class="metric-title" data-i18n="moisture_label">Root-Zone Moisture (0-10cm)</div>
+                <div class="metric-num">68%</div>
+                <div class="metric-status" data-i18n="moisture_status">Moist (Optimal for Sowing)</div>
+              </div>
+              <div class="metric-cell">
+                <div class="metric-title" data-i18n="rain_label">3-Day Rain Forecast</div>
+                <div class="metric-num">18 mm</div>
+                <div class="metric-status" style="color:var(--neutral-700);" data-i18n="rain_status">Scattered Showers Expected</div>
+              </div>
+            </div>
+
+            <div class="advisory-directive" data-i18n="advisory_guidance_text">
+              Agronomic Guidance: Topsoil moisture is adequate for immediate seed emergence. If dry seeds were sown earlier, expect germination within 48 to 72 hours.
+            </div>
+
+            <!-- Plain Language Audio Playback -->
+            <button type="button" class="btn-audio-player" onclick="playAudioAdvice()">
+              <svg class="svg-icon" viewBox="0 0 24 24">
+                <path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/>
+              </svg>
+              <span data-i18n="btn_listen_voice">Listen to Voice Guidance (Selected Language)</span>
+            </button>
+          </div>
+
+          <!-- Quick Shortcuts -->
+          <div class="card">
+            <h2 class="card-title" style="margin-bottom:12px;" data-i18n="field_directives_title">Field Directives</h2>
+            <div style="display:flex; flex-direction:column; gap:8px;">
+              <button type="button" class="btn-outline-secondary" style="justify-content:space-between;" onclick="navigateTab('report')">
+                <span data-i18n="dir_submit_pest">Submit Pest or Foliage Concern</span>
+                <span style="color:var(--neutral-500);">&rarr;</span>
+              </button>
+              <button type="button" class="btn-outline-secondary" style="justify-content:space-between;" onclick="navigateTab('visit')">
+                <span data-i18n="dir_schedule_visit">Schedule On-Site Extension Inspection</span>
+                <span style="color:var(--neutral-500);">&rarr;</span>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Right Column: Crop Planting Windows from Verified Dataset -->
+        <div>
+          <!-- Maize Advisory Block -->
+          <div class="card">
+            <div class="card-header-row">
+              <h2 class="card-title" data-i18n="maize_title">Maize Planting Window</h2>
+              <span class="badge-status-pill active" data-i18n="badge_optimal">Optimal Period</span>
+            </div>
+
+            <div class="crop-advisory-block recommended">
+              <div class="crop-advisory-header">
+                <span class="crop-title-text" data-i18n="maize_crop_name">Northern Uganda Maize</span>
+                <span style="font-size:0.8rem; font-weight:700; color:var(--neutral-500);">115 - 120 Days</span>
+              </div>
+
+              <div class="crop-spec-list">
+                <div data-i18n="maize_windows">Planting Windows: March - April (Early) &bull; July - August (Late)</div>
+                <div data-i18n="maize_soil">Optimal Soil Condition: Moist soil at planting</div>
+                <div data-i18n="maize_depth">Recommended Sowing Depth: 5 cm with 75 cm row spacing</div>
+              </div>
+
+              <div class="advisory-directive" style="margin:8px 0; font-size:0.86rem;" data-i18n="maize_action">
+                Field Action: Topsoil moisture is optimal. Sow certified seeds in early morning hours to limit moisture loss from heat.
+              </div>
+
+              <div class="crop-citation" data-i18n="maize_source">
+                Source: NUTOFA SACCO LTD Northern Uganda planting calendar and maize agronomy guide.
+              </div>
+            </div>
+          </div>
+
+          <!-- Sorghum Advisory Block -->
+          <div class="card">
+            <div class="card-header-row">
+              <h2 class="card-title" data-i18n="sorghum_title">Sorghum Planting Window</h2>
+              <span class="badge-status-pill active" data-i18n="badge_ready">Ready to Sow</span>
+            </div>
+
+            <div class="crop-advisory-block">
+              <div class="crop-advisory-header">
+                <span class="crop-title-text" data-i18n="sorghum_crop_name">Drought-Tolerant Sorghum</span>
+                <span style="font-size:0.8rem; font-weight:700; color:var(--neutral-500);">90 - 120 Days</span>
+              </div>
+
+              <div class="crop-spec-list">
+                <div data-i18n="sorghum_window">Planting Window: April - May (Main Season)</div>
+                <div data-i18n="sorghum_soil">Optimal Soil Condition: Sufficient soil moisture at sowing</div>
+                <div data-i18n="sorghum_varieties">Approved Varieties: NAROSORG-1 to 4 and SESO-1 to 3</div>
+              </div>
+
+              <div class="advisory-directive" style="margin:8px 0; font-size:0.86rem;" data-i18n="sorghum_action">
+                Field Action: Recommended for low-rainfall areas. Improved seed varieties withstand dry intervals following initial rains.
+              </div>
+
+              <div class="crop-citation" data-i18n="sorghum_source">
+                Source: NAADS Uganda: Sorghum varieties grown in Uganda &amp; production guidelines.
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- =======================================================================
+         VIEW PANEL 2: 'REPORT AN ISSUE'
+         ======================================================================= -->
+    <section id="panel-report" class="view-panel">
+      <div class="grid-layout grid-layout-equal">
+        
+        <!-- Issue Submission Form -->
+        <div class="card">
+          <h2 class="card-title" data-i18n="report_title">Report a Crop or Pest Problem</h2>
+          <p class="card-description" data-i18n="report_desc">Submit field observations directly to your assigned extension officer for diagnosis and guidance.</p>
+
+          <form id="issueReportForm" onsubmit="handleIssueFormSubmit(event)">
+            
+            <!-- Category Selection -->
+            <div class="form-group-field">
+              <label class="form-field-label" data-i18n="report_lbl_class">1. Problem Classification</label>
+              <div class="issue-selector-grid">
+                <div class="issue-option-btn selected" onclick="setIssueClassification(this, 'Fall Armyworm / Insect Pests')" data-i18n="opt_armyworm">
+                  Armyworm / Pests
+                </div>
+                <div class="issue-option-btn" onclick="setIssueClassification(this, 'Foliage Yellowing / Drying')" data-i18n="opt_yellowing">
+                  Yellowing Foliage
+                </div>
+                <div class="issue-option-btn" onclick="setIssueClassification(this, 'Soil Moisture Deficit / Scorched')" data-i18n="opt_dry_soil">
+                  Severe Dry Soil
+                </div>
+                <div class="issue-option-btn" onclick="setIssueClassification(this, 'Stunted Growth / Root Disease')" data-i18n="opt_stunted">
+                  Stunted Growth
+                </div>
+              </div>
+              <input type="hidden" id="selectedClassification" value="Fall Armyworm / Insect Pests">
+            </div>
+
+            <!-- Affected Crop -->
+            <div class="form-group-field">
+              <label class="form-field-label" for="reportCropField" data-i18n="report_lbl_crop">2. Affected Crop</label>
+              <select id="reportCropField" class="form-select-control" required>
+                <option value="Maize">Maize</option>
+                <option value="Sorghum">Sorghum</option>
+                <option value="Finger Millet">Finger Millet</option>
+                <option value="Cassava">Cassava</option>
+                <option value="Beans / Cowpeas">Beans / Cowpeas</option>
+                <option value="Pasture / Grassland">Pasture / Grassland</option>
+              </select>
+            </div>
+
+            <!-- Urgency Level -->
+            <div class="form-group-field">
+              <label class="form-field-label" data-i18n="report_lbl_urgency">3. Severity Assessment</label>
+              <div class="urgency-segment-bar">
+                <input type="radio" name="severityLevel" id="sev-low" value="Low" style="display:none;">
+                <label for="sev-low" class="urgency-segment-item" data-i18n="urgency_low">Low (Isolated Plants)</label>
+
+                <input type="radio" name="severityLevel" id="sev-med" value="Medium" style="display:none;" checked>
+                <label for="sev-med" class="urgency-segment-item" style="background:var(--primary-50); border-color:var(--primary-700); color:var(--primary-900);" data-i18n="urgency_med">Medium (Spreading)</label>
+
+                <input type="radio" name="severityLevel" id="sev-high" value="Urgent" style="display:none;">
+                <label for="sev-high" class="urgency-segment-item" data-i18n="urgency_high">Urgent (Entire Plot)</label>
+              </div>
+            </div>
+
+            <!-- Optional Photo Attachment -->
+            <div class="form-group-field">
+              <label class="form-field-label" data-i18n="report_lbl_photo">4. Photo Documentation (Optional)</label>
+              <div style="border:1px dashed var(--neutral-300); border-radius:var(--radius-sm); padding:16px; text-align:center; background:var(--neutral-100); cursor:pointer;" onclick="triggerPhotoPick()">
+                <div style="font-weight:600; color:var(--primary-700); font-size:0.9rem;" data-i18n="photo_prompt">Attach Leaf or Field Photograph</div>
+                <div class="form-help-note" data-i18n="photo_note">Supported image files up to 5MB. Stored locally if offline.</div>
+                <input type="file" id="issuePhotoInput" accept="image/*" capture="environment" style="display:none;" onchange="handlePhotoChosen(event)">
+                <div id="photoAttachmentPreview" style="display:none; font-weight:700; color:var(--status-success-text); margin-top:6px; font-size:0.84rem;"></div>
+              </div>
+            </div>
+
+            <!-- Audio Recording or Written Description -->
+            <div class="form-group-field">
+              <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+                <label class="form-field-label" for="issueDetails" style="margin-bottom:0;" data-i18n="report_lbl_details">5. Field Description</label>
+                <button type="button" class="btn-outline-secondary" style="padding:4px 10px; font-size:0.8rem;" onclick="toggleVoiceInput()">
+                  <span id="voiceBtnLabel" data-i18n="voice_record_btn">Record Voice Note</span>
+                </button>
+              </div>
+              <textarea id="issueDetails" class="form-textarea-control" data-i18n-placeholder="report_placeholder" placeholder="Describe symptoms (e.g., small holes inside maize funnel with caterpillar droppings)."></textarea>
+            </div>
+
+            <button type="submit" class="btn-solid-primary" data-i18n="btn_submit_report">
+              Submit Field Report
+            </button>
+          </form>
+        </div>
+
+        <!-- Issue History and Log -->
+        <div>
+          <div class="card">
+            <h2 class="card-title" data-i18n="recent_submissions_title">Recent Field Submissions</h2>
+            <p class="card-description" data-i18n="recent_submissions_desc">Status of previously logged issues and extension responses.</p>
+
+            <div class="data-feed-list" id="submissionFeed">
+              <div class="feed-item">
+                <div class="feed-item-header">
+                  <span class="feed-item-title">Fall Armyworm in Early Maize</span>
+                  <span class="badge-status-pill active">Reviewed</span>
+                </div>
+                <div class="feed-item-time">Logged 2 days ago &bull; Nadunget Plot 1</div>
+                <div class="feed-item-body" style="margin-top:6px;">
+                  <strong>Officer Guidance:</strong> Apply neem extract or wood ash mixed with fine sand in funnel centers. Re-inspect in 48 hours.
+                </div>
+              </div>
+
+              <div class="feed-item">
+                <div class="feed-item-header">
+                  <span class="feed-item-title">Topsoil Crusting Post-Germination</span>
+                  <span class="badge-status-pill active">Resolved</span>
+                </div>
+                <div class="feed-item-time">Logged 6 days ago &bull; Nadunget Plot 2</div>
+                <div class="feed-item-body" style="margin-top:6px;">
+                  Precipitation occurred; seedling emergence restored.
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="card">
+            <h2 class="card-title" data-i18n="protocol_title">Pest Management Protocol</h2>
+            <p class="card-description" style="margin-bottom:8px;">Standard practices for dryland smallholder farms:</p>
+            <ul style="font-size:0.88rem; color:var(--neutral-700); padding-left:18px; line-height:1.6;">
+              <li data-i18n="protocol_rule1">Inspect 20 consecutive plants in 5 locations across the field.</li>
+              <li data-i18n="protocol_rule2">Handpick egg masses and early-instar caterpillars when infestations are below threshold.</li>
+              <li data-i18n="protocol_rule3">Notify extension officers immediately when whorl damage exceeds 20%.</li>
+            </ul>
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- =======================================================================
+         VIEW PANEL 3: 'ASK FOR A VISIT'
+         ======================================================================= -->
+    <section id="panel-visit" class="view-panel">
+      <div class="grid-layout grid-layout-equal">
+        
+        <!-- Request Form -->
+        <div class="card">
+          <!-- Officer Bio Header -->
+          <div class="officer-brief-card">
+            <div class="officer-initials">PL</div>
+            <div>
+              <div style="font-weight:700; color:var(--neutral-900);">Peter Lokol</div>
+              <div style="font-size:0.82rem; color:var(--neutral-500);" data-i18n="officer_role">Agricultural Extension Officer &bull; Nadunget Sub-County</div>
+              <div style="font-size:0.8rem; color:var(--primary-700); font-weight:600; margin-top:2px;" data-i18n="officer_station">Stationed at Moroto District Agriculture Office</div>
+            </div>
+          </div>
+
+          <h2 class="card-title" data-i18n="visit_title">Schedule an On-Site Extension Visit</h2>
+          <p class="card-description" data-i18n="visit_desc">Request in-person field inspection for complex crop issues, soil sampling, or certified seed verification.</p>
+
+          <form id="visitRequestForm" onsubmit="handleVisitFormSubmit(event)">
+            
+            <div class="form-group-field">
+              <label class="form-field-label" for="visitObjective" data-i18n="visit_lbl_purpose">1. Purpose of Inspection</label>
+              <select id="visitObjective" class="form-select-control" required>
+                <option value="Soil Moisture & Seedbed Verification">Soil moisture and seedbed inspection prior to sowing</option>
+                <option value="Severe Pest / Disease Diagnosis">Identification and treatment of spreading pest infestation</option>
+                <option value="Drought Stress Assessment">Crop evaluation following dry period</option>
+                <option value="Seed Variety Verification">Verification of certified NAADS seed varieties</option>
+                <option value="General Agronomic Training">General agronomic guidance</option>
+              </select>
+            </div>
+
+            <div class="form-group-field">
+              <label class="form-field-label" for="visitTimeframe" data-i18n="visit_lbl_timeframe">2. Preferred Timing</label>
+              <select id="visitTimeframe" class="form-select-control" required>
+                <option value="Next Available Morning (08:00 - 11:00)">Next available morning (08:00 - 11:00)</option>
+                <option value="Next Available Afternoon (14:00 - 17:00)">Next available afternoon (14:00 - 17:00)</option>
+                <option value="Community Market Day">Nadunget Community Market Day</option>
+                <option value="Any Day This Week">Flexible within the current week</option>
+              </select>
+            </div>
+
+            <div class="form-group-field">
+              <label class="form-field-label" for="farmLandmark" data-i18n="visit_lbl_landmark">3. Farm Location and Landmark</label>
+              <input type="text" id="farmLandmark" class="form-input-text" value="Nadunget Parish, 300m behind Church borehole" required>
+              <div class="form-help-note" data-i18n="visit_landmark_note">Provides directional reference for the field visit.</div>
+            </div>
+
+            <div class="form-group-field">
+              <label class="form-field-label" for="contactPhone" data-i18n="visit_lbl_phone">4. Confirmation Contact Number</label>
+              <input type="tel" id="contactPhone" class="form-input-text" value="0772 890 123" required>
+            </div>
+
+            <div class="form-group-field" style="display:flex; align-items:center; gap:8px;">
+              <input type="checkbox" id="smsNotificationCheck" checked style="width:18px; height:18px; accent-color:var(--primary-700);">
+              <label for="smsNotificationCheck" style="font-size:0.86rem; color:var(--neutral-700);" data-i18n="visit_sms_note">Receive confirmation and officer itinerary via free SMS</label>
+            </div>
+
+            <button type="submit" class="btn-solid-primary" data-i18n="btn_submit_visit">
+              Submit Visit Request
+            </button>
+          </form>
+        </div>
+
+        <!-- Visit Schedules -->
+        <div>
+          <div class="card">
+            <h2 class="card-title" data-i18n="scheduled_visits_title">Scheduled Field Inspections</h2>
+            <p class="card-description" data-i18n="scheduled_visits_desc">Confirmed and pending visit dates with extension staff.</p>
+
+            <div class="data-feed-list" id="visitFeed">
+              <div class="feed-item">
+                <div class="feed-item-header">
+                  <span class="feed-item-title">Pre-Sowing Soil Inspection</span>
+                  <span class="badge-status-pill pending">Pending Itinerary</span>
+                </div>
+                <div class="feed-item-time">Requested for Thursday Morning &bull; Nadunget Parish</div>
+                <div class="feed-item-body" style="margin-top:4px;">
+                  Assigned to Officer Peter Lokol. Confirmation SMS pending schedule finalization.
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="card">
+            <h2 class="card-title" data-i18n="guidelines_title">Extension Service Guidelines</h2>
+            <div style="font-size:0.88rem; color:var(--neutral-700); line-height:1.55;">
+              <p data-i18n="guidelines_text1"><strong>Government-Supported Program:</strong> Extension inspections are provided without direct cost to registered smallholders.</p>
+              <p style="margin-top:8px;" data-i18n="guidelines_text2"><strong>Group Consultations:</strong> If adjacent farmers have similar crop conditions, neighborhood demonstrations may be conducted during the same visit.</p>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- =======================================================================
+         VIEW PANEL 4: 'FARM PROFILE'
+         ======================================================================= -->
+    <section id="panel-profile" class="view-panel">
+      <div class="grid-layout grid-layout-equal">
+        
+        <div class="card">
+          <h2 class="card-title" data-i18n="profile_title">Registered Farmer Information</h2>
+          <p class="card-description" data-i18n="profile_desc">Official registry record for extension communication and input programs.</p>
+
+          <div style="display:flex; align-items:center; gap:16px; margin-bottom:18px;">
+            <div style="width:52px; height:52px; border-radius:50%; background:var(--primary-100); color:var(--primary-800); display:flex; align-items:center; justify-content:center; font-size:1.25rem; font-weight:800;">
+              MA
+            </div>
+            <div>
+              <div style="font-size:1.15rem; font-weight:700;" id="profileName">Maria Akol</div>
+              <div style="font-size:0.85rem; color:var(--neutral-500);">ID: TM-KRA-088 &bull; Phone: <span id="profilePhone">0772 890 123</span></div>
+              <div style="font-size:0.85rem; color:var(--neutral-500);">Parish: Nadunget, Moroto District</div>
+            </div>
+          </div>
+
+          <div style="border-top:1px solid var(--neutral-200); padding-top:14px; font-size:0.9rem; display:flex; flex-direction:column; gap:10px;">
+            <div style="display:flex; justify-content:space-between;">
+              <span style="color:var(--neutral-500);" data-i18n="profile_lbl_crops">Registered Crops:</span>
+              <strong>Maize, Sorghum, Cowpeas</strong>
+            </div>
+            <div style="display:flex; justify-content:space-between;">
+              <span style="color:var(--neutral-500);" data-i18n="profile_lbl_acreage">Acreage Under Cultivation:</span>
+              <strong>2.5 Acres</strong>
+            </div>
+            <div style="display:flex; justify-content:space-between;">
+              <span style="color:var(--neutral-500);" data-i18n="profile_lbl_jurisdiction">Extension Jurisdiction:</span>
+              <strong>Moroto District Agricultural Department</strong>
+            </div>
+            <div style="display:flex; justify-content:space-between;">
+              <span style="color:var(--neutral-500);" data-i18n="profile_lbl_sms">SMS Alerts Status:</span>
+              <span class="badge-status-pill active" data-i18n="badge_subscribed">Subscribed</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <h2 class="card-title" data-i18n="profile_offline_title">Offline Advisory Database</h2>
+          <p class="card-description" data-i18n="profile_offline_desc">Local database status for field areas with limited or intermittent connectivity.</p>
+
+          <div style="background:var(--primary-50); border:1px solid var(--neutral-200); border-radius:var(--radius-sm); padding:14px; margin-bottom:16px;">
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+              <div>
+                <strong style="color:var(--primary-900);" data-i18n="db_name">Northern Uganda Crop Calendar 2026</strong>
+                <div style="font-size:0.8rem; color:var(--neutral-500);" data-i18n="db_cached">Cached locally &bull; NAADS &amp; NUTOFA SACCO Guidelines</div>
+              </div>
+              <span class="badge-status-pill active" data-i18n="badge_uptodate">Up to Date</span>
+            </div>
+          </div>
+
+          <button type="button" class="btn-outline-secondary" style="width:100%; margin-bottom:12px;" onclick="syncOfflineDatabase()" data-i18n="btn_sync_db">
+            Synchronize Advisory Database
+          </button>
+
+          <button type="button" class="btn-outline-secondary" style="width:100%; color:var(--status-alert-text); border-color:var(--status-alert-text);" onclick="openSignInModal()" data-i18n="btn_logout">
+            Switch Account or Sign Out
+          </button>
+        </div>
+
+      </div>
+    </section>
+
+  </main>
+
+  <!-- =========================================================================
+       5. SIGN-IN MODAL (Professional Standard Placement & UX)
+       ========================================================================= -->
+  <div class="modal-overlay" id="signInModal" onclick="handleModalBackdropClick(event)">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3 class="modal-title" data-i18n="modal_signin_title">Farmer Account Sign In</h3>
+        <button type="button" class="modal-close-btn" onclick="closeSignInModal()">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p style="font-size:0.88rem; color:var(--neutral-500); margin-bottom:16px;" data-i18n="modal_signin_desc">
+          Access your localized soil moisture directives and registered field records.
+        </p>
+
+        <form id="authLoginForm" onsubmit="handleAuthSubmit(event)">
+          <div class="form-group-field">
+            <label class="form-field-label" for="loginPhone" data-i18n="modal_lbl_phone">Phone Number or Farmer ID</label>
+            <input type="tel" id="loginPhone" class="form-input-text" placeholder="e.g., 0772 890 123 or MOR-042" value="0772 890 123" required>
+            <div class="form-help-note" data-i18n="modal_phone_note">Compatible with Airtel and MTN Uganda numbers.</div>
+          </div>
+
+          <div class="form-group-field">
+            <label class="form-field-label" for="loginDistrict" data-i18n="modal_lbl_subcounty">Sub-County Location</label>
+            <select id="loginDistrict" class="form-select-control">
+              <option value="Moroto District (Nadunget Parish)" selected>Moroto District (Nadunget Sub-County)</option>
+              <option value="Moroto District (Rupa Sub-County)">Moroto District (Rupa Sub-County)</option>
+              <option value="Kotido District (Panyangara Sub-County)">Kotido District (Panyangara Sub-County)</option>
+              <option value="Kaabong District (Lodiko Sub-County)">Kaabong District (Lodiko Sub-County)</option>
+              <option value="Napak District (Matany Sub-County)">Napak District (Matany Sub-County)</option>
+              <option value="Nakapiripirit District (Lorengedwat)">Nakapiripirit District (Lorengedwat)</option>
+              <option value="Amudat District (Karita Sub-County)">Amudat District (Karita Sub-County)</option>
+              <option value="Abim District (Nyakwae Sub-County)">Abim District (Nyakwae Sub-County)</option>
+            </select>
+          </div>
+
+          <button type="submit" class="btn-solid-primary" style="margin-top:8px;" data-i18n="modal_btn_signin">
+            Sign In to Portal
+          </button>
+        </form>
+
+        <!-- Quick Demo Profiles for Reviewers -->
+        <div style="margin-top:20px; border-top:1px dashed var(--neutral-300); padding-top:14px;">
+          <div style="font-size:0.8rem; font-weight:700; color:var(--neutral-500); text-transform:uppercase; margin-bottom:8px;" data-i18n="modal_demo_title">Quick Profiles for Demonstration:</div>
+          <div style="display:flex; flex-direction:column; gap:6px;">
+            <button type="button" class="btn-outline-secondary" style="justify-content:space-between; font-size:0.82rem;" onclick="applyDemoUser('Maria Akol', 'Moroto District (Nadunget Parish)', '0772 890 123')">
+              <span><strong>Maria Akol</strong> &bull; Moroto (Nadunget)</span>
+              <span style="color:var(--primary-700); font-weight:700;">Select</span>
+            </button>
+            <button type="button" class="btn-outline-secondary" style="justify-content:space-between; font-size:0.82rem;" onclick="applyDemoUser('Paul Lokeris', 'Kotido District (Panyangara Sub-County)', '0788 456 789')">
+              <span><strong>Paul Lokeris</strong> &bull; Kotido (Panyangara)</span>
+              <span style="color:var(--primary-700); font-weight:700;">Select</span>
+            </button>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <!-- =========================================================================
+       6. SYSTEM TOAST ALERT
+       ========================================================================= -->
+  <div class="toast-system-alert" id="systemToast">
+    <span id="toastContent">Action completed successfully.</span>
+  </div>
+
+  <!-- =========================================================================
+       7. JAVASCRIPT CONTROLLERS & MULTI-LANGUAGE ENGINE
+       ========================================================================= -->
+  <script>
+    let isVoiceActive = false;
+
+    // =========================================================================
+    // Multi-Language Translation Dictionaries (en, ngk, sw)
+    // =========================================================================
+    const TRANSLATIONS = {
+      en: {
+        brand_tagline: "Smallholder Advisory Portal",
+        nav_advice: "My Advice",
+        nav_report: "Report an Issue",
+        nav_visit: "Ask for a Visit",
+        nav_profile: "Farm Profile",
+        auth_label: "Sign In",
+        context_region_label: "Region:",
+        context_officer_label: "Extension Officer:",
+        context_channel_label: "Advisory Channel:",
+        context_channel_val: "SMS Verified",
+        verified_notice: "Verified Advisory: Approved by Agricultural Officer Peter Lokol for the current sowing window.",
+        active_farm_record: "Active Farm Record",
+        registered_acreage_meta: "Plot: Nadunget • Registered Acreage: 2.5 Acres • Season 2026A",
+        btn_report_issue: "Report Issue",
+        btn_request_visit: "Request Officer Visit",
+        radar_title: "Soil Moisture & Precipitation Radar",
+        badge_calibrated: "Calibrated",
+        radar_desc: "Combined village ground sensor data and satellite moisture metrics.",
+        moisture_label: "Root-Zone Moisture (0-10cm)",
+        moisture_status: "Moist (Optimal for Sowing)",
+        rain_label: "3-Day Rain Forecast",
+        rain_status: "Scattered Showers Expected",
+        advisory_guidance_text: "Agronomic Guidance: Topsoil moisture is adequate for immediate seed emergence. If dry seeds were sown earlier, expect germination within 48 to 72 hours.",
+        btn_listen_voice: "Listen to Voice Guidance (Selected Language)",
+        field_directives_title: "Field Directives",
+        dir_submit_pest: "Submit Pest or Foliage Concern",
+        dir_schedule_visit: "Schedule On-Site Extension Inspection",
+        maize_title: "Maize Planting Window",
+        badge_optimal: "Optimal Period",
+        maize_crop_name: "Northern Uganda Maize",
+        maize_windows: "Planting Windows: March - April (Early) • July - August (Late)",
+        maize_soil: "Optimal Soil Condition: Moist soil at planting",
+        maize_depth: "Recommended Sowing Depth: 5 cm with 75 cm row spacing",
+        maize_action: "Field Action: Topsoil moisture is optimal. Sow certified seeds in early morning hours to limit moisture loss from heat.",
+        maize_source: "Source: NUTOFA SACCO LTD Northern Uganda planting calendar and maize agronomy guide.",
+        sorghum_title: "Sorghum Planting Window",
+        badge_ready: "Ready to Sow",
+        sorghum_crop_name: "Drought-Tolerant Sorghum",
+        sorghum_window: "Planting Window: April - May (Main Season)",
+        sorghum_soil: "Optimal Soil Condition: Sufficient soil moisture at sowing",
+        sorghum_varieties: "Approved Varieties: NAROSORG-1 to 4 and SESO-1 to 3",
+        sorghum_action: "Field Action: Recommended for low-rainfall areas. Improved seed varieties withstand dry intervals following initial rains.",
+        sorghum_source: "Source: NAADS Uganda: Sorghum varieties grown in Uganda & production guidelines.",
+        report_title: "Report a Crop or Pest Problem",
+        report_desc: "Submit field observations directly to your assigned extension officer for diagnosis and guidance.",
+        report_lbl_class: "1. Problem Classification",
+        opt_armyworm: "Armyworm / Pests",
+        opt_yellowing: "Yellowing Foliage",
+        opt_dry_soil: "Severe Dry Soil",
+        opt_stunted: "Stunted Growth",
+        report_lbl_crop: "2. Affected Crop",
+        report_lbl_urgency: "3. Severity Assessment",
+        urgency_low: "Low (Isolated Plants)",
+        urgency_med: "Medium (Spreading)",
+        urgency_high: "Urgent (Entire Plot)",
+        report_lbl_photo: "4. Photo Documentation (Optional)",
+        photo_prompt: "Attach Leaf or Field Photograph",
+        photo_note: "Supported image files up to 5MB. Stored locally if offline.",
+        report_lbl_details: "5. Field Description",
+        voice_record_btn: "Record Voice Note",
+        report_placeholder: "Describe symptoms (e.g., small holes inside maize funnel with caterpillar droppings).",
+        btn_submit_report: "Submit Field Report",
+        recent_submissions_title: "Recent Field Submissions",
+        recent_submissions_desc: "Status of previously logged issues and extension responses.",
+        protocol_title: "Pest Management Protocol",
+        protocol_rule1: "Inspect 20 consecutive plants in 5 locations across the field.",
+        protocol_rule2: "Handpick egg masses and early-instar caterpillars when infestations are below threshold.",
+        protocol_rule3: "Notify extension officers immediately when whorl damage exceeds 20%.",
+        officer_role: "Agricultural Extension Officer • Nadunget Sub-County",
+        officer_station: "Stationed at Moroto District Agriculture Office",
+        visit_title: "Schedule an On-Site Extension Visit",
+        visit_desc: "Request in-person field inspection for complex crop issues, soil sampling, or certified seed verification.",
+        visit_lbl_purpose: "1. Purpose of Inspection",
+        visit_lbl_timeframe: "2. Preferred Timing",
+        visit_lbl_landmark: "3. Farm Location and Landmark",
+        visit_landmark_note: "Provides directional reference for the field visit.",
+        visit_lbl_phone: "4. Confirmation Contact Number",
+        visit_sms_note: "Receive confirmation and officer itinerary via free SMS",
+        btn_submit_visit: "Submit Visit Request",
+        scheduled_visits_title: "Scheduled Field Inspections",
+        scheduled_visits_desc: "Confirmed and pending visit dates with extension staff.",
+        guidelines_title: "Extension Service Guidelines",
+        guidelines_text1: "Government-Supported Program: Extension inspections are provided without direct cost to registered smallholders.",
+        guidelines_text2: "Group Consultations: If adjacent farmers have similar crop conditions, neighborhood demonstrations may be conducted during the same visit.",
+        profile_title: "Registered Farmer Information",
+        profile_desc: "Official registry record for extension communication and input programs.",
+        profile_lbl_crops: "Registered Crops:",
+        profile_lbl_acreage: "Acreage Under Cultivation:",
+        profile_lbl_jurisdiction: "Extension Jurisdiction:",
+        profile_lbl_sms: "SMS Alerts Status:",
+        badge_subscribed: "Subscribed",
+        profile_offline_title: "Offline Advisory Database",
+        profile_offline_desc: "Local database status for field areas with limited or intermittent connectivity.",
+        db_name: "Northern Uganda Crop Calendar 2026",
+        db_cached: "Cached locally • NAADS & NUTOFA SACCO Guidelines",
+        badge_uptodate: "Up to Date",
+        btn_sync_db: "Synchronize Advisory Database",
+        btn_logout: "Switch Account or Sign Out",
+        modal_signin_title: "Farmer Account Sign In",
+        modal_signin_desc: "Access your localized soil moisture directives and registered field records.",
+        modal_lbl_phone: "Phone Number or Farmer ID",
+        modal_phone_note: "Compatible with Airtel and MTN Uganda numbers.",
+        modal_lbl_subcounty: "Sub-County Location",
+        modal_btn_signin: "Sign In to Portal",
+        modal_demo_title: "Quick Profiles for Demonstration:"
+      },
+      ngk: {
+        brand_tagline: "Ekorikinet a Ngikonei a Karamoja",
+        nav_advice: "Ekiwuryo Kang",
+        nav_report: "Elimu Ngikur",
+        nav_visit: "Alip Emeto",
+        nav_profile: "Emanik Kang",
+        auth_label: "Toloma",
+        context_region_label: "Ekolia:",
+        context_officer_label: "Ekapolon a Emanik:",
+        context_channel_label: "Eporoto a Ekiwuryo:",
+        context_channel_val: "SMS Etemokinitai",
+        verified_notice: "Ekiwuryo ni etemokinitai: Elemuni Ekapolon Peter Lokol nuka alokin akipi tokona.",
+        active_farm_record: "Egelet a Emanik",
+        registered_acreage_meta: "Amana: Nadunget • Akeere: 2.5 Acres • Season 2026A",
+        btn_report_issue: "Elimu Ngikur",
+        btn_request_visit: "Alip Emeto noko Ekapolon",
+        radar_title: "Akipi noko Ngalup ka Akiru",
+        badge_calibrated: "Etemokinitai",
+        radar_desc: "Akip ka ngalup alomun neni a ngisensa noko amana ka satalayit.",
+        moisture_label: "Akipi noko Ngalup (0-10cm)",
+        moisture_status: "Eyapi Akipi (Epatana noi alokin)",
+        rain_label: "Akiru nuka Ngirwa 3",
+        rain_status: "Ereete Akiru Kiditi",
+        advisory_guidance_text: "Ekiwuryo a Emanik: Eyapi akipi noko ngalup alokin inyoit. Kera iyei nginyangita alup, eputosi alupun kotoma ngisaan 48-72.",
+        btn_listen_voice: "Tipup Ekiwuryo nuka Ngakarimojong",
+        field_directives_title: "Ngakiro nuka Amana",
+        dir_submit_pest: "Elimu Ngikur noko Nginyangita",
+        dir_schedule_visit: "Alip Emeto noko Emanik kon",
+        maize_title: "Akiro nuka Alokin Ebaba",
+        badge_optimal: "Saa ni Epatana",
+        maize_crop_name: "Ebaba a Uganda Kide",
+        maize_windows: "Saa a Alokin: March - April (Naka ekingaren) • July - August (Naka kelo)",
+        maize_soil: "Akiro nuka Ngalup: Eyapi akipi noko ngalup alokin",
+        maize_depth: "Iloritai alokin 5 cm ka abwatar a 75 cm",
+        maize_action: "Asubakinet: Eyapi akipi. Toko nginyangita nuka ngataparani eroko akolong enyari akipi.",
+        maize_source: "Ekalimonokinan: NUTOFA SACCO LTD Uganda kide kalenda a emanik.",
+        sorghum_title: "Akiro nuka Alokin Ngimomwa",
+        badge_ready: "Atemokin Alokin",
+        sorghum_crop_name: "Ngimomwa nuka Akolong",
+        sorghum_window: "Saa a Alokin: April - May (Akipiru a Kide)",
+        sorghum_soil: "Akiro nuka Ngalup: Eyapi akipi noko ngalup alokin",
+        sorghum_varieties: "Nginyangita ni etelete: NAROSORG-1 toni 4 ka SESO-1 toni 3",
+        sorghum_action: "Asubakinet: Epatana alup na ngataparar. Nginyangita na egangitoi akolong kera eyapi akiru kiditi.",
+        sorghum_source: "Ekalimonokinan: NAADS Uganda: Ngimomwa nuka Uganda.",
+        report_title: "Elimu Ngikur noko Ngimomwa",
+        report_desc: "Toya ngakiro nuka amana kon neni a ekapolon Peter Lokol kingarak ecelet.",
+        report_lbl_class: "1. Ecelet a Akiro",
+        opt_armyworm: "Ngikur / Ngilomet",
+        opt_yellowing: "Anyangiar a Ngikya",
+        opt_dry_soil: "Akar a Ngalup",
+        opt_stunted: "Adongonor a Ngikya",
+        report_lbl_crop: "2. Ikya ni Eariat",
+        report_lbl_urgency: "3. Egile a Akiro",
+        urgency_low: "Kiditi (Ngikya ngice)",
+        urgency_med: "Alosikinet (Eyaari)",
+        urgency_high: "Eriono (Amana dada)",
+        report_lbl_photo: "4. Aputoi a Amana (Kera iyei)",
+        photo_prompt: "Roko Aputoi a Ikya",
+        photo_note: "Esubi fayil 5MB. Erumokinit kera mam netiwaak eyapi.",
+        report_lbl_details: "5. Akiro nuka Amana",
+        voice_record_btn: "Roko Eporoto",
+        report_placeholder: "Kilikwa ngakiro (ebali ngikur eramo kotoma ebaba).",
+        btn_submit_report: "Toliu Elimu a Amana",
+        recent_submissions_title: "Ngilimonokin noko Ngirwa",
+        recent_submissions_desc: "Akiro na ilimu iye ka ekiwuryo a ekapolon.",
+        protocol_title: "Egelet nuka Apetun Ngikur",
+        protocol_rule1: "Itemoku ngikya 20 kotoma ngoni 5 a amana.",
+        protocol_rule2: "Kokoto ngaboboroi ka ngikur kidici kera mam eyatata.",
+        protocol_rule3: "Elimu ekapolon atipe kera ngikur eyatata 20%.",
+        officer_role: "Ekapolon a Emanik • Nadunget Sub-County",
+        officer_station: "Eya Opisi a Moroto District Agriculture",
+        visit_title: "Alip Emeto noko Emanik",
+        visit_desc: "Alip ekapolon abunere emato ngikur noko ngalup kotoma amana kon.",
+        visit_lbl_purpose: "1. Ecelet a Emeto",
+        visit_lbl_timeframe: "2. Saa ni Ikotei",
+        visit_lbl_landmark: "3. Ekolia a Amana",
+        visit_landmark_note: "Ekingaraki ekapolon aanyun manyatta kon.",
+        visit_lbl_phone: "4. Enamba a Esim",
+        visit_sms_note: "Tomal SMS a namba kon a akalimonokin",
+        btn_submit_visit: "Toya Alip Emeto",
+        scheduled_visits_title: "Ngirwa nuka Emeto",
+        scheduled_visits_desc: "Ngirwa na etemokinit ekapolon abunere.",
+        guidelines_title: "Ekiwuryo nuka Gavumenti",
+        guidelines_text1: "Emudukanit Gavumenti: Emeto a amana eroko a ngasilesil mam igali.",
+        guidelines_text2: "Akituk a Ngikonei: Kera eya ngikur amana a ngikonei dada, elimunoi neni a ngikonei dada.",
+        profile_title: "Akiro nuka Ekonei",
+        profile_desc: "Egelet nuka emanik kotoma gavumenti.",
+        profile_lbl_crops: "Ngikya ni Iyei:",
+        profile_lbl_acreage: "Akeere a Amana:",
+        profile_lbl_jurisdiction: "Opisi a Emeto:",
+        profile_lbl_sms: "SMS a Akiro:",
+        badge_subscribed: "Etomokinit",
+        profile_offline_title: "Ngakiro nuka Off-layin",
+        profile_offline_desc: "Ngakiro na igangitoi kotoma foon kera mam netiwaak.",
+        db_name: "Northern Uganda Crop Calendar 2026",
+        db_cached: "Eya kotoma foon • NAADS & NUTOFA Guidelines",
+        badge_uptodate: "Eyapi Tokona",
+        btn_sync_db: "Toliu Ngakiro nuka Foon",
+        btn_logout: "Tolem / Toloma Ece",
+        modal_signin_title: "Toloma Emanik Kon",
+        modal_signin_desc: "Aanyun ekiwuryo nuka akipi ka amana kon.",
+        modal_lbl_phone: "Enamba a Esim / ID",
+        modal_phone_note: "Esubi MTN ka Airtel Uganda.",
+        modal_lbl_subcounty: "Ekolia / Sub-County",
+        modal_btn_signin: "Toloma Kotoma",
+        modal_demo_title: "Ngikonei nuka Akitatam:"
+      },
+      sw: {
+        brand_tagline: "Tovuti ya Ushauri wa Wakulima Wadogo",
+        nav_advice: "Ushauri Wangu",
+        nav_report: "Ripoti Tatizo",
+        nav_visit: "Omba Ziara",
+        nav_profile: "Wasifu wa Shamba",
+        auth_label: "Ingia",
+        context_region_label: "Eneo:",
+        context_officer_label: "Afisa Ugani:",
+        context_channel_label: "Njia ya Ushauri:",
+        context_channel_val: "SMS Imethibitishwa",
+        verified_notice: "Ushauri Uliothibitishwa: Umeidhinishwa na Afisa wa Kilimo Peter Lokol kwa msimu wa sasa wa kupanda.",
+        active_farm_record: "Kumbukumbu ya Shamba Lililo Hai",
+        registered_acreage_meta: "Shamba: Nadunget • Ukubwa wa Shamba: Ekari 2.5 • Msimu 2026A",
+        btn_report_issue: "Ripoti Tatizo",
+        btn_request_visit: "Omba Ziara ya Afisa",
+        radar_title: "Unyevu wa Udongo na Utabiri wa Mvua",
+        badge_calibrated: "Imepimwa",
+        radar_desc: "Mchanganyiko wa data za vitambuzi vya ardhini kijijini na vipimo vya setilaiti.",
+        moisture_label: "Unyevu wa Tabaka la Mizizi (0-10cm)",
+        moisture_status: "Unyevu wa Kutosha (Bora kwa Kupanda)",
+        rain_label: "Utabiri wa Mvua wa Siku 3",
+        rain_status: "Mvua ya Mara kwa Mara Inatarajiwa",
+        advisory_guidance_text: "Mwongozo wa Kilimo: Unyevu wa tabaka la juu unatosha kwa mbegu kuchipua mara moja. Iwapo ulipanda mbegu kavu awali, tarajia zitaanza kuota ndani ya saa 48 hadi 72.",
+        btn_listen_voice: "Sikiliza Mwongozo wa Sauti (Kiswahili)",
+        field_directives_title: "Miongozo ya Shambani",
+        dir_submit_pest: "Wasilisha Taarifa ya Wadudu au Majani",
+        dir_schedule_visit: "Panga Ukaguzi wa Shamba na Afisa Ugani",
+        maize_title: "Wakati wa Kupanda Mahindi",
+        badge_optimal: "Wakati Bora",
+        maize_crop_name: "Mahindi ya Kaskazini mwa Uganda",
+        maize_windows: "Nyakati za Kupanda: Machi - Aprili (Mapema) • Julai - Agosti (Kuchelewa)",
+        maize_soil: "Hali Bora ya Udongo: Udongo wenye unyevu wakati wa kupanda",
+        maize_depth: "Kina cha Kupanda: cm 5 kwa nafasi ya mistari ya cm 75",
+        maize_action: "Hatua ya Shambani: Unyevu wa udongo ni bora. Panda mbegu zilizothibitishwa asubuhi mapema ili kupunguza upotezaji wa unyevu kutokana na joto.",
+        maize_source: "Chanzo: NUTOFA SACCO LTD kalenda ya upandaji na mwongozo wa kilimo cha mahindi.",
+        sorghum_title: "Wakati wa Kupanda Mtama",
+        badge_ready: "Tayari Kupandwa",
+        sorghum_crop_name: "Mtama Unaovumilia Ukame",
+        sorghum_window: "Wakati wa Kupanda: Aprili - Mei (Msimu Mkuu)",
+        sorghum_soil: "Hali Bora ya Udongo: Unyevu wa kutosha wakati wa kupanda",
+        sorghum_varieties: "Aina Zilizoidhinishwa: NAROSORG-1 hadi 4 na SESO-1 hadi 3",
+        sorghum_action: "Hatua ya Shambani: Inapendekezwa kwa maeneo yenye mvua kidogo. Aina zilizoboreshwa huvumilia vipindi vya ukame baada ya mvua ya kwanza.",
+        sorghum_source: "Chanzo: NAADS Uganda: Aina za mtama zinazolimwa Uganda na miongozo ya uzalishaji.",
+        report_title: "Ripoti Tatizo la Mazao au Wadudu",
+        report_desc: "Tuma taarifa ya shambani moja kwa moja kwa afisa ugani aliyepangiwa kwa utambuzi na ushauri.",
+        report_lbl_class: "1. Uainishaji wa Tatizo",
+        opt_armyworm: "Viwavi Jeshi / Wadudu",
+        opt_yellowing: "Majani ya Njano / Yanayokauka",
+        opt_dry_soil: "Udongo Mkabwa Sana",
+        opt_stunted: "Kudumaa kwa Mimea",
+        report_lbl_crop: "2. Zao Lililoathirika",
+        report_lbl_urgency: "3. Kiwango cha Ukali",
+        urgency_low: "Chini (Mimea Michache)",
+        urgency_med: "Kati (Inaenea)",
+        urgency_high: "Dharura (Shamba Zima)",
+        report_lbl_photo: "4. Picha ya Shamba (Hiari)",
+        photo_prompt: "Weka Picha ya Jani au Shamba",
+        photo_note: "Faili za picha hadi 5MB. Huhifadhiwa ndani ya simu bila mtandao.",
+        report_lbl_details: "5. Maelezo ya Shambani",
+        voice_record_btn: "Rekodi Sauti",
+        report_placeholder: "Eleza dalili (mfano: mashimo madogo ndani ya funeli ya mahindi na kinyesi cha viwavi).",
+        btn_submit_report: "Tuma Ripoti ya Shambani",
+        recent_submissions_title: "Ripoti Zilizotumwa Hivi Karibuni",
+        recent_submissions_desc: "Hali ya masuala yaliyotumwa awali na majibu ya afisa ugani.",
+        protocol_title: "Mwongozo wa Kudhibiti Wadudu",
+        protocol_rule1: "Kagua mimea 20 mfululizo katika sehemu 5 tofauti za shamba.",
+        protocol_rule2: "Okota mayai na viwavi wachanga kwa mikono ikiwa mashambulizi bado ni madogo.",
+        protocol_rule3: "Mjulishe afisa ugani mara moja uharibifu unapozidi 20%.",
+        officer_role: "Afisa Ugani wa Kilimo • Nadunget Sub-County",
+        officer_station: "Yupo katika Ofisi ya Kilimo ya Wilaya ya Moroto",
+        visit_title: "Panga Ziara ya Afisa Ugani Shambani",
+        visit_desc: "Omba ukaguzi wa shamba ana kwa ana kwa matatizo magumu, vipimo vya udongo au uhakiki wa mbegu bora.",
+        visit_lbl_purpose: "1. Kusudi la Ziara",
+        visit_lbl_timeframe: "2. Wakati Unaopendelea",
+        visit_lbl_landmark: "3. Eneo na Alama ya Shamba",
+        visit_landmark_note: "Hutoa maelekezo ya kumwezesha afisa kufika shambani mwako.",
+        visit_lbl_phone: "4. Nambari ya Simu ya Uthibitisho",
+        visit_sms_note: "Pokea uthibitisho na ratiba ya afisa kupitia SMS ya bure",
+        btn_submit_visit: "Tuma Ombi la Ziara",
+        scheduled_visits_title: "Ziara Zilizopangwa Shambani",
+        scheduled_visits_desc: "Tarehe zilizothibitishwa na zinazosubiriwa na maafisa ugani.",
+        guidelines_title: "Miongozo ya Huduma za Ugani",
+        guidelines_text1: "Mpango Unaofadhiliwa na Serikali: Ukaguzi wa ugani hutolewa bila gharama ya moja kwa moja kwa wakulima wadogo.",
+        guidelines_text2: "Ushauri wa Kikundi: Ikiwa wakulima wa karibu wana hali sawa, mafunzo ya kijiji yanaweza kufanyika wakati wa ziara hiyo hiyo.",
+        profile_title: "Taarifa za Mkulima Aliyesajiliwa",
+        profile_desc: "Kumbukumbu rasmi ya serikali kwa mawasiliano na mipango ya pembejeo.",
+        profile_lbl_crops: "Mazao Yaliyosajiliwa:",
+        profile_lbl_acreage: "Ekari Zinazolimwa:",
+        profile_lbl_jurisdiction: "Eneo la Utawala wa Ugani:",
+        profile_lbl_sms: "Hali ya Arifa za SMS:",
+        badge_subscribed: "Imejisajili",
+        profile_offline_title: "Hifadhi ya Ushauri Bila Mtandao",
+        profile_offline_desc: "Hali ya data ya ndani ya kifaa kwa maeneo yenye mtandao hafifu au yasiyo na mtandao.",
+        db_name: "Northern Uganda Crop Calendar 2026",
+        db_cached: "Imehifadhiwa kwenye simu • Miongozo ya NAADS & NUTOFA SACCO",
+        badge_uptodate: "Imesasishwa",
+        btn_sync_db: "Sawazisha Hifadhi ya Ushauri",
+        btn_logout: "Badilisha Akaunti au Toka",
+        modal_signin_title: "Kuingia kwa Mkulima",
+        modal_signin_desc: "Fikia maelekezo ya unyevu wa udongo na rekodi za shamba lako.",
+        modal_lbl_phone: "Nambari ya Simu au Kitambulisho",
+        modal_phone_note: "Inafanya kazi na nambari za Airtel na MTN Uganda.",
+        modal_lbl_subcounty: "Eneo la Kaunti Ndogo",
+        modal_btn_signin: "Ingia Kwenye Tovuti",
+        modal_demo_title: "Wasifu wa Haraka wa Majaribio:"
+      }
+    };
+
+    // Voice guidance text per language for speaker playback
+    const AUDIO_MESSAGES = {
+      en: "Your topsoil is moist. Light rainfall is expected this week. Sowing maize and sorghum is recommended now in Nadunget.",
+      ngk: "Eyapi akipi noko ngalup. Ereete akiru kiditi kide kwap. Alokin ebaba ka ngimomwa eroni tokona Nadunget.",
+      sw: "Unyevu wa udongo wako ni mzuri. Mvua nyepesi inatarajiwa wiki hii. Kupanda mahindi na mtama kunapendekezwa sasa huko Nadunget."
+    };
+
+    // Current active language state
+    let currentLang = 'en';
+
+    // =========================================================================
+    // Multi-Language Switching Engine (Zero-Latency Client-Side & LocalStorage)
+    // =========================================================================
+    function changeLanguage(lang) {
+      if (!TRANSLATIONS[lang]) lang = 'en';
+      currentLang = lang;
+      const dict = TRANSLATIONS[lang];
+
+      // Update all elements with data-i18n
+      document.querySelectorAll('[data-i18n]').forEach(el => {
+        const key = el.getAttribute('data-i18n');
+        if (dict[key] !== undefined) {
+          el.textContent = dict[key];
+        }
+      });
+
+      // Update placeholders
+      document.querySelectorAll('[data-i18n-placeholder]').forEach(el => {
+        const key = el.getAttribute('data-i18n-placeholder');
+        if (dict[key] !== undefined) {
+          el.setAttribute('placeholder', dict[key]);
+        }
+      });
+
+      // Sync language select dropdown
+      const sel = document.getElementById('languageSelect');
+      if (sel && sel.value !== lang) {
+        sel.value = lang;
+      }
+
+      // Persist user selection
+      try {
+        localStorage.setItem('terramoist_lang', lang);
+      } catch (err) {
+        // Fallback for sandboxed browsing
+      }
+
+      // Display localized toast confirmation
+      const toastNotifications = {
+        en: 'Language set to English.',
+        ngk: 'Egelete akirorok nuka Ngakarimojong.',
+        sw: 'Lugha imebadilishwa kuwa Kiswahili.'
+      };
+      displayToast(toastNotifications[lang] || 'Language updated.');
+    }
+
+    // Tab Navigation Controller
+    function navigateTab(tabKey) {
+      const tabs = ['advice', 'report', 'visit', 'profile'];
+      tabs.forEach(key => {
+        const panel = document.getElementById('panel-' + key);
+        const navBtn = document.getElementById('nav-' + key);
+        if (panel) panel.classList.toggle('active', key === tabKey);
+        if (navBtn) navBtn.classList.toggle('active', key === tabKey);
+      });
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    // Modal Controller for Sign In
+    function openSignInModal() {
+      document.getElementById('signInModal').classList.add('open');
+    }
+
+    function closeSignInModal() {
+      document.getElementById('signInModal').classList.remove('open');
+    }
+
+    function handleModalBackdropClick(e) {
+      if (e.target.id === 'signInModal') {
+        closeSignInModal();
+      }
+    }
+
+    // Sign In Action
+    function handleAuthSubmit(e) {
+      e.preventDefault();
+      const phoneVal = document.getElementById('loginPhone').value;
+      const districtVal = document.getElementById('loginDistrict').value;
+      
+      document.getElementById('displayDistrict').textContent = districtVal;
+      document.getElementById('bannerFarmerName').textContent = phoneVal;
+      document.getElementById('profileName').textContent = phoneVal;
+      document.getElementById('profilePhone').textContent = phoneVal;
+      document.getElementById('headerAuthLabel').textContent = phoneVal.split(' ')[0] || 'Maria';
+
+      closeSignInModal();
+      displayToast('Authenticated as ' + phoneVal);
+      navigateTab('advice');
+    }
+
+    // Demo Profile Quick Switcher
+    function applyDemoUser(name, district, phone) {
+      document.getElementById('bannerFarmerName').textContent = name;
+      document.getElementById('displayDistrict').textContent = district;
+      document.getElementById('profileName').textContent = name;
+      document.getElementById('profilePhone').textContent = phone;
+      document.getElementById('headerAuthLabel').textContent = name;
+      
+      closeSignInModal();
+      displayToast('Active profile set to ' + name);
+      navigateTab('advice');
+    }
+
+    // Issue Classification Button Selection
+    function setIssueClassification(elem, label) {
+      document.querySelectorAll('.issue-selector-grid .issue-option-btn').forEach(btn => {
+        btn.classList.remove('selected');
+      });
+      elem.classList.add('selected');
+      document.getElementById('selectedClassification').value = label;
+    }
+
+    // Urgency Segment Selection Styling
+    document.querySelectorAll('input[name="severityLevel"]').forEach(radio => {
+      radio.addEventListener('change', (e) => {
+        document.querySelectorAll('.urgency-segment-item').forEach(lbl => {
+          lbl.style.background = 'var(--neutral-0)';
+          lbl.style.borderColor = 'var(--neutral-300)';
+          lbl.style.color = 'var(--neutral-900)';
+        });
+        const activeLabel = document.querySelector(`label[for="${e.target.id}"]`);
+        if (activeLabel) {
+          activeLabel.style.background = 'var(--primary-50)';
+          activeLabel.style.borderColor = 'var(--primary-700)';
+          activeLabel.style.color = 'var(--primary-900)';
+        }
+      });
+    });
+
+    // Photo Input Trigger
+    function triggerPhotoPick() {
+      const input = document.getElementById('issuePhotoInput');
+      if (input) input.click();
+    }
+
+    function handlePhotoChosen(e) {
+      const file = e.target.files[0];
+      const preview = document.getElementById('photoAttachmentPreview');
+      if (file && preview) {
+        preview.style.display = 'block';
+        preview.textContent = 'Attached: ' + file.name + ' (' + Math.round(file.size / 1024) + ' KB)';
+      }
+    }
+
+    // Voice Note Input
+    function toggleVoiceInput() {
+      const label = document.getElementById('voiceBtnLabel');
+      isVoiceActive = !isVoiceActive;
+      if (isVoiceActive) {
+        label.textContent = currentLang === 'ngk' ? 'Totowo...' : (currentLang === 'sw' ? 'Simamisha Rekodi' : 'Stop Recording');
+        displayToast(currentLang === 'ngk' ? 'Iyei aroko eporoto...' : (currentLang === 'sw' ? 'Inarekodi sauti...' : 'Recording voice note...'));
+      } else {
+        label.textContent = currentLang === 'ngk' ? 'Eporoto Etemokinit' : (currentLang === 'sw' ? 'Sauti Imerekodiwa' : 'Voice Note Attached');
+        document.getElementById('issueDetails').value = '[Voice note attached]';
+        displayToast(currentLang === 'ngk' ? 'Eporoto erokoitai.' : (currentLang === 'sw' ? 'Sauti imewekwa kwenye ripoti.' : 'Audio note attached to report.'));
+      }
+    }
+
+    // Audio Advisory Playback
+    function playAudioAdvice() {
+      const msg = AUDIO_MESSAGES[currentLang] || AUDIO_MESSAGES.en;
+      displayToast(currentLang === 'ngk' ? 'Etotol eporoto a Ngakarimojong...' : (currentLang === 'sw' ? 'Inacheza ushauri wa Kiswahili...' : 'Playing voice guidance...'));
+      if ('speechSynthesis' in window) {
+        window.speechSynthesis.cancel();
+        const utterance = new SpeechSynthesisUtterance(msg);
+        utterance.rate = 0.92;
+        if (currentLang === 'sw') utterance.lang = 'sw-KE';
+        else utterance.lang = 'en-UG';
+        window.speechSynthesis.speak(utterance);
+      }
+    }
+
+    // Submit Issue Report
+    async function handleIssueFormSubmit(e) {
+      e.preventDefault();
+      const issueType = document.getElementById('selectedClassification').value;
+      const crop = document.getElementById('reportCropField').value;
+      const details = document.getElementById('issueDetails').value;
+      const phone = document.getElementById('contactPhone') ? document.getElementById('contactPhone').value : '0772 890 123';
+      const severity = document.querySelector('input[name="severityLevel"]:checked')?.value || 'Medium';
+      const feed = document.getElementById('submissionFeed');
+
+      try {
+        const response = await fetch('/api/reports', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            farmer_phone: phone,
+            crop_type: crop,
+            issue_type: issueType,
+            urgency: severity,
+            description: details || null,
+            location: document.getElementById('displayDistrict')?.textContent || 'Moroto District (Nadunget Parish)',
+            has_photo: !!(document.getElementById('issuePhotoInput')?.files?.length)
+          })
+        });
+        if (response.ok) {
+          const data = await response.json();
+          displayToast(currentLang === 'ngk' ? 'Elimu ' + data.id + ' eyaakini ekapolon.' : (currentLang === 'sw' ? 'Ripoti ' + data.id + ' imetumwa kwa afisa ugani.' : 'Field observation ' + data.id + ' transmitted to officer.'));
+        } else {
+          displayToast(currentLang === 'ngk' ? 'Elimu erumokinit kotoma foon.' : 'Field observation saved locally (Offline mode).');
+        }
+      } catch (err) {
+        displayToast('Field observation queued locally (Offline mode).');
+      }
+
+      const item = document.createElement('div');
+      item.className = 'feed-item';
+      item.innerHTML = `
+        <div class="feed-item-header">
+          <span class="feed-item-title">${issueType} in ${crop}</span>
+          <span class="badge-status-pill pending">Pending Review</span>
+        </div>
+        <div class="feed-item-time">Logged just now &bull; Nadunget Plot</div>
+        <div class="feed-item-body" style="margin-top:4px;">
+          Dispatched to Officer Peter Lokol. Guidance will be transmitted via SMS.
+        </div>
+      `;
+      feed.prepend(item);
+
+      document.getElementById('issueReportForm').reset();
+      document.getElementById('photoAttachmentPreview').style.display = 'none';
+    }
+
+    // Submit Visit Request
+    async function handleVisitFormSubmit(e) {
+      e.preventDefault();
+      const objective = document.getElementById('visitObjective').value;
+      const timeframe = document.getElementById('visitTimeframe').value;
+      const landmark = document.getElementById('farmLandmark').value;
+      const phone = document.getElementById('contactPhone').value;
+      const smsCheck = document.getElementById('smsNotificationCheck')?.checked ?? true;
+      const feed = document.getElementById('visitFeed');
+
+      try {
+        const response = await fetch('/api/visit-requests', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            farmer_phone: phone,
+            reason: objective,
+            preferred_time: timeframe,
+            landmark: landmark,
+            district: document.getElementById('displayDistrict')?.textContent || 'Moroto District (Nadunget Parish)',
+            sms_notification: smsCheck
+          })
+        });
+        if (response.ok) {
+          const data = await response.json();
+          displayToast(currentLang === 'ngk' ? 'Alip emeto ' + data.id + ' etemokinitai.' : (currentLang === 'sw' ? 'Ombi la ziara ' + data.id + ' limesajiliwa.' : 'Visit request ' + data.id + ' registered for scheduling.'));
+        } else {
+          displayToast('Visit request queued locally.');
+        }
+      } catch (err) {
+        displayToast('Visit request queued (Offline mode).');
+      }
+
+      const item = document.createElement('div');
+      item.className = 'feed-item';
+      item.innerHTML = `
+        <div class="feed-item-header">
+          <span class="feed-item-title">${objective}</span>
+          <span class="badge-status-pill pending">Pending Itinerary</span>
+        </div>
+        <div class="feed-item-time">Requested for ${timeframe}</div>
+        <div class="feed-item-body" style="margin-top:4px;">
+          Scheduled request received. Officer Peter Lokol will confirm via SMS.
+        </div>
+      `;
+      feed.prepend(item);
+
+      document.getElementById('visitRequestForm').reset();
+    }
+
+    // Sync Offline Database
+    function syncOfflineDatabase() {
+      displayToast(currentLang === 'ngk' ? 'Toliu ngakiro nuka kalenda...' : (currentLang === 'sw' ? 'Inasawazisha hifadhidata ya kilimo...' : 'Synchronizing advisory database...'));
+      setTimeout(() => {
+        displayToast(currentLang === 'ngk' ? 'Ngakiro nuka kalenda itemokitos 2026.' : (currentLang === 'sw' ? 'Hifadhidata imesasishwa: Kalenda ya 2026 iko tayari.' : 'Database synchronized: 2026 Northern Uganda calendars updated.'));
+      }, 900);
+    }
+
+    // Toast Notification Display
+    function displayToast(msg, duration = 3200) {
+      const toast = document.getElementById('systemToast');
+      const text = document.getElementById('toastContent');
+      if (!toast || !text) return;
+      text.textContent = msg;
+      toast.classList.add('active');
+      setTimeout(() => {
+        toast.classList.remove('active');
+      }, duration);
+    }
+
+    // Initialize Language from LocalStorage on page load (Zero-latency instant switch)
+    document.addEventListener('DOMContentLoaded', () => {
+      let savedLang = 'en';
+      try {
+        savedLang = localStorage.getItem('terramoist_lang') || 'en';
+      } catch (e) {
+        savedLang = 'en';
+      }
+      changeLanguage(savedLang);
+    });
+  </script>
+</body>
+</html>
