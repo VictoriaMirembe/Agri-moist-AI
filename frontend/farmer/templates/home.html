@@ -1,104 +1,11 @@
 {% extends "base.html" %}
-{% block title %}Farmer dashboard{% endblock %}
-{% block container_class %}farmer-dashboard-container{% endblock %}
+{% block title %}AgriMoist AI{% endblock %}
 {% block content %}
-<div class="farmer-dashboard">
-  <header class="farmer-dashboard-header">
-    <a class="farmer-brand" href="/farmer/home?phone={{ phone|urlencode }}">AgriMoist <span>AI</span></a>
-    <a class="farmer-signout" href="/farmer">Sign out</a>
-  </header>
-
-  <section class="farmer-welcome">
-    <div class="farmer-avatar" id="farmer-avatar" aria-hidden="true">F</div>
-    <div class="farmer-welcome-copy">
-      <p class="farmer-eyebrow">YOUR FARM DASHBOARD</p>
-      <h1>Hello, <span id="farmer-name">farmer</span></h1>
-      <p class="farmer-household" id="farmer-household">Loading your household details...</p>
-    </div>
-  </section>
-
-  <section class="farmer-advice-card" aria-labelledby="advice-heading">
-    <div class="farmer-section-heading">
-      <div>
-        <p class="farmer-eyebrow">FROM YOUR EXTENSION OFFICER</p>
-        <h2 id="advice-heading">My advice</h2>
-      </div>
-      <span class="farmer-approval-badge" id="advice-status">Checking</span>
-    </div>
-    <p id="advice-preview" class="farmer-advice-preview" aria-live="polite">Loading your latest approved advice...</p>
-    <p id="advice-credit" class="farmer-advice-credit" hidden></p>
-    <a class="farmer-link-button" href="/farmer/advice?phone={{ phone|urlencode }}">Read my advice <span aria-hidden="true">&rarr;</span></a>
-  </section>
-
-  <section class="farmer-actions" aria-labelledby="actions-heading">
-    <div class="farmer-section-heading">
-      <div>
-        <p class="farmer-eyebrow">HOW CAN WE HELP?</p>
-        <h2 id="actions-heading">Farm support</h2>
-      </div>
-    </div>
-    <div class="farmer-action-grid">
-      <a class="farmer-action-card" href="/farmer/report?phone={{ phone|urlencode }}">
-        <span class="farmer-action-icon" aria-hidden="true">!</span>
-        <span><strong>Report a problem</strong><small>Tell your officer what is happening in your field.</small></span>
-        <span class="farmer-action-arrow" aria-hidden="true">&rarr;</span>
-      </a>
-      <a class="farmer-action-card" href="/farmer/visit?phone={{ phone|urlencode }}">
-        <span class="farmer-action-icon" aria-hidden="true">+</span>
-        <span><strong>Ask for a visit</strong><small>Request a visit from your extension officer.</small></span>
-        <span class="farmer-action-arrow" aria-hidden="true">&rarr;</span>
-      </a>
-      <a class="farmer-action-card" href="/farmer/followup?phone={{ phone|urlencode }}">
-        <span class="farmer-action-icon" aria-hidden="true">&#10003;</span>
-        <span><strong>Did advice help?</strong><small>Share how the latest advice worked for you.</small></span>
-        <span class="farmer-action-arrow" aria-hidden="true">&rarr;</span>
-      </a>
-    </div>
-  </section>
-</div>
-
-<script>
-const phone = {{ phone|tojson }};
-
-(async () => {
-  const name = document.getElementById("farmer-name");
-  const avatar = document.getElementById("farmer-avatar");
-  const household = document.getElementById("farmer-household");
-  const adviceStatus = document.getElementById("advice-status");
-  const advicePreview = document.getElementById("advice-preview");
-  const adviceCredit = document.getElementById("advice-credit");
-
-  try {
-    const [profile, advice] = await Promise.all([
-      getJSON("/api/farmer/profile?phone=" + encodeURIComponent(phone)),
-      getJSON("/api/farmer/advice?phone=" + encodeURIComponent(phone)),
-    ]);
-    name.textContent = profile.full_name;
-    avatar.textContent = profile.full_name
-      .split(/\s+/)
-      .filter(Boolean)
-      .slice(0, 2)
-      .map((part) => part[0].toUpperCase())
-      .join("");
-    household.textContent = "Household " + profile.household_code + " - Group " + profile.group_id;
-
-    if (advice.has_advice) {
-      adviceStatus.textContent = "Officer approved";
-      adviceStatus.classList.add("is-approved");
-      advicePreview.textContent = advice.text;
-      if (advice.officer_name) {
-        adviceCredit.textContent = "Approved by " + advice.officer_name;
-        adviceCredit.hidden = false;
-      }
-    } else {
-      adviceStatus.textContent = "No new advice";
-      advicePreview.textContent = "Your officer has not sent new advice yet. Check back after it has been reviewed.";
-    }
-  } catch (error) {
-    household.textContent = error.message || "We could not load your household details.";
-    adviceStatus.textContent = "Unavailable";
-    advicePreview.textContent = "We could not load your advice. Please refresh or try again later.";
-  }
-})();
-</script>
+<h1>AgriMoist AI</h1>
+<p class="muted">{{ phone }}</p>
+<a class="btn big" href="/farmer/advice?phone={{ phone|urlencode }}">My advice</a>
+<a class="btn big secondary" href="/farmer/report?phone={{ phone|urlencode }}">Report a problem</a>
+<a class="btn big secondary" href="/farmer/visit?phone={{ phone|urlencode }}">Ask for a visit</a>
+<a class="btn big secondary" href="/farmer/followup?phone={{ phone|urlencode }}">Did advice help?</a>
+<p style="margin-top:1.5rem;"><a href="/farmer">Sign out</a></p>
 {% endblock %}
