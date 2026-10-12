@@ -99,15 +99,67 @@ def test_farmer_profile_resolves_the_registered_household(client):
     assert unknown.status_code == 404
 
 
+def test_maria_akol_is_the_last_demo_farmer(client):
+    response = client.get("/api/farmer/profile", params={"phone": "+256700000010"})
+
+    assert response.status_code == 200
+    assert response.json()["full_name"] == "Maria Akol"
+
+
+def test_farmer_dashboard_returns_recorded_farm_data(client, monkeypatch):
+    from backend.farmer import router as farmer_router
+
+    monkeypatch.setattr(
+        farmer_router.impl,
+        "get_weather",
+        lambda **kwargs: {
+            "past_7_days_rain_mm": 12.5,
+            "next_7_days_rain_mm": 18.0,
+            "source_ref": "https://weather.example/forecast",
+        },
+    )
+
+    response = client.get("/api/farmer/dashboard", params={"phone": "+256700000010"})
+
+    assert response.status_code == 200
+    dashboard = response.json()
+    assert dashboard["profile"]["full_name"] == "Maria Akol"
+    assert dashboard["profile"]["household_code"] == "H-010"
+    assert dashboard["profile"]["village"] == "Iriiri"
+    assert dashboard["profile"]["crops"] == ["sorghum"]
+    assert dashboard["latest_observation"]["soil_wetness"] is None
+    assert dashboard["weather"]["past_7_days_rain_mm"] == 12.5
+    assert {crop["crop"] for crop in dashboard["crop_calendar"]} == {"maize", "sorghum"}
+    assert all(crop["source_url"].startswith("https://") for crop in dashboard["crop_calendar"])
+
+
 def test_farmer_dashboard_loads_registered_profile_and_approved_advice(client):
     response = client.get("/farmer/home", params={"phone": "+256700000001"})
 
     assert response.status_code == 200
     assert 'id="farmer-name">farmer</span>' in response.text
-    assert 'getJSON("/api/farmer/profile?phone="' in response.text
+    assert 'getJSON("/api/farmer/dashboard?phone="' in response.text
     assert 'getJSON("/api/farmer/advice?phone="' in response.text
     assert "/farmer/report?phone=%2B256700000001" in response.text
     assert "/farmer/visit?phone=%2B256700000001" in response.text
+    assert response.text.index('<script src="/static/app.js"></script>') < response.text.index(
+        "async function loadDashboard()"
+    )
+
+
+def test_farmer_actions_share_the_dashboard_template(client):
+    action_forms = {
+        "/farmer/report": 'id="report-form"',
+        "/farmer/visit": 'id="visit-form"',
+        "/farmer/followup": 'id="followup-form"',
+        "/farmer/advice": 'id="advice-detail"',
+    }
+
+    for path, expected in action_forms.items():
+        response = client.get(path, params={"phone": "+256700000001"})
+        assert response.status_code == 200
+        assert expected in response.text
+        assert "farmer-action-page" in response.text
 
 
 def test_web_report_rejects_unknown_problem_type(client):

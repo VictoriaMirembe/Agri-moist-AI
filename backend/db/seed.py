@@ -45,6 +45,13 @@ def already_seeded(session: Session) -> bool:
 
 def seed(session: Session) -> None:
     if already_seeded(session):
+        demo_contact = session.exec(
+            select(Contact).where(Contact.phone == "+256700000010")
+        ).first()
+        if demo_contact and demo_contact.name == "Loru James":
+            demo_contact.name = "Maria Akol"
+            session.add(demo_contact)
+            session.commit()
         return
 
     district = District(name="Napak", agroclimatic_zone="Karamoja agro-pastoral")
@@ -174,7 +181,7 @@ def seed(session: Session) -> None:
                                  rain_last_7_days="none", pest_seen=None,
                                  crop_condition="fair", food_left="enough",
                                  notes="Farmer asking whether it is too late to plant maize this year.")]),
-        dict(code="H-010", village=iriiri, group_id=3, contact="Loru James", phone="+256700000010",
+        dict(code="H-010", village=iriiri, group_id=3, contact="Maria Akol", phone="+256700000010",
              size_acres=2.2,
              plot_history=[dict(season="2026 first season", crop="sorghum",
                                  planted_on=date(2026, 4, 1), harvested_on=None,

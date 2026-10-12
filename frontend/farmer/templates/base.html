@@ -5,12 +5,12 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>{% block title %}AgriMoist AI{% endblock %}</title>
   <link rel="stylesheet" href="/static/styles.css">
+  <script src="/static/app.js"></script>
 </head>
 <body class="farmer">
   <main class="farmer-container {% block container_class %}{% endblock %}">
     {% block content %}{% endblock %}
   </main>
-  <script src="/static/app.js"></script>
   {% block scripts %}{% endblock %}
 </body>
 </html>

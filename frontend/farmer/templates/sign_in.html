@@ -1,27 +1,36 @@
 {% extends "base.html" %}
-{% block title %}AgriMoist AI{% endblock %}
+{% block title %}Sign in | TerraMoist AI{% endblock %}
+{% block container_class %}farmer-signin-shell{% endblock %}
 {% block content %}
-<h1>AgriMoist AI</h1>
-<p>Enter your phone number to continue.</p>
-<form id="sign-in-form">
-  <label for="phone">Phone number</label>
-  <input id="phone" type="tel" placeholder="+256700000001" required>
-  <p id="error" class="pill red" style="display:none;margin-top:0.8rem;"></p>
-  <button class="btn big" type="submit" style="margin-top:1rem;">Continue</button>
-</form>
-<p class="muted">Demo numbers: +256700000001 to +256700000010 (made-up households).</p>
+<section class="farmer-signin-card" aria-labelledby="signin-heading">
+  <a class="farmer-brand farmer-signin-brand" href="/farmer">
+    <span class="farmer-brand-mark" aria-hidden="true">T</span>
+    <span>TerraMoist <strong>AI</strong></span>
+  </a>
+  <p class="farmer-eyebrow">FARMER PORTAL</p>
+  <h1 id="signin-heading">Sign in to your farm</h1>
+  <p class="farmer-panel-description">Enter the phone number registered with your extension officer.</p>
+  <form id="sign-in-form" class="farmer-form">
+    <label for="phone">Phone number</label>
+    <input id="phone" type="tel" inputmode="tel" autocomplete="tel" placeholder="+256700000001" required>
+    <p id="error" class="farmer-form-error" role="alert" hidden></p>
+    <button class="farmer-button farmer-button-primary" type="submit">Continue</button>
+  </form>
+  <p class="farmer-signin-note">Demo numbers: +256700000001 to +256700000010.</p>
+</section>
 
 <script>
 document.getElementById("sign-in-form").addEventListener("submit", async (e) => {
   e.preventDefault();
   const phone = document.getElementById("phone").value.trim();
   const errorEl = document.getElementById("error");
-  errorEl.style.display = "none";
+  errorEl.hidden = true;
   try {
     await getJSON("/api/farmer/profile?phone=" + encodeURIComponent(phone));
     window.location.href = "/farmer/home?phone=" + encodeURIComponent(phone);
   } catch (err) {
-    showError(errorEl, err);
+    errorEl.textContent = err.message || "Could not sign in. Check your phone number and try again.";
+    errorEl.hidden = false;
   }
 });
 </script>

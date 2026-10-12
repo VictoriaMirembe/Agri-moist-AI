@@ -16,7 +16,21 @@ from sqlmodel import select
 
 from backend.core.config import settings
 from backend.core.database import session_scope
-from backend.db.models import Advice, Approval, Contact, Followup, Household, Officer, UssdSession
+from backend.db.models import (
+    Advice,
+    Approval,
+    Contact,
+    CropCalendar,
+    District,
+    Followup,
+    Household,
+    Observation,
+    Officer,
+    Plot,
+    PlotHistory,
+    UssdSession,
+    Village,
+)
 from backend.logging.tool_log import run_logged
 from backend.tools import agrimoist_tools as impl
 from backend.tools.errors import ToolError
@@ -177,6 +191,88 @@ def farmer_profile(phone: str):
             "household_code": household.code,
             "group_id": household.group_id,
         }
+
+
+@router.get("/api/farmer/dashboard")
+def farmer_dashboard(phone: str):
+    with session_scope() as session:
+        household = _household_for_phone(session, phone)
+        if household is None:
+            raise HTTPException(404, "This number is not registered. Please ask your extension officer.")
+
+        contact = session.exec(
+            select(Contact).where(Contact.household_id == household.id, Contact.phone == phone)
+        ).first()
+        if contact is None:
+            raise HTTPException(404, "No registered farmer contact was found for this household.")
+
+        village = session.get(Village, household.village_id)
+        district = session.get(District, village.district_id) if village else None
+        latest_observation = session.exec(
+            select(Observation)
+            .where(Observation.household_id == household.id)
+            .order_by(Observation.observed_on.desc())
+        ).first()
+        plots = session.exec(select(Plot).where(Plot.household_id == household.id)).all()
+        plot_ids = [plot.id for plot in plots if plot.id is not None]
+        histories = (
+            session.exec(select(PlotHistory).where(PlotHistory.plot_id.in_(plot_ids))).all()
+            if plot_ids
+            else []
+        )
+        calendars = session.exec(
+            select(CropCalendar)
+            .where(CropCalendar.zone == (district.agroclimatic_zone if district else ""))
+            .order_by(CropCalendar.crop)
+        ).all()
+        coordinates = (village.latitude, village.longitude) if village else None
+        profile = {
+            "full_name": contact.name,
+            "household_code": household.code,
+            "group_id": household.group_id,
+            "village": village.name if village else None,
+            "district": district.name if district else None,
+            "zone": district.agroclimatic_zone if district else None,
+            "crops": sorted({history.crop for history in histories}),
+        }
+        observation = (
+            {
+                "soil_wetness": latest_observation.soil_wetness,
+                "rain_last_7_days": latest_observation.rain_last_7_days,
+                "crop": latest_observation.crop,
+                "observed_on": latest_observation.observed_on.date().isoformat(),
+                "source": latest_observation.source,
+            }
+            if latest_observation
+            else None
+        )
+        crop_calendar = [
+            {
+                "crop": calendar.crop,
+                "plant_from": calendar.plant_from,
+                "plant_to": calendar.plant_to,
+                "harvest_from": calendar.harvest_from,
+                "harvest_to": calendar.harvest_to,
+                "source_url": calendar.source_url,
+            }
+            for calendar in calendars
+        ]
+
+    weather = None
+    weather_error = None
+    if coordinates:
+        try:
+            weather = impl.get_weather(latitude=coordinates[0], longitude=coordinates[1])
+        except ToolError as exc:
+            weather_error = str(exc)
+
+    return {
+        "profile": profile,
+        "latest_observation": observation,
+        "weather": weather,
+        "weather_error": weather_error,
+        "crop_calendar": crop_calendar,
+    }
 
 
 class FollowupBody(BaseModel):

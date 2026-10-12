@@ -21,27 +21,33 @@ def sign_in(request: Request):
 
 @router.get("/farmer/home")
 def farmer_home(request: Request, phone: str = ""):
-    return templates.TemplateResponse(request, "home.html", {"phone": phone})
+    return _farmer_page(request, phone, "dashboard")
 
 
 @router.get("/farmer/advice")
 def farmer_advice_page(request: Request, phone: str = ""):
-    return templates.TemplateResponse(request, "advice.html", {"phone": phone})
+    return _farmer_page(request, phone, "advice")
 
 
 @router.get("/farmer/report")
 def farmer_report_page(request: Request, phone: str = ""):
-    return templates.TemplateResponse(request, "report.html", {"phone": phone})
+    return _farmer_page(request, phone, "report")
 
 
 @router.get("/farmer/visit")
 def farmer_visit_page(request: Request, phone: str = ""):
-    return templates.TemplateResponse(request, "visit.html", {"phone": phone})
+    return _farmer_page(request, phone, "visit")
 
 
 @router.get("/farmer/followup")
 def farmer_followup_page(request: Request, phone: str = ""):
-    return templates.TemplateResponse(request, "followup.html", {"phone": phone})
+    return _farmer_page(request, phone, "followup")
+
+
+def _farmer_page(request: Request, phone: str, active_view: str):
+    return templates.TemplateResponse(
+        request, "home.html", {"phone": phone, "active_view": active_view}
+    )
 
 
 @router.get("/ussd")

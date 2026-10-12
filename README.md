@@ -126,7 +126,9 @@ follow-ups in **Farmer follow-ups**. Follow-up answers are accepted only for
 approved advice belonging to that farmer's household group.
 
 The active farmer portal is served at `/farmer` from `frontend/farmer/templates`.
-The old unmounted root-level farmer portal prototypes, which used the inactive
+Its dashboard, advice, report, visit and follow-up views share one dashboard
+template; sign-in and the USSD simulator remain separate entry screens. The old
+unmounted root-level farmer portal prototypes, which used the inactive
 `/api/reports` endpoint, have been removed. The phone-number check in this demo
 resolves a seeded household; it is not production authentication.
 
