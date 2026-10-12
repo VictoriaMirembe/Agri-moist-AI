@@ -155,7 +155,16 @@ def farmer_profile(phone: str):
         household = _household_for_phone(session, phone)
         if household is None:
             raise HTTPException(404, "This number is not registered. Please ask your extension officer.")
-        return {"household_code": household.code, "group_id": household.group_id}
+        contact = session.exec(
+            select(Contact).where(Contact.household_id == household.id, Contact.phone == phone)
+        ).first()
+        if contact is None:
+            raise HTTPException(404, "No registered farmer contact was found for this household.")
+        return {
+            "full_name": contact.name,
+            "household_code": household.code,
+            "group_id": household.group_id,
+        }
 
 
 class FollowupBody(BaseModel):

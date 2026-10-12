@@ -147,7 +147,11 @@ def test_web_report_rejects_unregistered_phone(client):
 def test_farmer_profile_resolves_the_registered_household(client):
     r = client.get("/api/farmer/profile", params={"phone": "+256700000001"})
     assert r.status_code == 200
-    assert r.json() == {"household_code": "H-001", "group_id": 1}
+    assert r.json() == {
+        "full_name": "Akello Susan",
+        "household_code": "H-001",
+        "group_id": 1,
+    }
 
     unknown = client.get("/api/farmer/profile", params={"phone": "+19999999999"})
     assert unknown.status_code == 404
@@ -161,6 +165,16 @@ def test_farmer_sign_in_page_uses_demo_login_endpoint(client):
     assert 'id="sign-in-form"' in response.text
     assert 'fetch("/api/login"' in response.text
     assert "result.redirect_url" in response.text
+
+
+def test_farmer_dashboard_loads_registered_name_and_approved_advice(client):
+    response = client.get("/farmer/home", params={"phone": "+256700000001"})
+
+    assert response.status_code == 200
+    assert 'id="farmer-name">farmer</span>' in response.text
+    assert 'getJSON("/api/farmer/profile?phone="' in response.text
+    assert 'getJSON("/api/farmer/advice?phone="' in response.text
+    assert "/farmer/report?phone=%2B256700000001" in response.text
 
 
 def test_demo_login_resolves_registered_farmer(client):

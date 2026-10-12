@@ -144,6 +144,180 @@ th { color: var(--muted); font-weight: 600; }
 .farmer-container { max-width: 480px; margin: 0 auto; padding: 1.25rem 1rem 3rem; }
 .farmer-container h1 { font-size: 1.5rem; }
 
+.farmer-dashboard {
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 0.5rem 0 3rem;
+}
+.farmer-container.farmer-dashboard-container {
+  max-width: 1000px;
+  padding: 1rem 1.5rem 3rem;
+}
+.farmer-dashboard-header {
+  min-height: 58px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  border-bottom: 1px solid #e5e7eb;
+}
+.farmer-brand {
+  color: #183b2a;
+  font-size: 1.2rem;
+  font-weight: 800;
+  letter-spacing: -0.04em;
+  text-decoration: none;
+}
+.farmer-brand span { color: #16834a; }
+.farmer-signout {
+  color: #52665a;
+  font-size: 0.9rem;
+  text-decoration: none;
+}
+.farmer-signout:hover { color: #0a7d33; text-decoration: underline; }
+.farmer-welcome {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin: 1.5rem 0;
+  padding: 1.5rem;
+  border: 1px solid #d8eadc;
+  border-radius: 16px;
+  background: linear-gradient(115deg, #f0faf2, #ffffff 80%);
+}
+.farmer-avatar {
+  width: 58px;
+  height: 58px;
+  flex: 0 0 58px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: #d9f1df;
+  color: #17683a;
+  font-size: 1.15rem;
+  font-weight: 800;
+}
+.farmer-welcome-copy h1 {
+  margin: 0.1rem 0 0.25rem;
+  color: #183b2a;
+  font-size: clamp(1.45rem, 4vw, 2rem);
+}
+.farmer-eyebrow {
+  margin: 0;
+  color: #52705d;
+  font-size: 0.7rem;
+  font-weight: 800;
+  letter-spacing: 0.11em;
+}
+.farmer-household {
+  margin: 0;
+  color: #617067;
+  font-size: 0.9rem;
+}
+.farmer-advice-card,
+.farmer-actions {
+  margin-top: 1.25rem;
+  padding: 1.4rem;
+  border: 1px solid #e1e8e2;
+  border-radius: 16px;
+  background: #fff;
+  box-shadow: 0 8px 24px rgb(24 59 42 / 5%);
+}
+.farmer-section-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+.farmer-section-heading h2 {
+  margin: 0.2rem 0 0;
+  color: #183b2a;
+  font-size: 1.3rem;
+}
+.farmer-approval-badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 30px;
+  padding: 0.25rem 0.7rem;
+  border-radius: 999px;
+  background: #f1f3f1;
+  color: #59655c;
+  font-size: 0.75rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.farmer-approval-badge.is-approved {
+  background: #e5f5e9;
+  color: #17683a;
+}
+.farmer-advice-preview {
+  margin: 1rem 0 0.35rem;
+  color: #33443a;
+  line-height: 1.65;
+  white-space: pre-wrap;
+}
+.farmer-advice-credit {
+  margin: 0.5rem 0 0;
+  color: #718077;
+  font-size: 0.85rem;
+}
+.farmer-link-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6rem;
+  min-height: 44px;
+  margin-top: 0.8rem;
+  color: #11713c;
+  font-size: 0.95rem;
+  font-weight: 700;
+  text-decoration: none;
+}
+.farmer-link-button:hover { text-decoration: underline; }
+.farmer-action-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.8rem;
+  margin-top: 1rem;
+}
+.farmer-action-card {
+  display: grid;
+  grid-template-columns: 38px minmax(0, 1fr) 16px;
+  align-items: start;
+  gap: 0.7rem;
+  min-height: 112px;
+  padding: 1rem;
+  border: 1px solid #e1e8e2;
+  border-radius: 12px;
+  color: #22382a;
+  text-decoration: none;
+  transition: border-color 0.15s ease, transform 0.15s ease, box-shadow 0.15s ease;
+}
+.farmer-action-card:hover {
+  transform: translateY(-2px);
+  border-color: #93c9a1;
+  box-shadow: 0 8px 20px rgb(24 59 42 / 8%);
+}
+.farmer-action-icon {
+  width: 36px;
+  height: 36px;
+  display: grid;
+  place-items: center;
+  border-radius: 10px;
+  background: #eef8f0;
+  color: #16723d;
+  font-weight: 800;
+}
+.farmer-action-card strong,
+.farmer-action-card small { display: block; }
+.farmer-action-card strong { font-size: 0.95rem; }
+.farmer-action-card small {
+  margin-top: 0.35rem;
+  color: #6a776e;
+  font-size: 0.8rem;
+  line-height: 1.45;
+}
+.farmer-action-arrow { color: #64806d; font-size: 1.1rem; }
+
 .login-page {
   min-height: 100vh;
   display: grid;
@@ -210,3 +384,16 @@ th { color: var(--muted); font-weight: 600; }
 }
 .keypad { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.5rem; }
 .keypad button { font-size: 1.3rem; padding: 0.9rem; border-radius: 8px; border: 1px solid var(--border); background: #fff; }
+
+@media (max-width: 700px) {
+  .farmer-container.farmer-dashboard-container { padding: 0.75rem 1rem 2rem; }
+  .farmer-action-grid { grid-template-columns: 1fr; }
+  .farmer-action-card { min-height: 88px; }
+  .farmer-welcome, .farmer-advice-card, .farmer-actions { padding: 1rem; }
+}
+
+@media (max-width: 420px) {
+  .farmer-welcome { align-items: flex-start; }
+  .farmer-avatar { width: 48px; height: 48px; flex-basis: 48px; }
+  .farmer-section-heading { align-items: flex-start; }
+}
