@@ -8,6 +8,20 @@ import pytest
 from sqlmodel import create_engine
 
 
+@pytest.fixture(autouse=True)
+def no_model_key(monkeypatch):
+    """Force the deterministic rule-based (stub) mode in every test, so no test ever
+    calls the real Groq model even when .env has GROQ_API_KEY. The env var covers
+    subprocesses and any fresh Settings(); the attribute covers the already-loaded
+    settings object."""
+    from backend.agent import model_client
+    from backend.core.config import settings
+
+    monkeypatch.setenv("GROQ_API_KEY", "")
+    monkeypatch.setattr(settings, "groq_api_key", None)
+    monkeypatch.setattr(model_client, "_client", None)
+
+
 @pytest.fixture()
 def test_db(tmp_path, monkeypatch):
     db_path = tmp_path / "test.db"
