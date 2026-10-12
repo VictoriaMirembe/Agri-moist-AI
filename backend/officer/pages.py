@@ -142,6 +142,11 @@ def farmer_reports_page(request: Request):
     return templates.TemplateResponse(request, "farmer_reports.html", {"officers": officers})
 
 
+@router.get("/followups")
+def followups_page(request: Request):
+    return templates.TemplateResponse(request, "followups.html", {})
+
+
 @router.get("/flags")
 def flags_page(request: Request):
     return templates.TemplateResponse(request, "flags.html", {})

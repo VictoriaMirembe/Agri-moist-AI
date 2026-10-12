@@ -39,6 +39,7 @@ Only this router may change an advice row's status to `approved` or
 | `POST` | `/api/farmer-reports` | `{phone, problem, crop}` | Saved via `record_observation`, `checked=unchecked` |
 | `GET` | `/api/farmer-reports` | `?checked=unchecked` | List of reports |
 | `POST` | `/api/farmer-reports/{id}/check` | `{officer_id}` | Marks the observation `checked` |
+| `GET` | `/api/followups` | - | Scheduled and answered follow-ups for approved advice |
 | `GET` | `/api/flags` | `?status=open` | List of visit flags |
 | `POST` | `/api/flags/{id}/visited` | `{}` | Marks a flag `visited` |
 | `POST` | `/api/visit-requests` | `{phone, reason}` | Creates a visit flag, `raised_by=farmer_ussd` or `farmer_web` |
@@ -47,8 +48,15 @@ Only this router may change an advice row's status to `approved` or
 
 | Method | Path | Body / query | Returns |
 | --- | --- | --- | --- |
+| `GET` | `/api/farmer/profile` | `?phone=` | Registered household code and group for the farmer portal |
 | `GET` | `/api/farmer/advice` | `?phone=` | Most recent `approved`/`edited_and_approved` advice for that phone's household group, translated text if available |
-| `POST` | `/api/farmer/followup` | `{phone, advice_id, followed, helped}` | Saves a followup answer |
+| `POST` | `/api/farmer/followup` | `{phone, advice_id, followed, helped}` | Saves a follow-up answer for approved advice belonging to that farmer's group |
+
+Farmer reports and visit requests are saved against the registered phone's household
+and appear in the officer's Farmer reports and Visit flags screens. Approved advice
+is returned only to a registered household in its group. Farmer follow-up responses
+are scoped to that household's approved advice and appear in the officer's Farmer
+follow-ups screen.
 
 ## USSD (simulated)
 

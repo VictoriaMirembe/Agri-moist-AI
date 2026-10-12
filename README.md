@@ -98,6 +98,20 @@ Farmer reports are saved as "farmer-reported, not yet checked" and appear on the
 officer's **Farmer reports** screen. The assistant may use them as signals, and each
 sourced fact built from one says so (`farmer_ussd` or `farmer_web`, `unchecked`).
 
+The web portal and the extension-officer portal share the same backend records:
+farmer sign-in resolves the registered household, reports appear in **Farmer
+reports**, visit requests appear in **Visit flags**, and officers can open the
+affected group directly from those queues. After an officer approves advice, the
+farmer can read it and submit a follow-up; officers see scheduled and answered
+follow-ups in **Farmer follow-ups**. Follow-up answers are accepted only for
+approved advice belonging to that farmer's household group.
+
+The active farmer portal is served at `/farmer` from `frontend/farmer/templates`.
+The root-level `farmer_portal.html` and `templates/farmer_portal.html` are older,
+unmounted prototypes; their report form uses `/api/reports`, which is not part of
+the active API contract. The phone-number check in this demo resolves a seeded
+household; it is not production authentication.
+
 The USSD handler uses the same request and reply shape as a real USSD gateway (such
 as Africa's Talking): a session id, a phone number, and the digits typed so far; a
 reply starting `CON` (more screens) or `END` (session over). Going live means

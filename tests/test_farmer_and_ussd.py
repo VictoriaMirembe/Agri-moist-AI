@@ -53,6 +53,7 @@ def test_report_pest_via_ussd_is_saved_unchecked(client):
     report = next(r for r in reports if r["household_code"] == "H-008")
     assert report["pest_seen"] == "farmer-reported pest"
     assert report["source"] == "farmer_ussd"
+    assert report["group_id"] == 3
 
     # And an officer can mark it checked.
     check = client.post(f"/api/farmer-reports/{report['id']}/check", json={"officer_id": 1})
@@ -83,6 +84,15 @@ def test_followup_flow_via_ussd(client):
 def test_web_report_rejects_unregistered_phone(client):
     r = client.post("/api/farmer-reports", json={"phone": "+19999999999", "problem": "pests"})
     assert r.status_code == 404
+
+
+def test_farmer_profile_resolves_the_registered_household(client):
+    r = client.get("/api/farmer/profile", params={"phone": "+256700000001"})
+    assert r.status_code == 200
+    assert r.json() == {"household_code": "H-001", "group_id": 1}
+
+    unknown = client.get("/api/farmer/profile", params={"phone": "+19999999999"})
+    assert unknown.status_code == 404
 
 
 def test_web_report_rejects_unknown_problem_type(client):

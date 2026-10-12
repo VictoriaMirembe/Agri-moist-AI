@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 from datetime import date
+from typing import Literal
 
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import PlainTextResponse
@@ -15,7 +16,7 @@ from sqlmodel import select
 
 from backend.core.config import settings
 from backend.core.database import session_scope
-from backend.db.models import Approval, Contact, Followup, Household, Officer, UssdSession
+from backend.db.models import Advice, Approval, Contact, Followup, Household, Officer, UssdSession
 from backend.logging.tool_log import run_logged
 from backend.tools import agrimoist_tools as impl
 from backend.tools.errors import ToolError
@@ -160,11 +161,20 @@ def farmer_advice(phone: str):
         return _advice_for_group(session, household.group_id)
 
 
+@router.get("/api/farmer/profile")
+def farmer_profile(phone: str):
+    with session_scope() as session:
+        household = _household_for_phone(session, phone)
+        if household is None:
+            raise HTTPException(404, "This number is not registered. Please ask your extension officer.")
+        return {"household_code": household.code, "group_id": household.group_id}
+
+
 class FollowupBody(BaseModel):
     phone: str
     advice_id: int
-    followed: str  # yes, no, partly
-    helped: str | None = None  # yes, no
+    followed: Literal["yes", "no", "partly"]
+    helped: Literal["yes", "no", "too_early"] | None = None
 
 
 @router.post("/api/farmer/followup")
@@ -173,6 +183,13 @@ def farmer_followup(body: FollowupBody):
         household = _household_for_phone(session, body.phone)
         if household is None:
             raise HTTPException(404, "This number is not registered. Please ask your extension officer.")
+        advice = session.get(Advice, body.advice_id)
+        if (
+            advice is None
+            or advice.group_id != household.group_id
+            or advice.status not in ("approved", "edited_and_approved")
+        ):
+            raise HTTPException(404, "No approved advice found for this household.")
         _save_followup(session, body.advice_id, body.followed, body.helped, "farmer_web")
         run_logged(
             session,

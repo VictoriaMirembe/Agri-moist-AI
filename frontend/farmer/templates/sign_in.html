@@ -12,10 +12,17 @@
 <p class="muted">Demo numbers: +256700000001 to +256700000010 (made-up households).</p>
 
 <script>
-document.getElementById("sign-in-form").addEventListener("submit", (e) => {
+document.getElementById("sign-in-form").addEventListener("submit", async (e) => {
   e.preventDefault();
   const phone = document.getElementById("phone").value.trim();
-  window.location.href = "/farmer/home?phone=" + encodeURIComponent(phone);
+  const errorEl = document.getElementById("error");
+  errorEl.style.display = "none";
+  try {
+    await getJSON("/api/farmer/profile?phone=" + encodeURIComponent(phone));
+    window.location.href = "/farmer/home?phone=" + encodeURIComponent(phone);
+  } catch (err) {
+    showError(errorEl, err);
+  }
 });
 </script>
 {% endblock %}

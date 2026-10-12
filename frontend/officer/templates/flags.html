@@ -10,6 +10,7 @@ function renderFlag(f) {
   return `
   <div class="card" data-id="${f.id}">
     <p><strong>Group G-${f.group_id}</strong> <span class="pill ${f.status === 'open' ? 'red' : 'green'}">${f.status}</span> <span class="muted">${f.raised_by} - ${f.created_at}</span></p>
+    <p><a href="/groups/${f.group_id}">Open household group</a></p>
     <p>${f.reason}</p>
     ${f.status === 'open' ? `<button class="btn secondary" onclick="markVisited(${f.id})">Mark visited</button>` : ""}
   </div>`;

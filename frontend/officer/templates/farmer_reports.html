@@ -20,6 +20,7 @@ function renderReport(r) {
   return `
   <div class="card" data-id="${r.id}">
     <p><strong>${r.household_code}</strong> via ${r.source} <span class="pill ${r.checked === 'checked' ? 'green' : 'amber'}">${r.checked}</span> <span class="muted">${r.observed_on}</span></p>
+    ${r.group_id ? `<p><a href="/groups/${r.group_id}">Open household group G-${r.group_id}</a></p>` : ""}
     <p>${r.crop ? "Crop: " + r.crop + ". " : ""}${r.pest_seen ? "Pest: " + r.pest_seen + ". " : ""}${r.rain_last_7_days ? "Rain: " + r.rain_last_7_days + ". " : ""}${r.notes || ""}</p>
     ${r.checked === 'unchecked' ? `<button class="btn secondary" onclick="markChecked(${r.id})">Mark checked</button>` : ""}
   </div>`;

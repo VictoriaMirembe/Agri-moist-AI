@@ -18,6 +18,7 @@ from backend.core.database import session_scope
 from backend.db.models import (
     Advice,
     District,
+    Followup,
     Household,
     Observation,
     Officer,
@@ -255,6 +256,7 @@ def list_farmer_reports(checked: str | None = None):
                 {
                     "id": o.id,
                     "household_code": household.code if household else None,
+                    "group_id": household.group_id if household else None,
                     "source": o.source,
                     "checked": o.checked,
                     "observed_on": o.observed_on.isoformat(),
@@ -290,6 +292,32 @@ def check_farmer_report(observation_id: int, body: CheckReportRequest):
             func=lambda: {"observation_id": observation_id, "checked": True},
         )
         return {"id": observation.id, "checked": observation.checked}
+
+
+# ---------------------------------------------------------------------------
+# Farmer follow-ups
+# ---------------------------------------------------------------------------
+@router.get("/followups")
+def list_followups():
+    with session_scope() as session:
+        rows = session.exec(
+            select(Followup, Advice)
+            .join(Advice, Followup.advice_id == Advice.id)
+            .where(Advice.status.in_(("approved", "edited_and_approved")))
+            .order_by(Followup.due_on.desc(), Followup.advice_id.desc())
+        ).all()
+        return [
+            {
+                "advice_id": advice.id,
+                "group_id": advice.group_id,
+                "advice_text": advice.final_text,
+                "due_on": followup.due_on.isoformat(),
+                "followed": followup.followed,
+                "helped": followup.helped,
+                "answered_via": followup.answered_via,
+            }
+            for followup, advice in rows
+        ]
 
 
 # ---------------------------------------------------------------------------

@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+{% block title %}Farmer follow-ups{% endblock %}
+{% block content %}
+<h1>Farmer follow-ups</h1>
+<p class="muted">See whether farmers followed approved advice and whether it helped.</p>
+<div id="list" class="muted">Loading...</div>
+
+<script>
+async function loadFollowups() {
+  const list = document.getElementById("list");
+  try {
+    const rows = await getJSON("/api/followups");
+    list.replaceChildren();
+    if (!rows.length) {
+      list.textContent = "No follow-up records yet.";
+      return;
+    }
+
+    for (const row of rows) {
+      const card = document.createElement("section");
+      card.className = "card";
+
+      const heading = document.createElement("p");
+      const group = document.createElement("a");
+      group.href = `/groups/${row.group_id}`;
+      group.textContent = `Group G-${row.group_id}`;
+      heading.append(group, document.createTextNode(` · Advice #${row.advice_id}`));
+      card.append(heading);
+
+      const advice = document.createElement("p");
+      advice.textContent = row.advice_text || "Approved advice text unavailable.";
+      card.append(advice);
+
+      const response = document.createElement("p");
+      if (row.answered_via) {
+        response.textContent = `Followed: ${row.followed || "not recorded"}; helped: ${row.helped || "not recorded"}; received via ${row.answered_via}.`;
+      } else {
+        response.textContent = `Awaiting farmer response · due ${row.due_on}.`;
+      }
+      card.append(response);
+      list.append(card);
+    }
+  } catch (err) {
+    list.textContent = "Could not load follow-ups: " + err.message;
+  }
+}
+
+loadFollowups();
+</script>
+{% endblock %}

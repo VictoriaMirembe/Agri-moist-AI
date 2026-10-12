@@ -58,7 +58,16 @@ def test_groups_list_shows_counts(client):
 
 
 def test_officer_pages_render(client):
-    for path in ("/", "/visits/new", "/groups/1", "/approvals", "/farmer-reports", "/flags", "/log"):
+    for path in (
+        "/",
+        "/visits/new",
+        "/groups/1",
+        "/approvals",
+        "/farmer-reports",
+        "/followups",
+        "/flags",
+        "/log",
+    ):
         r = client.get(path)
         assert r.status_code == 200, f"{path} returned {r.status_code}"
 
@@ -70,3 +79,62 @@ def test_farmer_pages_render(client):
     for path in ("/farmer/home", "/farmer/advice", "/farmer/report", "/farmer/visit", "/farmer/followup"):
         r = client.get(path, params={"phone": "+256700000001"})
         assert r.status_code == 200, f"{path} returned {r.status_code}"
+
+
+def test_farmer_followup_is_visible_to_officers(client):
+    advice = client.get("/api/farmer/advice", params={"phone": "+256700000001"}).json()
+    assert advice["has_advice"] is True
+
+    response = client.post(
+        "/api/farmer/followup",
+        json={
+            "phone": "+256700000001",
+            "advice_id": advice["advice_id"],
+            "followed": "partly",
+            "helped": "yes",
+        },
+    )
+    assert response.status_code == 200
+
+    followups = client.get("/api/followups")
+    assert followups.status_code == 200
+    result = next(row for row in followups.json() if row["advice_id"] == advice["advice_id"])
+    assert result["group_id"] == 1
+    assert result["followed"] == "partly"
+    assert result["helped"] == "yes"
+    assert result["answered_via"] == "farmer_web"
+
+
+def test_farmer_cannot_answer_unapproved_advice(client):
+    pending_advice = client.get("/api/approvals", params={"status": "pending_review"}).json()[0]
+
+    response = client.post(
+        "/api/farmer/followup",
+        json={
+            "phone": "+256700000004",
+            "advice_id": pending_advice["id"],
+            "followed": "yes",
+            "helped": "no",
+        },
+    )
+    assert response.status_code == 404
+
+
+def test_farmer_cannot_answer_approved_advice_for_another_group(client):
+    pending_advice = client.get("/api/approvals", params={"status": "pending_review"}).json()[0]
+    approval = client.post(
+        f"/api/approvals/{pending_advice['id']}/approve",
+        json={"officer_id": 1},
+    )
+    assert approval.status_code == 200
+
+    response = client.post(
+        "/api/farmer/followup",
+        json={
+            "phone": "+256700000001",
+            "advice_id": pending_advice["id"],
+            "followed": "yes",
+            "helped": "no",
+        },
+    )
+    assert response.status_code == 404
