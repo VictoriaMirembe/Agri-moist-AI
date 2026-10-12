@@ -1,11 +1,157 @@
 {% extends "base.html" %}
-{% block title %}AgriMoist AI{% endblock %}
+{% block title %}Farmer dashboard{% endblock %}
+{% block container_class %}farmer-dashboard-shell{% endblock %}
 {% block content %}
-<h1>AgriMoist AI</h1>
-<p class="muted">{{ phone }}</p>
-<a class="btn big" href="/farmer/advice?phone={{ phone|urlencode }}">My advice</a>
-<a class="btn big secondary" href="/farmer/report?phone={{ phone|urlencode }}">Report a problem</a>
-<a class="btn big secondary" href="/farmer/visit?phone={{ phone|urlencode }}">Ask for a visit</a>
-<a class="btn big secondary" href="/farmer/followup?phone={{ phone|urlencode }}">Did advice help?</a>
-<p style="margin-top:1.5rem;"><a href="/farmer">Sign out</a></p>
+<div class="farmer-dashboard">
+  <header class="farmer-dashboard-header">
+    <a class="farmer-brand" href="/farmer/home?phone={{ phone|urlencode }}" aria-label="AgriMoist AI home">
+      AgriMoist <span>AI</span>
+    </a>
+    <nav class="farmer-nav" aria-label="Farmer dashboard">
+      <a href="/farmer/advice?phone={{ phone|urlencode }}">My advice</a>
+      <a href="/farmer/report?phone={{ phone|urlencode }}">Report a problem</a>
+      <a href="/farmer/visit?phone={{ phone|urlencode }}">Request a visit</a>
+    </nav>
+    <a class="farmer-signout" href="/farmer">Sign out</a>
+  </header>
+
+  <section class="farmer-welcome" aria-labelledby="welcome-heading">
+    <div class="farmer-avatar" id="farmer-avatar" aria-hidden="true">...</div>
+    <div class="farmer-welcome-copy">
+      <p class="farmer-eyebrow">ACTIVE FARM RECORD</p>
+      <h1 id="welcome-heading">Welcome, <span id="farmer-name">farmer</span></h1>
+      <p class="farmer-household" id="farmer-household">Loading your registered household...</p>
+    </div>
+    <span class="farmer-record-badge"><span aria-hidden="true"></span> Registered farmer</span>
+  </section>
+
+  <div class="farmer-dashboard-grid">
+    <div class="farmer-dashboard-main">
+      <section class="farmer-advice-card" aria-labelledby="advice-heading">
+        <div class="farmer-section-heading">
+          <div>
+            <p class="farmer-eyebrow">REVIEWED BY YOUR EXTENSION OFFICER</p>
+            <h2 id="advice-heading">My advice</h2>
+          </div>
+          <span class="farmer-approval-badge" id="advice-status">Checking</span>
+        </div>
+        <p id="advice-preview" class="farmer-advice-preview" aria-live="polite">
+          Loading your latest approved advice...
+        </p>
+        <div class="farmer-advice-footer">
+          <p id="advice-credit" class="farmer-advice-credit" hidden></p>
+          <a class="farmer-link-button" href="/farmer/advice?phone={{ phone|urlencode }}">
+            View my advice <span aria-hidden="true">&rarr;</span>
+          </a>
+        </div>
+      </section>
+
+      <section class="farmer-actions" aria-labelledby="actions-heading">
+        <div class="farmer-section-heading">
+          <div>
+            <p class="farmer-eyebrow">FARMER SERVICES</p>
+            <h2 id="actions-heading">How can we help?</h2>
+          </div>
+        </div>
+        <div class="farmer-action-grid">
+          <a class="farmer-action-card" href="/farmer/report?phone={{ phone|urlencode }}">
+            <span class="farmer-action-icon" aria-hidden="true">!</span>
+            <span>
+              <strong>Report a problem</strong>
+              <small>Tell your extension officer about a crop or field problem.</small>
+            </span>
+            <span class="farmer-action-arrow" aria-hidden="true">&rarr;</span>
+          </a>
+          <a class="farmer-action-card" href="/farmer/visit?phone={{ phone|urlencode }}">
+            <span class="farmer-action-icon" aria-hidden="true">+</span>
+            <span>
+              <strong>Ask for a visit</strong>
+              <small>Request a visit from your extension officer.</small>
+            </span>
+            <span class="farmer-action-arrow" aria-hidden="true">&rarr;</span>
+          </a>
+          <a class="farmer-action-card" href="/farmer/followup?phone={{ phone|urlencode }}">
+            <span class="farmer-action-icon" aria-hidden="true">&#10003;</span>
+            <span>
+              <strong>Did advice help?</strong>
+              <small>Share how the advice worked for your household.</small>
+            </span>
+            <span class="farmer-action-arrow" aria-hidden="true">&rarr;</span>
+          </a>
+        </div>
+      </section>
+    </div>
+
+    <aside class="farmer-profile-card" aria-labelledby="profile-heading">
+      <p class="farmer-eyebrow">YOUR DETAILS</p>
+      <h2 id="profile-heading">Farm profile</h2>
+      <dl class="farmer-profile-list">
+        <div><dt>Household</dt><dd id="profile-household">Loading...</dd></div>
+        <div><dt>Household group</dt><dd id="profile-group">Loading...</dd></div>
+        <div><dt>Registered phone</dt><dd>{{ phone }}</dd></div>
+      </dl>
+      <p class="farmer-profile-note">
+        Your approved advice is shared with your household group by your extension officer.
+      </p>
+    </aside>
+  </div>
+</div>
+
+<script>
+const farmerPhone = {{ phone|tojson }};
+
+async function loadFarmerProfile() {
+  const name = document.getElementById("farmer-name");
+  const avatar = document.getElementById("farmer-avatar");
+  const householdLine = document.getElementById("farmer-household");
+  const householdValue = document.getElementById("profile-household");
+  const groupValue = document.getElementById("profile-group");
+  try {
+    const profile = await getJSON("/api/farmer/profile?phone=" + encodeURIComponent(farmerPhone));
+    name.textContent = profile.full_name;
+    avatar.textContent = profile.full_name
+      .split(/\s+/)
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((part) => part[0].toUpperCase())
+      .join("");
+    householdLine.textContent = "Household " + profile.household_code + " - Group " + profile.group_id;
+    householdValue.textContent = profile.household_code;
+    groupValue.textContent = "Group " + profile.group_id;
+  } catch (error) {
+    const message = error.message || "Could not load your registered profile.";
+    householdLine.textContent = message;
+    householdValue.textContent = "Unavailable";
+    groupValue.textContent = "Unavailable";
+  }
+}
+
+async function loadFarmerAdvice() {
+  const status = document.getElementById("advice-status");
+  const preview = document.getElementById("advice-preview");
+  const credit = document.getElementById("advice-credit");
+  try {
+    const advice = await getJSON("/api/farmer/advice?phone=" + encodeURIComponent(farmerPhone));
+    if (!advice.has_advice) {
+      status.textContent = "No new advice";
+      preview.textContent = "Your officer has not sent new advice yet. It will appear here after it has been reviewed.";
+      return;
+    }
+    status.textContent = "Officer approved";
+    status.classList.add("is-approved");
+    preview.textContent = advice.text;
+    if (advice.officer_name) {
+      credit.textContent = "Approved by " + advice.officer_name +
+        (advice.date ? " - " + advice.date.slice(0, 10) : "");
+      credit.hidden = false;
+    }
+  } catch (error) {
+    status.textContent = "Unavailable";
+    preview.textContent = error.message || "Could not load advice. Please try again later.";
+  }
+}
+
+loadFarmerProfile();
+loadFarmerAdvice();
+</script>
 {% endblock %}

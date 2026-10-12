@@ -48,7 +48,7 @@ Only this router may change an advice row's status to `approved` or
 
 | Method | Path | Body / query | Returns |
 | --- | --- | --- | --- |
-| `GET` | `/api/farmer/profile` | `?phone=` | Registered household code and group for the farmer portal |
+| `GET` | `/api/farmer/profile` | `?phone=` | Registered farmer name, household code, and household group |
 | `GET` | `/api/farmer/advice` | `?phone=` | Most recent `approved`/`edited_and_approved` advice for that phone's household group, translated text if available |
 | `POST` | `/api/farmer/followup` | `{phone, advice_id, followed, helped}` | Saves a follow-up answer for approved advice belonging to that farmer's group |
 
