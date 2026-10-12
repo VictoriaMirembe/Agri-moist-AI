@@ -1,6 +1,6 @@
 # Farmer-facing HTML: sign in, home, my advice, report a problem, ask for a visit,
 # did advice help, plus the USSD simulator page. Simple words, large buttons, low
-# data (DESIGN.md). All of these pages call the JSON API in backend/farmer/router.py.
+# data. All of these pages call the JSON API in backend/farmer/router.py.
 from __future__ import annotations
 
 from pathlib import Path

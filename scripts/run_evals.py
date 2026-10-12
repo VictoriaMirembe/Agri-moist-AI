@@ -19,6 +19,7 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT))
 
 RESULTS_FILE = Path(__file__).resolve().parent / "evals_results.json"
+MODEL_PAUSE_SECONDS = 8 if os.environ.get("EVALS_NO_PAUSE") != "1" else 0
 
 
 def fresh_db_url() -> Path:
@@ -66,7 +67,11 @@ async def run_agent(database_module, group_id: int):
     from backend.db.models import Run
 
     with database_module.session_scope() as session:
-        run = Run(group_id=group_id, model="rule-based-stub")
+        from backend.core.config import settings
+
+        # Same label the real "Draft advice" route uses (backend/officer/router.py).
+        model_name = settings.groq_model if settings.model_configured else "rule-based-stub"
+        run = Run(group_id=group_id, model=model_name)
         session.add(run)
         session.commit()
         session.refresh(run)
@@ -108,6 +113,16 @@ def get_run_and_advice(database_module, run_id: int):
         )
 
 
+def _describe(run: dict, advice: dict | None) -> str:
+    """One line that explains a pass or a failure: which model ran, what happened, and
+    the start of the advice it wrote."""
+    parts = [f"model={run['model']}", f"outcome={run['outcome']}"]
+    if advice:
+        parts.append(f"advice_status={advice['status']}")
+        parts.append(f"advice='{advice['draft_text'][:160]}'")
+    return ", ".join(parts)
+
+
 # ---------------------------------------------------------------------------
 # Each task_* function performs ONE run and returns (passed, detail)
 # ---------------------------------------------------------------------------
@@ -121,7 +136,7 @@ async def task_1_dry_soil_little_rain():
         and "water" in advice["draft_text"].lower()
         and any(s["source_type"] == "weather" for s in sources)
     )
-    return ok, f"outcome={run['outcome']}", elapsed, run["cost"]
+    return ok, _describe(run, advice), elapsed, run["cost"]
 
 
 async def task_2_heavy_rain():
@@ -133,7 +148,7 @@ async def task_2_heavy_rain():
         and advice is not None
         and "no extra watering" in advice["draft_text"].lower()
     )
-    return ok, f"outcome={run['outcome']}", elapsed, run["cost"]
+    return ok, _describe(run, advice), elapsed, run["cost"]
 
 
 async def task_3_pest_reported():
@@ -146,7 +161,7 @@ async def task_3_pest_reported():
         and "fall armyworm" in advice["draft_text"]
         and any(s["source_type"] == "pest_report" for s in sources)
     )
-    return ok, f"outcome={run['outcome']}", elapsed, run["cost"]
+    return ok, _describe(run, advice), elapsed, run["cost"]
 
 
 async def task_4_weather_down():
@@ -162,7 +177,7 @@ async def task_4_weather_down():
         and weather_source is not None
         and weather_source["source_ref"].startswith("unavailable")
     )
-    return ok, f"retries={len(weather_calls)}, outcome={run['outcome']}", elapsed, run["cost"]
+    return ok, f"retries={len(weather_calls)}, {_describe(run, advice)}", elapsed, run["cost"]
 
 
 async def task_5_no_visit_30_days():
@@ -250,10 +265,42 @@ async def task_9_no_order_tool():
 
 
 async def task_10_translation():
-    # No GROQ_API_KEY is configured in this environment, so no model-based
-    # translation call can actually be made or checked by a speaker. Recorded
-    # honestly as skipped rather than faking a pass. See README "Known gaps".
-    return None, "SKIPPED: no GROQ_API_KEY configured in this environment", 0.0, 0.0
+    # Approve the seeded pending draft and check that a real translation is stored
+    # and shown to the farmer. Passing proves the model produced a translation; it
+    # does NOT prove the Ngakarimojong is correct - that needs a speaker to check
+    # the text recorded here.
+    from backend.core.config import settings
+
+    if not settings.model_configured:
+        return None, "SKIPPED: no GROQ_API_KEY configured in this environment", 0.0, 0.0
+    await new_app()
+    from fastapi.testclient import TestClient
+
+    from backend.main import app
+
+    started = time.monotonic()
+    with TestClient(app) as client:
+        pending = client.get("/api/approvals", params={"status": "pending_review"}).json()[0]
+        r = client.post(f"/api/approvals/{pending['id']}/approve", json={"officer_id": 1})
+        log_row = next(row for row in client.get("/api/logs").json() if row["tool"] == "approve_advice")
+        cost = json.loads(log_row["outputs"]).get("translation_cost", 0.0)
+        phone = "+256700000004"  # a household in the pending draft's group (G-2)
+        farmer = client.get("/api/farmer/advice", params={"phone": phone}).json()
+    elapsed = time.monotonic() - started
+    english = pending["draft_text"].strip()
+    shown = (farmer.get("text") or "").strip()
+    ok = (
+        r.status_code == 200
+        and r.json().get("translation_model") == settings.groq_model
+        and farmer.get("language") == settings.farmer_language
+        and bool(shown)
+        and shown != english
+    )
+    detail = (
+        f"translation_model={r.json().get('translation_model')}, language={farmer.get('language')}, "
+        f"translated='{shown[:200]}' (needs a Ngakarimojong speaker to confirm meaning)"
+    )
+    return ok, detail, elapsed, cost
 
 
 async def task_11_planting_closed():
@@ -269,7 +316,7 @@ async def task_11_planting_closed():
         and len(cal_sources) >= 1
         and all(s["source_ref"].startswith("https://") for s in cal_sources)
     )
-    return ok, f"outcome={run['outcome']}, crop_calendar_sources={len(cal_sources)}", elapsed, run["cost"]
+    return ok, f"{_describe(run, advice)}, crop_calendar_sources={len(cal_sources)}", elapsed, run["cost"]
 
 
 async def task_12_messy_record():
@@ -358,6 +405,10 @@ async def main():
             runs.append({"pass": ok, "detail": detail, "seconds": round(elapsed, 2), "cost": cost})
             status = "SKIP" if ok is None else ("PASS" if ok else "FAIL")
             print(f"Task {task_id} run {i + 1}: {status} - {detail}")
+            if MODEL_PAUSE_SECONDS:
+                # Groq's on-demand tier has a tokens-per-minute limit; without a pause,
+                # back-to-back runs hit 429 and silently fall back to the stub.
+                await asyncio.sleep(MODEL_PAUSE_SECONDS)
         results[task_id] = {"name": name, "runs": runs}
 
     RESULTS_FILE.write_text(json.dumps(results, indent=2), encoding="utf-8")

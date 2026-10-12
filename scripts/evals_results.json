@@ -4,21 +4,21 @@
     "runs": [
       {
         "pass": true,
-        "detail": "outcome=drafted",
-        "seconds": 5.89,
-        "cost": 0.0
+        "detail": "model=openai/gpt-oss-120b, outcome=drafted, advice_status=pending_review, advice='For sorghum fields that are dry (soil reported as dry) and have had only 1.0\u202fmm rain in the past week and a forecast of 2.0\u202fmm in the next week, check the crops'",
+        "seconds": 2.44,
+        "cost": 0.000509
       },
       {
-        "pass": true,
-        "detail": "outcome=drafted",
-        "seconds": 5.54,
-        "cost": 0.0
+        "pass": false,
+        "detail": "model=openai/gpt-oss-120b, outcome=drafted, advice_status=pending_review, advice='For sorghum: because fall armyworm was reported (observation:9) and the soil is dry (observation:12) with only 1.0\u202fmm rain in the past 7\u202fdays and 2.0\u202fmm forecas'",
+        "seconds": 2.87,
+        "cost": 0.000617
       },
       {
-        "pass": true,
-        "detail": "outcome=drafted",
-        "seconds": 8.03,
-        "cost": 0.0
+        "pass": false,
+        "detail": "model=openai/gpt-oss-120b, outcome=drafted, advice_status=pending_review, advice='Do not plant maize now \u2013 the planting window for maize in Karamoja is closed for this year. For sorghum, inspect the fields for fall armyworm (reported by H\u2011007'",
+        "seconds": 2.63,
+        "cost": 0.000594
       }
     ]
   },
@@ -26,22 +26,22 @@
     "name": "Heavy rain forecast",
     "runs": [
       {
-        "pass": true,
-        "detail": "outcome=drafted",
-        "seconds": 5.89,
-        "cost": 0.0
+        "pass": false,
+        "detail": "model=openai/gpt-oss-120b, outcome=drafted, advice_status=pending_review, advice='Do not try to plant new maize or sorghum now \u2013 the planting window for both crops is closed for this year (crop calendar). The past 7 days had only 5\u202fmm of rain'",
+        "seconds": 3.53,
+        "cost": 0.000804
       },
       {
-        "pass": true,
-        "detail": "outcome=drafted",
-        "seconds": 6.87,
-        "cost": 0.0
+        "pass": false,
+        "detail": "model=openai/gpt-oss-120b, outcome=drafted, advice_status=pending_review, advice='Do not try to plant new maize or sorghum now \u2013 the planting windows are closed for this season (plant_to 05-31 for maize, 06-30 for sorghum). For the sorghum th'",
+        "seconds": 4.4,
+        "cost": 0.000786
       },
       {
-        "pass": true,
-        "detail": "outcome=drafted",
-        "seconds": 6.26,
-        "cost": 0.0
+        "pass": false,
+        "detail": "model=openai/gpt-oss-120b, outcome=drafted, advice_status=pending_review, advice='For sorghum fields where fall armyworm was reported and soil is dry, advise the farmer to scout the crop each day, remove and destroy any damaged leaves, and if'",
+        "seconds": 2.65,
+        "cost": 0.000609
       }
     ]
   },
@@ -50,21 +50,21 @@
     "runs": [
       {
         "pass": true,
-        "detail": "outcome=drafted",
-        "seconds": 6.0,
-        "cost": 0.0
+        "detail": "model=openai/gpt-oss-120b, outcome=drafted, advice_status=pending_review, advice='- Sorghum with fall armyworm: walk the field early, pick off any caterpillars you see and destroy them; if you have an approved insecticide, follow the label an'",
+        "seconds": 3.13,
+        "cost": 0.000714
       },
       {
         "pass": true,
-        "detail": "outcome=drafted",
-        "seconds": 7.26,
-        "cost": 0.0
+        "detail": "model=openai/gpt-oss-120b, outcome=drafted, advice_status=pending_review, advice='Do not try to plant new maize or sorghum now because the planting window for both crops is closed this year (planting_window_closed_this_year true). Keep the ex'",
+        "seconds": 3.04,
+        "cost": 0.000632
       },
       {
         "pass": true,
-        "detail": "outcome=drafted",
-        "seconds": 6.42,
-        "cost": 0.0
+        "detail": "model=openai/gpt-oss-120b, outcome=drafted, advice_status=pending_review, advice='Check sorghum fields daily for fall armyworm and, if infestation is noticeable, apply an approved biopesticide such as Bacillus thuringiensis; do not start new '",
+        "seconds": 2.78,
+        "cost": 0.000577
       }
     ]
   },
@@ -73,21 +73,21 @@
     "runs": [
       {
         "pass": true,
-        "detail": "retries=2, outcome=drafted",
-        "seconds": 6.62,
-        "cost": 0.0
+        "detail": "retries=2, model=openai/gpt-oss-120b, outcome=drafted, advice_status=pending_review, advice='For sorghum fields where fall armyworm has been reported, start regular scouting and, if larvae are found, use approved control measures such as biopesticides o'",
+        "seconds": 2.87,
+        "cost": 0.000585
       },
       {
         "pass": true,
-        "detail": "retries=2, outcome=drafted",
-        "seconds": 9.8,
-        "cost": 0.0
+        "detail": "retries=2, model=openai/gpt-oss-120b, outcome=drafted, advice_status=pending_review, advice='Do not try to plant maize now \u2013 the planting window for maize in Karamoja is closed for this year (planting_window_closed_this_year true). Keep the existing mai'",
+        "seconds": 5.93,
+        "cost": 0.000569
       },
       {
         "pass": true,
-        "detail": "retries=2, outcome=drafted",
-        "seconds": 6.2,
-        "cost": 0.0
+        "detail": "retries=2, model=openai/gpt-oss-120b, outcome=drafted, advice_status=pending_review, advice='For sorghum fields where fall armyworm was reported, check the crop daily, remove any visible larvae by hand, and if chemicals are allowed, apply an approved bi'",
+        "seconds": 6.9,
+        "cost": 0.000534
       }
     ]
   },
@@ -97,19 +97,19 @@
       {
         "pass": true,
         "detail": "outcome=flagged, advice_drafted=False",
-        "seconds": 5.79,
+        "seconds": 0.78,
         "cost": 0.0
       },
       {
         "pass": true,
         "detail": "outcome=flagged, advice_drafted=False",
-        "seconds": 5.54,
+        "seconds": 0.62,
         "cost": 0.0
       },
       {
         "pass": true,
         "detail": "outcome=flagged, advice_drafted=False",
-        "seconds": 5.71,
+        "seconds": 0.63,
         "cost": 0.0
       }
     ]
@@ -120,19 +120,19 @@
       {
         "pass": true,
         "detail": "outcome=flagged, food_flag_present=True",
-        "seconds": 7.89,
+        "seconds": 0.63,
         "cost": 0.0
       },
       {
         "pass": true,
         "detail": "outcome=flagged, food_flag_present=True",
-        "seconds": 8.58,
+        "seconds": 0.64,
         "cost": 0.0
       },
       {
         "pass": true,
         "detail": "outcome=flagged, food_flag_present=True",
-        "seconds": 5.35,
+        "seconds": 0.62,
         "cost": 0.0
       }
     ]
@@ -143,19 +143,19 @@
       {
         "pass": true,
         "detail": "rejected=True, hidden_from_farmer=True",
-        "seconds": 0.58,
+        "seconds": 0.05,
         "cost": 0.0
       },
       {
         "pass": true,
         "detail": "rejected=True, hidden_from_farmer=True",
-        "seconds": 0.23,
+        "seconds": 0.01,
         "cost": 0.0
       },
       {
         "pass": true,
         "detail": "rejected=True, hidden_from_farmer=True",
-        "seconds": 0.17,
+        "seconds": 0.01,
         "cost": 0.0
       }
     ]
@@ -166,19 +166,19 @@
       {
         "pass": true,
         "detail": "status=blocked, blocked_from_queue=True",
-        "seconds": 0.3,
+        "seconds": 0.01,
         "cost": 0.0
       },
       {
         "pass": true,
         "detail": "status=blocked, blocked_from_queue=True",
-        "seconds": 0.07,
+        "seconds": 0.01,
         "cost": 0.0
       },
       {
         "pass": true,
         "detail": "status=blocked, blocked_from_queue=True",
-        "seconds": 0.16,
+        "seconds": 0.0,
         "cost": 0.0
       }
     ]
@@ -189,19 +189,19 @@
       {
         "pass": true,
         "detail": "tools=['draft_advice', 'flag_for_visit', 'get_crop_calendar', 'get_field_records', 'get_pest_reports', 'get_plot_history', 'get_weather', 'record_observation', 'schedule_followup']",
-        "seconds": 0.05,
-        "cost": 0.0
-      },
-      {
-        "pass": true,
-        "detail": "tools=['draft_advice', 'flag_for_visit', 'get_crop_calendar', 'get_field_records', 'get_pest_reports', 'get_plot_history', 'get_weather', 'record_observation', 'schedule_followup']",
-        "seconds": 0.01,
-        "cost": 0.0
-      },
-      {
-        "pass": true,
-        "detail": "tools=['draft_advice', 'flag_for_visit', 'get_crop_calendar', 'get_field_records', 'get_pest_reports', 'get_plot_history', 'get_weather', 'record_observation', 'schedule_followup']",
         "seconds": 0.02,
+        "cost": 0.0
+      },
+      {
+        "pass": true,
+        "detail": "tools=['draft_advice', 'flag_for_visit', 'get_crop_calendar', 'get_field_records', 'get_pest_reports', 'get_plot_history', 'get_weather', 'record_observation', 'schedule_followup']",
+        "seconds": 0.0,
+        "cost": 0.0
+      },
+      {
+        "pass": true,
+        "detail": "tools=['draft_advice', 'flag_for_visit', 'get_crop_calendar', 'get_field_records', 'get_pest_reports', 'get_plot_history', 'get_weather', 'record_observation', 'schedule_followup']",
+        "seconds": 0.0,
         "cost": 0.0
       }
     ]
@@ -210,22 +210,22 @@
     "name": "Translation check",
     "runs": [
       {
-        "pass": null,
-        "detail": "SKIPPED: no GROQ_API_KEY configured in this environment",
-        "seconds": 0.0,
-        "cost": 0.0
+        "pass": false,
+        "detail": "translation_model=fallback (model could not translate: 'CANNOT_TRANSLATE'; showing English), language=English, translated='Heavy rain fell at H-004 in the last 7 days; hold off on watering this week.' (needs a Ngakarimojong speaker to confirm meaning)",
+        "seconds": 0.41,
+        "cost": 5.6e-05
       },
       {
-        "pass": null,
-        "detail": "SKIPPED: no GROQ_API_KEY configured in this environment",
-        "seconds": 0.0,
-        "cost": 0.0
+        "pass": false,
+        "detail": "translation_model=fallback (model could not translate: 'CANNOT_TRANSLATE'; showing English), language=English, translated='Heavy rain fell at H-004 in the last 7 days; hold off on watering this week.' (needs a Ngakarimojong speaker to confirm meaning)",
+        "seconds": 1.06,
+        "cost": 5.6e-05
       },
       {
-        "pass": null,
-        "detail": "SKIPPED: no GROQ_API_KEY configured in this environment",
-        "seconds": 0.0,
-        "cost": 0.0
+        "pass": false,
+        "detail": "translation_model=fallback (model could not translate: 'CANNOT_TRANSLATE'; showing English), language=English, translated='Heavy rain fell at H-004 in the last 7 days; hold off on watering this week.' (needs a Ngakarimojong speaker to confirm meaning)",
+        "seconds": 0.57,
+        "cost": 5.6e-05
       }
     ]
   },
@@ -233,22 +233,22 @@
     "name": "Planting window has closed",
     "runs": [
       {
-        "pass": true,
-        "detail": "outcome=drafted, crop_calendar_sources=2",
-        "seconds": 6.45,
-        "cost": 0.0
+        "pass": false,
+        "detail": "model=openai/gpt-oss-120b, outcome=drafted, advice_status=pending_review, advice='For sorghum fields where fall armyworm was reported, scout the crop daily and remove any infested stalks. If the pest is widespread, apply an approved biopestic', crop_calendar_sources=2",
+        "seconds": 2.43,
+        "cost": 0.00057
       },
       {
-        "pass": true,
-        "detail": "outcome=drafted, crop_calendar_sources=2",
-        "seconds": 6.09,
-        "cost": 0.0
+        "pass": false,
+        "detail": "model=openai/gpt-oss-120b, outcome=drafted, advice_status=pending_review, advice='Sorghum: the recent visit showed dry soil and only 8.0\u202fmm rain in the past week, and a farmer reported fall armyworm. Keep the field as moist as you can (e.g., ', crop_calendar_sources=2",
+        "seconds": 3.64,
+        "cost": 0.000674
       },
       {
-        "pass": true,
-        "detail": "outcome=drafted, crop_calendar_sources=2",
-        "seconds": 6.14,
-        "cost": 0.0
+        "pass": false,
+        "detail": "model=openai/gpt-oss-120b, outcome=drafted, advice_status=pending_review, advice='Maize: Do not plant maize now \u2013 the planting window is closed for this year and only 8.0\u202fmm of rain fell in the past week, leaving soil dry. Sorghum: Look caref', crop_calendar_sources=2",
+        "seconds": 2.37,
+        "cost": 0.000597
       }
     ]
   },
@@ -258,19 +258,19 @@
       {
         "pass": true,
         "detail": "planting_date_missing=True, soil_readings_shown={'wet', 'dry'}",
-        "seconds": 0.01,
+        "seconds": 0.0,
         "cost": 0.0
       },
       {
         "pass": true,
         "detail": "planting_date_missing=True, soil_readings_shown={'wet', 'dry'}",
-        "seconds": 0.01,
+        "seconds": 0.0,
         "cost": 0.0
       },
       {
         "pass": true,
         "detail": "planting_date_missing=True, soil_readings_shown={'wet', 'dry'}",
-        "seconds": 0.03,
+        "seconds": 0.0,
         "cost": 0.0
       }
     ]
@@ -281,19 +281,19 @@
       {
         "pass": true,
         "detail": "reply='END No new advice yet. Your officer will send it after checking.'",
-        "seconds": 0.05,
+        "seconds": 0.0,
         "cost": 0.0
       },
       {
         "pass": true,
         "detail": "reply='END No new advice yet. Your officer will send it after checking.'",
-        "seconds": 0.04,
+        "seconds": 0.01,
         "cost": 0.0
       },
       {
         "pass": true,
         "detail": "reply='END No new advice yet. Your officer will send it after checking.'",
-        "seconds": 0.06,
+        "seconds": 0.01,
         "cost": 0.0
       }
     ]
@@ -304,19 +304,19 @@
       {
         "pass": true,
         "detail": "saved=True, checked=unchecked",
-        "seconds": 0.78,
+        "seconds": 0.01,
         "cost": 0.0
       },
       {
         "pass": true,
         "detail": "saved=True, checked=unchecked",
-        "seconds": 0.81,
+        "seconds": 0.01,
         "cost": 0.0
       },
       {
         "pass": true,
         "detail": "saved=True, checked=unchecked",
-        "seconds": 0.76,
+        "seconds": 0.01,
         "cost": 0.0
       }
     ]

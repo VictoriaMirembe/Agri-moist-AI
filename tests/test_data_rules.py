@@ -1,4 +1,4 @@
-# Structural checks for the data and consent rules in RULES.md section 3.
+# Structural checks for the data and consent rules in README "Safety rules".
 from __future__ import annotations
 
 from pathlib import Path
@@ -9,7 +9,7 @@ from backend.db.models import Household
 def test_household_has_no_exact_location_fields():
     # "Locations are stored at village level only, never a household's exact
     # location." Household must not carry latitude/longitude at all - only Village
-    # does (see DATA_SCHEMA.md).
+    # does (see backend/db/models.py).
     field_names = set(Household.model_fields.keys())
     assert "latitude" not in field_names
     assert "longitude" not in field_names

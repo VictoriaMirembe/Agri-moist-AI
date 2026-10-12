@@ -142,3 +142,29 @@ def test_get_weather_real_call_has_a_source():
     assert "past_7_days_rain_mm" in result
     assert "next_7_days_rain_mm" in result
     assert result["source_ref"].startswith("https://api.open-meteo.com/")
+
+
+def test_draft_advice_blocks_a_number_no_source_contains(seeded_session):
+    sources = [{"fact": "Rain last 7 days 3.2mm, next 7 days forecast 18.0mm", "source_type": "weather", "source_ref": "open-meteo"}]
+    invented = impl.draft_advice(
+        seeded_session, group_id=1, run_id=None,
+        draft_text="Expect 40mm of rain this week.", why_text="Forecast.", sources=sources,
+    )
+    assert invented["status"] == "blocked"
+    assert "40" in invented["blocked_reason"]
+
+    sourced = impl.draft_advice(
+        seeded_session, group_id=1, run_id=None,
+        draft_text="Only 3.2mm fell; 18mm is forecast over the next 7 days.", why_text="Forecast.", sources=sources,
+    )
+    assert sourced["status"] == "pending_review"
+    assert sourced["blocked_reason"] is None
+
+
+def test_list_numbering_is_not_treated_as_an_invented_number(seeded_session):
+    sources = [{"fact": "Rain last 7 days 8.0mm", "source_type": "weather", "source_ref": "open-meteo"}]
+    result = impl.draft_advice(
+        seeded_session, group_id=1, run_id=None,
+        draft_text="1. Check sorghum daily.\n2. Only 8.0mm fell in the last 7 days.", why_text="Rain.", sources=sources,
+    )
+    assert result["status"] == "pending_review"

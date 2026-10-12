@@ -2,7 +2,7 @@
 #
 # Nine tools, one job each. Four change data (record_observation, draft_advice,
 # flag_for_visit, schedule_followup); none of them can send anything to a farmer or
-# place an order - see RULES.md. Every call is logged by backend.logging.tool_log,
+# place an order - see README "Safety rules". Every call is logged by backend.logging.tool_log,
 # through the same database file the web app uses.
 #
 # Run standalone (for MCP Inspector or another MCP client):

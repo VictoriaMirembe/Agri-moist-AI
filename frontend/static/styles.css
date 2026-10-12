@@ -107,6 +107,21 @@ table { width: 100%; border-collapse: collapse; margin-top: 0.5rem; }
 th, td { text-align: left; padding: 0.5rem; border-bottom: 1px solid var(--border); font-size: 0.95rem; }
 th { color: var(--muted); font-weight: 600; }
 
+/* Wide tables scroll sideways inside this box instead of widening the whole page. */
+.table-wrap { width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+
+/* Phones: keep table cells on one line (the wrapper scrolls), tighten spacing. */
+@media (max-width: 600px) {
+  body { font-size: 16px; }
+  .topbar { padding: 0.6rem 0.75rem; gap: 0.5rem; }
+  .topbar nav { gap: 0.4rem 0.8rem; }
+  .container { padding: 1rem 0.75rem 2.5rem; }
+  h1 { font-size: 1.35rem; }
+  .card { padding: 0.8rem; }
+  th, td { white-space: nowrap; padding: 0.4rem; font-size: 0.9rem; }
+  .row > * { min-width: 100%; }
+}
+
 .pill {
   display: inline-block;
   padding: 0.15rem 0.6rem;

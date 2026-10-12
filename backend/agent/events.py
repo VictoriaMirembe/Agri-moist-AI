@@ -1,4 +1,4 @@
-# Per-run event queues, so the Agent run screen (DESIGN.md screen 4) can watch tool
+# Per-run event queues, so the Agent run screen (officer screen 4) can watch tool
 # calls as they happen over server-sent events, while tool_log keeps the permanent
 # record. Events are best-effort and in memory only; the log table is the source of
 # truth if a browser tab misses them.

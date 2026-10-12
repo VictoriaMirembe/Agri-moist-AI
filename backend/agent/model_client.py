@@ -1,8 +1,7 @@
 # The open-weights model client. Uses Groq's OpenAI-compatible API when GROQ_API_KEY
 # is set in .env. With no key, every function falls back to a deterministic,
 # rule-based mode so the whole flow still runs end to end and can be marked
-# "rule-based-stub" honestly in the run log - never a made-up "real run" (RULES.md
-# section 4).
+# "rule-based-stub" honestly in the run log - never a made-up "real run" (README "Safety rules").
 from __future__ import annotations
 
 import json
@@ -17,6 +16,7 @@ _client: OpenAI | None = None
 # Published Groq per-token prices, USD per 1M tokens (input, output). Used only to
 # estimate a cost figure for the log; update if the model or pricing changes.
 _PRICES_PER_MILLION = {
+    "openai/gpt-oss-120b": (0.15, 0.60),  # console.groq.com/docs/model/openai/gpt-oss-120b
     "llama-3.3-70b-versatile": (0.59, 0.79),
 }
 _DEFAULT_PRICE = (0.60, 0.80)
@@ -45,7 +45,9 @@ DRAFT_SYSTEM_PROMPT = (
     "you never send anything to a farmer, order inputs or request credit. Use only "
     "the facts you are given, each already tied to a source. If a needed fact is "
     "marked as a gap or missing, say so plainly in the advice - never guess or invent "
-    "a reading, a date or a forecast. Keep the advice short and in plain words a "
+    "a reading, a date or a forecast. Only write numbers that appear in the facts, "
+    "copied exactly - a draft with any other number is blocked before review. "
+    "Keep the advice short and in plain words a "
     "farmer could act on. Reply as JSON only: "
     '{"advice": "...", "why": "one or two sentences citing the facts used"}'
 )
@@ -135,15 +137,24 @@ def _stub_draft(facts: dict[str, Any]) -> dict[str, Any]:
     return {"advice": advice, "why": why, "model": "rule-based-stub", "cost": 0.0}
 
 
-def translate_text(text: str, target_language: str) -> dict[str, str | None]:
+CANNOT_TRANSLATE = "CANNOT_TRANSLATE"
+_REFUSAL_STARTS = ("i'm sorry", "i’m sorry", "i am sorry", "sorry", "i cannot", "i can't", "i can’t", "i don't", "i don’t", "as an ai")
+
+
+def _is_refusal(text: str) -> bool:
+    lowered = text.strip().lower()
+    return CANNOT_TRANSLATE.lower() in lowered or lowered.startswith(_REFUSAL_STARTS)
+
+
+def translate_text(text: str, target_language: str) -> dict[str, Any]:
     """Returns translated_text=None when no translation actually happened (no model
     key, or the call failed) - callers should fall back to showing the English
     original rather than mislabel it as translated."""
     if not text:
-        return {"translated_text": None, "model": "none (nothing to translate)"}
+        return {"translated_text": None, "model": "none (nothing to translate)", "cost": 0.0}
     client = _get_client()
     if client is None:
-        return {"translated_text": None, "model": "none (no model key configured; showing English)"}
+        return {"translated_text": None, "model": "none (no model key configured; showing English)", "cost": 0.0}
     try:
         response = client.chat.completions.create(
             model=settings.groq_model,
@@ -153,16 +164,23 @@ def translate_text(text: str, target_language: str) -> dict[str, str | None]:
                     "content": (
                         f"Translate the following farm advice into {target_language}. Keep the "
                         "meaning exact and the words simple. Reply with only the translation, "
-                        "no notes."
+                        f"no notes. If you cannot translate it accurately, reply with exactly {CANNOT_TRANSLATE}."
                     ),
                 },
                 {"role": "user", "content": text},
             ],
             temperature=0.0,
         )
+        cost = _estimate_cost(response.usage)  # tokens are paid for even if the reply is unusable
         translated = (response.choices[0].message.content or "").strip()
-        if not translated:
-            raise ValueError("empty translation")
-        return {"translated_text": translated, "model": settings.groq_model}
+        if not translated or _is_refusal(translated):
+            # Never store a refusal or apology as the "translation" - the farmer would
+            # see it instead of their advice. Fall back to the English text.
+            return {
+                "translated_text": None,
+                "model": f"fallback (model could not translate: {translated[:80]!r}; showing English)",
+                "cost": cost,
+            }
+        return {"translated_text": translated, "model": settings.groq_model, "cost": cost}
     except Exception as exc:  # noqa: BLE001
-        return {"translated_text": None, "model": f"fallback (translation failed: {exc}; showing English)"}
+        return {"translated_text": None, "model": f"fallback (translation failed: {exc}; showing English)", "cost": 0.0}

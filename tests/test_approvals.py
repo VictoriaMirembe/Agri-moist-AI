@@ -78,3 +78,36 @@ def test_blocked_advice_can_never_be_approved(client):
     assert result["status"] == "blocked"
     r = client.post(f"/api/approvals/{result['advice_id']}/approve", json={"officer_id": 1})
     assert r.status_code == 409
+
+
+def test_every_approval_decision_is_in_the_log(client):
+    pending = client.get("/api/approvals", params={"status": "pending_review"}).json()
+    assert pending
+    advice = pending[0]
+    r = client.post(f"/api/approvals/{advice['id']}/reject", json={"officer_id": 2, "reason": "rain figure looks wrong"})
+    assert r.status_code == 200
+
+    logs = [row for row in client.get("/api/logs").json() if row["tool"] == "reject_advice"]
+    assert len(logs) == 1
+    row = logs[0]
+    assert row["actor"] == "2"
+    assert row["source"] == "officer"
+    assert row["run_id"] == advice["run_id"]
+    assert "rain figure looks wrong" in row["inputs"]
+    assert row["error"] is None
+
+
+def test_translation_model_and_cost_are_logged_with_the_approval(client, monkeypatch):
+    from backend.approvals import router as approvals_router
+
+    monkeypatch.setattr(
+        approvals_router,
+        "translate_text",
+        lambda text, lang: {"translated_text": "(translated)", "model": "openai/gpt-oss-120b", "cost": 0.000042},
+    )
+    advice = client.get("/api/approvals", params={"status": "pending_review"}).json()[0]
+    assert client.post(f"/api/approvals/{advice['id']}/approve", json={"officer_id": 1}).status_code == 200
+
+    row = next(r for r in client.get("/api/logs").json() if r["tool"] == "approve_advice")
+    assert '"translation_cost": 4.2e-05' in row["outputs"] or '"translation_cost": 0.000042' in row["outputs"]
+    assert "openai/gpt-oss-120b" in row["outputs"]

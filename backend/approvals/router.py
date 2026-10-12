@@ -1,5 +1,5 @@
 # The approval gate. This is the ONLY module in the whole app allowed to set an
-# advice status to approved or edited_and_approved - see AGENTS.md and RULES.md.
+# advice status to approved or edited_and_approved - see docs/API_CONTRACT.md.
 # A rejection always needs a reason; approving or editing always needs an officer id,
 # and only a draft that is pending_review (never blocked, drafted, or already
 # decided) can be acted on.
@@ -13,6 +13,7 @@ from backend.agent.model_client import translate_text
 from backend.core.config import settings
 from backend.core.database import session_scope
 from backend.db.models import Advice, AdviceSource, Approval, Officer
+from backend.logging.tool_log import run_logged
 
 router = APIRouter(prefix="/api/approvals", tags=["approvals"])
 
@@ -95,15 +96,29 @@ def _officer_or_400(session, officer_id: int) -> Officer:
     return officer
 
 
-def _translate_and_store(session, advice: Advice) -> str:
+def _translate_and_store(session, advice: Advice) -> dict:
     """Translate the final, approved text for farmers. Runs only after approval
-    (DATA_SCHEMA.md: advice.translated_text is set after approval only). Any
+    (advice.translated_text is set after approval only). Any
     translation failure falls back to showing the English text - never blocks
     the approval itself."""
     result = translate_text(advice.final_text or "", settings.farmer_language)
     advice.translated_text = result["translated_text"]
     session.add(advice)
-    return result["model"]
+    return {"model": result["model"], "cost": result.get("cost", 0.0)}
+
+
+def _log_decision(session, advice: Advice, officer: Officer, decision: str, inputs: dict, outputs: dict) -> None:
+    """Every approval decision goes into the same log as tool calls, tied to the
+    agent run that drafted the advice, with the officer as the actor."""
+    run_logged(
+        session,
+        tool=f"{decision}_advice",
+        inputs={"advice_id": advice.id, "officer_id": officer.id, **inputs},
+        actor=str(officer.id),
+        source="officer",
+        run_id=advice.run_id,
+        func=lambda: outputs,
+    )
 
 
 @router.post("/{advice_id}/approve")
@@ -114,10 +129,12 @@ def approve(advice_id: int, body: ApproveRequest):
         advice.status = "approved"
         advice.final_text = advice.draft_text
         session.add(advice)
-        translation_model = _translate_and_store(session, advice)
+        translation = _translate_and_store(session, advice)
         session.add(Approval(advice_id=advice.id, officer_id=officer.id, decision="approved"))
         session.commit()
-        return {"id": advice.id, "status": advice.status, "officer": officer.name, "translation_model": translation_model}
+        result = {"id": advice.id, "status": advice.status, "officer": officer.name, "translation_model": translation["model"]}
+        _log_decision(session, advice, officer, "approve", {}, {**result, "translation_cost": translation["cost"]})
+        return result
 
 
 @router.post("/{advice_id}/edit")
@@ -128,10 +145,15 @@ def edit_and_approve(advice_id: int, body: EditRequest):
         advice.status = "edited_and_approved"
         advice.final_text = body.final_text
         session.add(advice)
-        translation_model = _translate_and_store(session, advice)
+        translation = _translate_and_store(session, advice)
         session.add(Approval(advice_id=advice.id, officer_id=officer.id, decision="edited_and_approved"))
         session.commit()
-        return {"id": advice.id, "status": advice.status, "officer": officer.name, "translation_model": translation_model}
+        result = {"id": advice.id, "status": advice.status, "officer": officer.name, "translation_model": translation["model"]}
+        _log_decision(
+            session, advice, officer, "edit_and_approve", {"final_text": body.final_text},
+            {**result, "translation_cost": translation["cost"]},
+        )
+        return result
 
 
 @router.post("/{advice_id}/reject")
@@ -145,4 +167,6 @@ def reject(advice_id: int, body: RejectRequest):
             Approval(advice_id=advice.id, officer_id=officer.id, decision="rejected", reason=body.reason)
         )
         session.commit()
-        return {"id": advice.id, "status": advice.status, "officer": officer.name}
+        result = {"id": advice.id, "status": advice.status, "officer": officer.name}
+        _log_decision(session, advice, officer, "reject", {"reason": body.reason}, result)
+        return result

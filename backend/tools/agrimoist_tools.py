@@ -7,6 +7,7 @@
 # place that writes tool_log rows, whatever is calling the tool.
 from __future__ import annotations
 
+import re
 from datetime import date, datetime, timedelta, timezone
 from typing import Any
 
@@ -287,6 +288,27 @@ def get_pest_reports(session: Session, *, group_id: int, days: int = 21) -> dict
 # draft_advice - does something: writes sourced advice into the approval queue
 # ---------------------------------------------------------------------------
 REQUIRED_SOURCE_KEYS = ("fact", "source_type", "source_ref")
+_NUMBER = re.compile(r"\d+(?:\.\d+)?")
+_LIST_MARKER = re.compile(r"^\s*\d+[.)]\s", re.MULTILINE)  # "1. ", "2) " at a line start
+
+
+def _numbers_in(text: str) -> set[float]:
+    return {float(n) for n in _NUMBER.findall(text or "")}
+
+
+def unsourced_numbers(texts: list[str], sources: list[dict[str, str]]) -> list[str]:
+    """Numbers in the advice wording that appear in no source's fact or reference.
+    A model can write a rain figure, a date or a dose that no tool returned; any such
+    number blocks the draft, so an officer never reviews an invented reading."""
+    sourced = set()
+    for s in sources:
+        sourced |= _numbers_in(s.get("fact", "")) | _numbers_in(s.get("source_ref", ""))
+    found = []
+    for text in texts:
+        for n in _NUMBER.findall(_LIST_MARKER.sub(" ", text or "")):
+            if float(n) not in sourced and n not in found:
+                found.append(n)
+    return found
 
 
 def draft_advice(
@@ -302,7 +324,8 @@ def draft_advice(
     missing_sources = not sources or any(
         not all(s.get(k) for k in REQUIRED_SOURCE_KEYS) for s in sources
     )
-    status = "blocked" if missing_sources else "pending_review"
+    invented = [] if missing_sources else unsourced_numbers([draft_text, why_text], sources)
+    status = "blocked" if missing_sources or invented else "pending_review"
 
     advice = Advice(
         group_id=group_id,
@@ -330,7 +353,13 @@ def draft_advice(
     return {
         "advice_id": advice.id,
         "status": status,
-        "blocked_reason": "a fact has no source" if missing_sources else None,
+        "blocked_reason": (
+            "a fact has no source"
+            if missing_sources
+            else f"the advice uses numbers no source contains: {', '.join(invented)}"
+            if invented
+            else None
+        ),
     }
 
 

@@ -1,3 +1,4 @@
+{# Log: every agent run (model, outcome, cost) and every tool call (actor, source, result). Rendered by backend/officer/pages.py log_page(). #}
 {% extends "base.html" %}
 {% block title %}Log{% endblock %}
 {% block content %}
@@ -5,7 +6,7 @@
 <p class="muted">Every tool call: inputs, outputs, source, actor and time. Errors show in red.</p>
 
 <h2>Runs</h2>
-<table>
+<div class="table-wrap"><table>
   <thead><tr><th>Run</th><th>Group</th><th>Model</th><th>Outcome</th><th>Cost (USD)</th><th>Started</th><th></th></tr></thead>
   <tbody>
     {% for r in runs %}
@@ -20,10 +21,10 @@
     </tr>
     {% endfor %}
   </tbody>
-</table>
+</table></div>
 
 <h2>Tool calls {% if selected_run_id %}(run #{{ selected_run_id }}) <a href="/log">clear filter</a>{% endif %}</h2>
-<table>
+<div class="table-wrap"><table>
   <thead><tr><th>At</th><th>Run</th><th>Tool</th><th>Actor</th><th>Source</th><th>Result</th></tr></thead>
   <tbody>
     {% for row in rows %}
@@ -40,5 +41,5 @@
     </tr>
     {% endfor %}
   </tbody>
-</table>
+</table></div>
 {% endblock %}

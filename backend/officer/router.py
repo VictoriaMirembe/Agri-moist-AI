@@ -7,7 +7,7 @@ import asyncio
 import json
 
 from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 from sqlmodel import func, select
 from sse_starlette.sse import EventSourceResponse
 
@@ -52,6 +52,14 @@ class VisitRequest(BaseModel):
     crop_condition: str | None = None
     food_left: str | None = None
     notes: str | None = None
+
+    @field_validator("pest_seen", "notes")
+    @classmethod
+    def _blank_to_none(cls, value: str | None) -> str | None:
+        # "  " or "" means nothing was entered; it must not be saved as a pest sighting.
+        if value is None:
+            return None
+        return value.strip() or None
 
 
 @router.post("/visits")

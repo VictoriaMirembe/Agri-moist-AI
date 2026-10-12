@@ -1,4 +1,4 @@
-# Officer-facing HTML screens (DESIGN.md screens 1-8). Server-rendered Jinja2 for the
+# Officer-facing HTML screens. Server-rendered Jinja2 for the
 # first paint; the small amount of interactivity (saving a visit, starting a draft,
 # approving, marking things checked/visited, watching a run live) is plain fetch()
 # calls in frontend/static/app.js against the JSON API in backend/officer/router.py,

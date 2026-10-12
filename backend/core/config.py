@@ -13,7 +13,7 @@ class Settings(BaseSettings):
 
     # Open-weights model (Groq, OpenAI-compatible API). Blank key = deterministic stub mode.
     groq_api_key: str | None = None
-    groq_model: str = "llama-3.3-70b-versatile"
+    groq_model: str = "openai/gpt-oss-120b"
     groq_base_url: str = "https://api.groq.com/openai/v1"
 
     # Weather. Open-Meteo needs no key.
@@ -24,7 +24,7 @@ class Settings(BaseSettings):
     # evaluated on demand (live weather cannot be forced to "little rain" on
     # purpose). When set, get_weather returns these figures instead of calling
     # Open-Meteo, and labels the source as an override rather than a live reading -
-    # never silently pretends to be real data (RULES.md section 4).
+    # never silently pretends to be real data (README "Safety rules").
     weather_override_past_mm: float | None = None
     weather_override_next_mm: float | None = None
 

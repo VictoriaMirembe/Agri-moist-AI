@@ -1,5 +1,5 @@
 # Everything a farmer touches: reports, visit requests, reading approved advice, and
-# the simulated USSD menu (USSD_MENU.md). Farmers never chat with the assistant and
+# the simulated USSD menu. Farmers never chat with the assistant and
 # never see the raw advice table - every read here goes through the
 # advice_visible_to_farmer database view, which only ever contains approved and
 # edited_and_approved rows (see backend/core/database.py).

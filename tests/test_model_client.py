@@ -67,3 +67,45 @@ def test_no_facts_gives_an_honest_fallback_not_a_guess():
     result = _stub_draft({})
     assert result["advice"]
     assert "model" in result and result["model"] == "rule-based-stub"
+
+
+def test_cost_uses_the_gpt_oss_120b_price(monkeypatch):
+    from types import SimpleNamespace
+
+    from backend.agent import model_client
+    from backend.core.config import settings
+
+    monkeypatch.setattr(settings, "groq_model", "openai/gpt-oss-120b")
+    usage = SimpleNamespace(prompt_tokens=1_000_000, completion_tokens=1_000_000)
+    assert model_client._estimate_cost(usage) == 0.75  # $0.15 in + $0.60 out
+
+
+def test_translation_without_a_key_reports_zero_cost():
+    from backend.agent.model_client import translate_text
+
+    result = translate_text("Water the sorghum.", "Ngakarimojong")
+    assert result["translated_text"] is None
+    assert result["cost"] == 0.0
+
+
+def test_a_refusal_is_never_stored_as_a_translation(monkeypatch):
+    from types import SimpleNamespace
+
+    from backend.agent import model_client
+
+    reply = "I’m sorry, but I don’t have enough knowledge of Ngakarimojong to provide an accurate translation."
+    fake = SimpleNamespace(
+        chat=SimpleNamespace(
+            completions=SimpleNamespace(
+                create=lambda **_: SimpleNamespace(
+                    choices=[SimpleNamespace(message=SimpleNamespace(content=reply))],
+                    usage=SimpleNamespace(prompt_tokens=100, completion_tokens=20),
+                )
+            )
+        )
+    )
+    monkeypatch.setattr(model_client, "_get_client", lambda: fake)
+    result = model_client.translate_text("Water the sorghum.", "Ngakarimojong")
+    assert result["translated_text"] is None  # farmer is shown the English text instead
+    assert result["model"].startswith("fallback")
+    assert result["cost"] > 0  # the tokens were still paid for

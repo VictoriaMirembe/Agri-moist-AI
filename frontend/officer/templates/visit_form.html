@@ -1,3 +1,4 @@
+{# Record visit: the officer's field-visit form. Posts to POST /api/visits, then opens that household's group screen. #}
 {% extends "base.html" %}
 {% block title %}Record visit{% endblock %}
 {% block content %}
@@ -62,7 +63,7 @@
     <label><input type="checkbox" id="consent" style="width:auto;display:inline-block;margin-right:0.5rem;" required> The household has given consent for this visit to be recorded</label>
 
     <p id="error" class="pill red" style="display:none;margin-top:1rem;"></p>
-    <button class="btn" type="submit" style="margin-top:1rem;">Save visit</button>
+    <button class="btn" id="save-btn" type="submit" style="margin-top:1rem;">Save visit</button>
   </form>
 </div>
 
@@ -83,7 +84,8 @@ document.getElementById("visit-form").addEventListener("submit", async (e) => {
       food_left: document.getElementById("food_left").value,
       notes: document.getElementById("notes").value || null,
     };
-    const result = await postJSON("/api/visits", body);
+    const saveBtn = document.getElementById("save-btn");
+    const result = await whileBusy([saveBtn], () => postJSON("/api/visits", body));
     window.location.href = "/groups/" + result.group_id;
   } catch (err) {
     showError(errorEl, err);

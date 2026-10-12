@@ -1,3 +1,4 @@
+{# Home: totals of drafts waiting, open visit flags and unchecked farmer reports, plus one row per household group. Rendered by backend/officer/pages.py home(). #}
 {% extends "base.html" %}
 {% block title %}Home{% endblock %}
 {% block content %}
@@ -9,7 +10,7 @@
 </div>
 
 <h2>Household groups</h2>
-<table>
+<div class="table-wrap"><table>
   <thead>
     <tr><th>Group</th><th>Village</th><th>Households</th><th>Open flags</th><th>Drafts waiting</th><th></th></tr>
   </thead>
@@ -25,5 +26,5 @@
     </tr>
     {% endfor %}
   </tbody>
-</table>
+</table></div>
 {% endblock %}

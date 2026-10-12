@@ -1,8 +1,8 @@
 # AgriMoist AI: API Contract
 
 Base URL in development: `http://localhost:8000`. All request and response bodies are
-JSON unless noted. See `DATA_SCHEMA.md` for field definitions and `DESIGN.md` for the
-approval states.
+JSON unless noted. Field definitions are in `backend/db/models.py`; the approval states are at
+the end of this file.
 
 ## Visits and groups
 

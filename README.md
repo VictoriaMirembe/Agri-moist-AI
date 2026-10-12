@@ -10,21 +10,22 @@ or on a simple farmer web page on a smartphone.
 - **Track:** Agentic AI for Africa Challenge, Agriculture & Food Security
 - **Theme:** Climate-smart advisory
 - **Office served (demo data):** Napak District Production Office, Karamoja, Uganda
-- **Team:** Ashelycole (core/agent), Victoria (officer app/approval gate), Evans (farmer channels/data) - see `AgriMoist_AI_Work_Plan_and_Build_Plan.pdf`
+- **Team:** Ashelycole (core/agent), Victoria (officer app/approval gate), Evans (farmer channels/data)
 
 > **Status:** All nine tools, the LangGraph agent, the approval gate, officer
 > screens, the USSD simulator and the farmer web page work end to end against real
-> data and a real weather API. No `GROQ_API_KEY` is configured in this build
-> environment, so advice drafting and translation run in a deterministic rule-based
-> fallback mode rather than on the open-weights model - see "Known gaps" below.
+> data, a real weather API and the open-weights model `openai/gpt-oss-120b` on Groq.
+> Without a `GROQ_API_KEY` the app still runs, using a deterministic rule-based
+> drafting mode. Translation into Ngakarimojong does **not** work yet: the model
+> declines, so farmers are shown the approved English text - see "Known gaps".
 
 ## Run it (one command)
 
 Requirements: Docker and Docker Compose.
 
 ```bash
-git clone https://github.com/[account]/agrimoist-ai.git
-cd agrimoist-ai
+git clone https://github.com/VictoriaMirembe/Agri-moist-AI.git
+cd Agri-moist-AI
 cp .env.example .env   # add your Groq key if you have one - works without it too
 docker compose up --build
 ```
@@ -36,7 +37,7 @@ made-up demo households on first start.
 
 ```bash
 python -m venv .venv
-.venv/Scripts/activate        # Windows: .venv\Scripts\activate ; macOS/Linux: source .venv/bin/activate
+source .venv/bin/activate     # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
 cp .env.example .env
 uvicorn backend.main:app --reload
@@ -64,7 +65,7 @@ Keys needed in `.env` (all optional - the app runs fully without any of them):
 
 | Key | What it is for | Where to get it |
 | --- | --- | --- |
-| `GROQ_API_KEY` | Open-weights model (`llama-3.3-70b-versatile` by default) that drafts advice and translates it. Blank = a deterministic, rule-based drafting mode is used instead, clearly labelled `rule-based-stub` in every run log. | <https://console.groq.com/keys> |
+| `GROQ_API_KEY` | Open-weights model (`openai/gpt-oss-120b` by default, set by `GROQ_MODEL`) that drafts advice and tries to translate it. Blank = a deterministic, rule-based drafting mode is used instead, clearly labelled `rule-based-stub` in every run log. | <https://console.groq.com/keys> |
 | `WEATHER_FAIL` | Set to `1` to make `get_weather` fail on purpose, to see the retry-then-mark-a-gap behaviour (EVALS task 4). | - |
 | `WEATHER_OVERRIDE_PAST_MM` / `WEATHER_OVERRIDE_NEXT_MM` | Force a specific rain scenario instead of today's live weather, for a demo or an eval run. Always labelled `demo-override`, never shown as a live reading. | - |
 
@@ -94,12 +95,12 @@ approving" instead of guessing a rain figure.
 
 Every piece of advice goes through five steps: **collect, check, draft, approve,
 follow up.** The assistant handles checking and drafting. The officer handles
-collecting, approving and following up. See [ARCHITECTURE.md](ARCHITECTURE.md).
+collecting, approving and following up.
 
-More detail: [DESIGN.md](DESIGN.md) (screens, flows, approval states),
-[DATA_SCHEMA.md](DATA_SCHEMA.md), [USSD_MENU.md](USSD_MENU.md), [RULES.md](RULES.md),
-[docs/API_CONTRACT.md](docs/API_CONTRACT.md) and
-[docs/TOOL_CONTRACT.md](docs/TOOL_CONTRACT.md).
+More detail: [docs/API_CONTRACT.md](docs/API_CONTRACT.md) (every route and the
+approval states), [docs/TOOL_CONTRACT.md](docs/TOOL_CONTRACT.md) (the nine tools),
+[EVALS.md](EVALS.md) (measured results) and
+[docs/user-research.md](docs/user-research.md).
 
 ## Farmer channels
 
@@ -153,7 +154,7 @@ nine tools - four that change data, five that only read:
 | `schedule_followup` | Books a check-back date | Writes |
 
 None of them can send a message, place an order, or request credit - see
-[RULES.md](RULES.md).
+"Safety rules" below.
 
 **Borrowed MCP server:** [`mcp-server-time`](https://pypi.org/project/mcp-server-time/)
 (the official Model Context Protocol reference server). The agent needs an
@@ -166,11 +167,11 @@ stdio exactly like our own server (`backend/agent/mcp_client.py`).
 sources, draft or flag - with one retry per failing tool call before the gap is
 marked in the advice, never guessed.
 
-**Model:** [Llama 3.3 70B](https://huggingface.co/meta-llama/Llama-3.3-70B-Instruct)
-(open weights), served through [Groq](https://groq.com) using the `openai` client
-with Groq's base URL, for one full advisory-drafting task and for translating
-approved advice into Ngakarimojong. With no key configured, both fall back to a
-deterministic, rule-based mode - see "Known gaps".
+**Model:** [gpt-oss-120b](https://huggingface.co/openai/gpt-oss-120b) (open weights,
+Apache 2.0), served through [Groq](https://groq.com) using the `openai` client with
+Groq's base URL, for drafting advice and for translating approved advice into
+Ngakarimojong. With no key configured, drafting falls back to a deterministic,
+rule-based mode and farmers see the English text.
 
 ## Safety rules
 
@@ -180,11 +181,16 @@ deterministic, rule-based mode - see "Known gaps".
   (`backend/approvals/router.py` is the only code allowed to set an advice status to
   `approved` or `edited_and_approved`).
 - Every fact in a draft cites its source. A draft with an unsourced fact is set to
-  `blocked` and can never enter the approval queue.
+  `blocked` and can never enter the approval queue. A draft whose wording uses a
+  number that appears in none of its sources (a rain figure, a date, a dose the model
+  made up) is also `blocked`. This catches invented numbers only: the officer still
+  has to read the wording against the sources listed under it.
 - If data is missing after one retry, the draft says so in plain words. It never
   guesses.
-- Every tool call is logged with its inputs, outputs, time, source, actor and cost
-  (`backend/logging/tool_log.py`).
+- Every tool call, and every approve / edit / reject decision, is logged with its
+  inputs, outputs, time, source and actor (`backend/logging/tool_log.py`). Each
+  agent run records its model and cost; each approval records the translation
+  model and cost.
 
 ## Data: where it came from and what it does not cover
 
@@ -197,8 +203,10 @@ deterministic, rule-based mode - see "Known gaps".
 
 ## Cost per run
 
-See [EVALS.md](EVALS.md) for the real, measured figures (average time and cost per
-agent run, from `scripts/run_evals.py`).
+Measured on `openai/gpt-oss-120b` over 15 real drafting runs (see [EVALS.md](EVALS.md)):
+**about $0.0006 per agent run** (highest $0.0008) and **about 3.4 seconds**. A
+translation attempt costs about $0.00006. Prices used: $0.15 per million input
+tokens and $0.60 per million output tokens (Groq's published price for this model).
 
 ## Scaling beyond the hackathon
 
@@ -214,11 +222,19 @@ agent run, from `scripts/run_evals.py`).
 
 ## Known gaps
 
-- **No model key configured in this environment.** Drafting and translation run in a
-  deterministic, rule-based fallback (clearly labelled `rule-based-stub` /
-  `fallback` in the log and in EVALS.md), not the open-weights model. Add
-  `GROQ_API_KEY` to `.env` to switch both on.
-- **Translation is unverified** (EVALS task 10) for the same reason - see EVALS.md.
+- **Translation into Ngakarimojong does not work.** The model replies that it cannot
+  translate the language (EVALS task 10 failed 3 of 3). The app detects this and
+  shows farmers the officer-approved English text instead; no translation has been
+  checked by a speaker.
+- **The evals' wording checks were written for the rule-based mode.** Tasks 1, 2 and
+  11 look for exact phrases the rule-based mode writes, so the model's differently
+  worded advice fails them even when its meaning may be right - see EVALS.md.
+- **The model's wording is not checked fact-by-fact against the sources.** Only
+  numbers are checked automatically; the officer reviews the rest.
+- **No login.** The officer picks a name from an "Acting as" list, and farmers are
+  identified by phone number only. Fine for a demo, not for real use.
+- **Consent is checked from the stored household record.** The consent tick box on
+  the visit form is only enforced by the browser.
 - **No real SMS or USSD sending** - the USSD menu is simulated in the browser at
   `/ussd`, using the real gateway request/reply shape.
 - **Made-up data only** - 10 households, 2 villages, 3 groups; see `backend/db/seed.py`.
@@ -227,15 +243,13 @@ agent run, from `scripts/run_evals.py`).
   The Dockerfile and compose file follow the same `pip install -r requirements.txt`
   + `uvicorn` path, so they are expected to work, but that specific path is
   untested.
-- **Agent run cost is always $0.00** in this environment (see above) - the cost
-  field and its arithmetic are implemented and tested, but have never priced a real
-  model call.
 
 ## Tests
 
-52 automated tests in `tests/` (`pytest`), plus `scripts/run_evals.py`, which runs
-the 14 EVALS.md tasks three times each against the real stack. See
-[EVALS.md](EVALS.md) for the real results.
+70 automated tests in `tests/` (`pytest`). Tests always use the rule-based mode, so
+they never call Groq even if `.env` has a key. `scripts/run_evals.py` runs the 14
+EVALS.md tasks three times each against the real stack, including the real model
+when a key is set. See [EVALS.md](EVALS.md) for the real results.
 
 ```bash
 pytest

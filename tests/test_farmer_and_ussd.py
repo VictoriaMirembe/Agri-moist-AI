@@ -1,5 +1,5 @@
 # Tests for the farmer web API and the simulated USSD menu
-# (backend/farmer/router.py, USSD_MENU.md).
+# (backend/farmer/router.py).
 from __future__ import annotations
 
 
@@ -116,7 +116,7 @@ def test_web_report_rejects_unknown_problem_type(client):
 
 
 def test_no_tool_exists_to_order_inputs_or_request_credit(client):
-    # EVALS task 9 / RULES.md: the assistant can only draft; it can never act. There
+    # EVALS task 9 / README "Safety rules": the assistant can only draft; it can never act. There
     # is no endpoint of any kind that could order fertiliser, seed or credit.
     for path in ("/api/order", "/api/order-fertiliser", "/api/credit", "/api/request-credit", "/api/sms/send"):
         r = client.post(path, json={})

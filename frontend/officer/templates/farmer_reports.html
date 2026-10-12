@@ -1,3 +1,4 @@
+{# Farmer reports: reports sent by USSD or the farmer web page (GET /api/farmer-reports); an officer can mark each one checked. #}
 {% extends "base.html" %}
 {% block title %}Farmer reports{% endblock %}
 {% block content %}
@@ -19,9 +20,9 @@ const officerSelect = document.getElementById("officer");
 function renderReport(r) {
   return `
   <div class="card" data-id="${r.id}">
-    <p><strong>${r.household_code}</strong> via ${r.source} <span class="pill ${r.checked === 'checked' ? 'green' : 'amber'}">${r.checked}</span> <span class="muted">${r.observed_on}</span></p>
-    ${r.group_id ? `<p><a href="/groups/${r.group_id}">Open household group G-${r.group_id}</a></p>` : ""}
-    <p>${r.crop ? "Crop: " + r.crop + ". " : ""}${r.pest_seen ? "Pest: " + r.pest_seen + ". " : ""}${r.rain_last_7_days ? "Rain: " + r.rain_last_7_days + ". " : ""}${r.notes || ""}</p>
+    <p><strong>${escapeHTML(r.household_code)}</strong> via ${escapeHTML(r.source)} <span class="pill ${r.checked === 'checked' ? 'green' : 'amber'}">${escapeHTML(r.checked)}</span> <span class="muted">${escapeHTML(r.observed_on)}</span></p>
+    ${r.group_id ? `<p><a href="/groups/${encodeURIComponent(r.group_id)}">Open household group G-${escapeHTML(r.group_id)}</a></p>` : ""}
+    <p>${r.crop ? "Crop: " + escapeHTML(r.crop) + ". " : ""}${r.pest_seen ? "Pest: " + escapeHTML(r.pest_seen) + ". " : ""}${r.rain_last_7_days ? "Rain: " + escapeHTML(r.rain_last_7_days) + ". " : ""}${escapeHTML(r.notes)}</p>
     ${r.checked === 'unchecked' ? `<button class="btn secondary" onclick="markChecked(${r.id})">Mark checked</button>` : ""}
   </div>`;
 }

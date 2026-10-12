@@ -1,3 +1,4 @@
+{# Approval queue: lists pending_review drafts with their sources (GET /api/approvals) and lets a named officer approve, edit and approve, or reject each one. #}
 {% extends "base.html" %}
 {% block title %}Approval queue{% endblock %}
 {% block content %}
@@ -18,16 +19,16 @@ const officerSelect = document.getElementById("officer");
 
 function renderAdvice(a) {
   const sourcesHtml = a.sources.map(s =>
-    `<li class="${s.is_gap ? 'gap' : ''}">${s.fact} <span class="muted">[${s.source_type}: ${s.source_ref}]</span></li>`
+    `<li class="${s.is_gap ? 'gap' : ''}">${escapeHTML(s.fact)} <span class="muted">[${escapeHTML(s.source_type)}: ${escapeHTML(s.source_ref)}]</span></li>`
   ).join("");
   return `
   <div class="card" data-id="${a.id}">
-    <p><strong>Group G-${a.group_id}</strong> <span class="pill amber">${a.status}</span> <span class="muted">${a.created_at}</span></p>
-    <p>${a.draft_text}</p>
-    <p class="muted"><em>Why this advice:</em> ${a.why_text || ""}</p>
+    <p><strong>Group G-${escapeHTML(a.group_id)}</strong> <span class="pill amber">${escapeHTML(a.status)}</span> <span class="muted">${escapeHTML(a.created_at)}</span></p>
+    <p>${escapeHTML(a.draft_text)}</p>
+    <p class="muted"><em>Why this advice:</em> ${escapeHTML(a.why_text)}</p>
     <ul class="source-list">${sourcesHtml}</ul>
-    <textarea class="edit-text" placeholder="Edit the advice text before approving (optional)">${a.draft_text}</textarea>
-    <div class="row" style="margin-top:0.6rem;">
+    <textarea class="edit-text" placeholder="Edit the advice text before approving (optional)">${escapeHTML(a.draft_text)}</textarea>
+    <div class="row actions" style="margin-top:0.6rem;">
       <button class="btn" onclick="approve(${a.id})">Approve</button>
       <button class="btn secondary" onclick="editApprove(${a.id})">Save edit &amp; approve</button>
       <button class="btn danger secondary" onclick="reject(${a.id})">Reject</button>
@@ -51,28 +52,39 @@ function cardError(id, err) {
   showError(card, err);
 }
 
-async function approve(id) {
+// All three buttons on a card are disabled together, so Approve and Reject cannot
+// both be sent for the same advice while one request is still in progress.
+function cardButtons(id) {
+  return Array.from(document.querySelectorAll(`[data-id="${id}"] .actions button`));
+}
+
+async function decide(id, path, body) {
+  document.querySelector(`[data-id="${id}"] .error`).style.display = "none";
   try {
-    await postJSON(`/api/approvals/${id}/approve`, { officer_id: parseInt(officerSelect.value, 10) });
+    await whileBusy(cardButtons(id), () => postJSON(`/api/approvals/${id}/${path}`, body));
     load();
   } catch (err) { cardError(id, err); }
 }
 
-async function editApprove(id) {
-  const text = document.querySelector(`[data-id="${id}"] .edit-text`).value;
-  try {
-    await postJSON(`/api/approvals/${id}/edit`, { officer_id: parseInt(officerSelect.value, 10), final_text: text });
-    load();
-  } catch (err) { cardError(id, err); }
+function approve(id) {
+  decide(id, "approve", { officer_id: parseInt(officerSelect.value, 10) });
 }
 
-async function reject(id) {
+function editApprove(id) {
+  const box = document.querySelector(`[data-id="${id}"] .edit-text`);
+  const text = box.value;
+  // An unchanged text must not be recorded as "edited_and_approved" in the audit trail.
+  if (text.trim() === box.defaultValue.trim()) {
+    cardError(id, new Error("The text has not been changed. Edit it first, or use Approve."));
+    return;
+  }
+  decide(id, "edit", { officer_id: parseInt(officerSelect.value, 10), final_text: text });
+}
+
+function reject(id) {
   const reason = prompt("Reason for rejecting this advice:");
   if (!reason) return;
-  try {
-    await postJSON(`/api/approvals/${id}/reject`, { officer_id: parseInt(officerSelect.value, 10), reason });
-    load();
-  } catch (err) { cardError(id, err); }
+  decide(id, "reject", { officer_id: parseInt(officerSelect.value, 10), reason });
 }
 
 load();

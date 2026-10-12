@@ -1,4 +1,4 @@
-# Database tables, matching DATA_SCHEMA.md. Every table reaches a district, directly or
+# Database tables. Every table reaches a district, directly or
 # through its village, so adding a second district later needs no redesign.
 from __future__ import annotations
 
@@ -100,7 +100,7 @@ class Advice(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     group_id: int
     run_id: Optional[int] = Field(default=None, foreign_key="run.id")
-    status: str = "drafted"  # see DESIGN.md approval states
+    status: str = "drafted"  # see docs/API_CONTRACT.md approval states
     draft_text: Optional[str] = None
     final_text: Optional[str] = None
     why_text: Optional[str] = None

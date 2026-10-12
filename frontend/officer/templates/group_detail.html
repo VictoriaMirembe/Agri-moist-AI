@@ -1,3 +1,4 @@
+{# Household group screen: flags, advice history, recent field records, plot history and crop calendar (from GET /api/groups/{id}), and the Draft advice button (POST /api/groups/{id}/draft). #}
 {% extends "base.html" %}
 {% block title %}Group G-{{ group_id }}{% endblock %}
 {% block content %}
@@ -11,19 +12,19 @@
 
 {% if flags %}
 <h2>Visit flags</h2>
-<table>
+<div class="table-wrap"><table>
   <thead><tr><th>Reason</th><th>Raised by</th><th>Status</th></tr></thead>
   <tbody>
     {% for f in flags %}
     <tr><td>{{ f.reason }}</td><td>{{ f.raised_by }}</td><td><span class="pill {{ 'amber' if f.status == 'open' else 'green' }}">{{ f.status }}</span></td></tr>
     {% endfor %}
   </tbody>
-</table>
+</table></div>
 {% endif %}
 
 <h2>Advice history</h2>
 {% if advices %}
-<table>
+<div class="table-wrap"><table>
   <thead><tr><th>Date</th><th>Status</th><th></th></tr></thead>
   <tbody>
     {% for a in advices %}
@@ -34,7 +35,7 @@
     </tr>
     {% endfor %}
   </tbody>
-</table>
+</table></div>
 {% else %}
 <p class="muted">No advice drafted for this group yet.</p>
 {% endif %}
@@ -56,25 +57,26 @@ async function loadDetail() {
     const data = await getJSON(`/api/groups/${groupId}`);
     const fr = data.field_records.records;
     document.getElementById("field-records").innerHTML = fr.length ? (
-      "<table><thead><tr><th>Household</th><th>Source</th><th>Soil</th><th>Rain</th><th>Pest</th><th>Condition</th><th>Food</th><th>Checked</th></tr></thead><tbody>" +
-      fr.map(r => `<tr><td>${r.household_code}</td><td>${r.source}</td><td>${r.soil_wetness||'-'}</td><td>${r.rain_last_7_days||'-'}</td><td>${r.pest_seen||'-'}</td><td>${r.crop_condition||'-'}</td><td>${r.food_left||'-'}</td><td>${r.checked}</td></tr>`).join("") +
-      "</tbody></table>"
+      "<div class='table-wrap'><table><thead><tr><th>Household</th><th>Source</th><th>Soil</th><th>Rain</th><th>Pest</th><th>Condition</th><th>Food</th><th>Checked</th></tr></thead><tbody>" +
+      fr.map(r => `<tr><td>${escapeHTML(r.household_code)}</td><td>${escapeHTML(r.source)}</td><td>${escapeHTML(r.soil_wetness||'-')}</td><td>${escapeHTML(r.rain_last_7_days||'-')}</td><td>${escapeHTML(r.pest_seen||'-')}</td><td>${escapeHTML(r.crop_condition||'-')}</td><td>${escapeHTML(r.food_left||'-')}</td><td>${escapeHTML(r.checked)}</td></tr>`).join("") +
+      "</tbody></table></div>"
     ) : "<p class='muted'>No recent records.</p>";
 
     const ph = data.plot_history.history;
     document.getElementById("plot-history").innerHTML = ph.length ? (
-      "<table><thead><tr><th>Household</th><th>Season</th><th>Crop</th><th>Planted</th><th>Harvested</th></tr></thead><tbody>" +
-      ph.map(r => `<tr><td>${r.household_code}</td><td>${r.season}</td><td>${r.crop}</td><td>${r.planted_on || '<span class=\"gap\">missing</span>'}</td><td>${r.harvested_on || '-'}</td></tr>`).join("") +
-      "</tbody></table>"
+      "<div class='table-wrap'><table><thead><tr><th>Household</th><th>Season</th><th>Crop</th><th>Planted</th><th>Harvested</th></tr></thead><tbody>" +
+      ph.map(r => `<tr><td>${escapeHTML(r.household_code)}</td><td>${escapeHTML(r.season)}</td><td>${escapeHTML(r.crop)}</td><td>${r.planted_on ? escapeHTML(r.planted_on) : '<span class=\"gap\">missing</span>'}</td><td>${escapeHTML(r.harvested_on || '-')}</td></tr>`).join("") +
+      "</tbody></table></div>"
     ) : "<p class='muted'>No plot history.</p>";
 
     const cal = data.crop_calendar;
     const crops = Object.keys(cal);
     document.getElementById("crop-calendar").innerHTML = crops.length ? crops.map(c => {
       const row = cal[c];
-      if (!row) return `<p>${c}: <span class="gap">no crop calendar entry - no source, cannot advise planting</span></p>`;
+      if (!row) return `<p>${escapeHTML(c)}: <span class="gap">no crop calendar entry - no source, cannot advise planting</span></p>`;
       const status = row.planting_window_closed_this_year ? '<span class="pill red">closed this year</span>' : (row.planting_window_open_today ? '<span class="pill green">open now</span>' : '<span class="pill amber">not open yet</span>');
-      return `<p><strong>${c}</strong>: ${row.plant_from} to ${row.plant_to} ${status} - <a href="${row.source_ref}" target="_blank" rel="noopener">source</a></p>`;
+      const link = safeURL(row.source_ref) ? `<a href="${safeURL(row.source_ref)}" target="_blank" rel="noopener">source</a>` : escapeHTML(row.source_ref);
+      return `<p><strong>${escapeHTML(c)}</strong>: ${escapeHTML(row.plant_from)} to ${escapeHTML(row.plant_to)} ${status} - ${link}</p>`;
     }).join("") : "<p class='muted'>No crops recorded yet for this group.</p>";
   } catch (err) {
     document.getElementById("field-records").textContent = "Could not load: " + err.message;
