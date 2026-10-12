@@ -31,7 +31,7 @@ templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
 router = APIRouter(tags=["officer-pages"], dependencies=[Depends(require_officer)])
 
 
-@router.get("/officer/dashboard")
+@router.get("/")
 def home(request: Request):
     with session_scope() as session:
         group_ids = sorted({g for g in session.exec(select(Household.group_id)).all()})

@@ -7,8 +7,7 @@ from contextlib import asynccontextmanager
 import secrets
 from pathlib import Path
 
-from fastapi import FastAPI, Request
-from fastapi.responses import RedirectResponse
+from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.sessions import SessionMiddleware
 
@@ -52,14 +51,6 @@ app.add_middleware(
     same_site="lax",
     https_only=settings.app_env.lower() == "production",
 )
-
-
-@app.get("/", include_in_schema=False)
-def landing_page(request: Request):
-    if request.session.get("role") == "officer":
-        return RedirectResponse("/officer/dashboard", status_code=303)
-    return RedirectResponse("/farmer", status_code=303)
-
 
 app.include_router(officer_router)
 app.include_router(approvals_router)

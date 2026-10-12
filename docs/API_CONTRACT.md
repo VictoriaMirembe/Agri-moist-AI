@@ -45,9 +45,6 @@ bound to the current session. Configure the demo bootstrap account and session s
 in `.env`; the password is PBKDF2-hashed in the matching officer record. Never commit
 the environment values.
 
-The site root (`/`) redirects visitors to the farmer sign-in page and signed-in
-officers to `/officer/dashboard`. The officer login page is `/officer/login`.
-
 ## Farmer reports and visit flags
 
 | Method | Path | Body / query | Returns |

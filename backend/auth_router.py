@@ -107,7 +107,7 @@ def officer_login(request: Request, username: str = Form(...), password: str = F
             "officer_name": officer_name,
         }
     )
-    return {"status": "success", "role": "officer", "redirect_url": "/officer/dashboard"}
+    return {"status": "success", "role": "officer", "redirect_url": "/"}
 
 
 @router.post("/api/officer/logout")

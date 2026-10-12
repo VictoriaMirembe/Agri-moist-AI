@@ -62,7 +62,7 @@ def test_groups_list_shows_counts(client):
 
 def test_officer_pages_render(client):
     for path in (
-        "/officer/dashboard",
+        "/",
         "/visits/new",
         "/groups/1",
         "/approvals",
@@ -80,12 +80,7 @@ def test_officer_routes_require_a_signed_in_officer(client):
 
     assert client.get("/followups").status_code == 403
     assert client.get("/api/followups").status_code == 403
-    assert client.get("/officer/dashboard").status_code == 403
-
-    landing = client.get("/", follow_redirects=False)
-    assert landing.status_code == 303
-    assert landing.headers["location"] == "/farmer"
-    assert client.get(landing.headers["location"]).status_code == 200
+    assert client.get("/").status_code == 403
 
     login_page = client.get("/officer/login")
     assert login_page.status_code == 200
@@ -106,15 +101,8 @@ def test_officer_login_creates_session_and_logout_clears_it(client):
         data={"username": "test-officer", "password": "test-officer-password"},
     )
     assert login.status_code == 200
-    assert login.json() == {
-        "status": "success",
-        "role": "officer",
-        "redirect_url": "/officer/dashboard",
-    }
+    assert login.json() == {"status": "success", "role": "officer", "redirect_url": "/"}
     assert client.get("/api/followups").status_code == 200
-    officer_landing = client.get("/", follow_redirects=False)
-    assert officer_landing.status_code == 303
-    assert officer_landing.headers["location"] == "/officer/dashboard"
 
     with session_scope() as session:
         officer = session.get(Officer, 1)

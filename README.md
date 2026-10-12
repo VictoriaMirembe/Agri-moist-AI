@@ -29,9 +29,8 @@ cp .env.example .env   # add your Groq key if you have one - works without it to
 docker compose up --build
 ```
 
-Then open <http://localhost:8000> for the farmer sign-in page. Officers can sign in
-at <http://localhost:8000/officer/login>. The app creates its SQLite database and
-loads the made-up demo households on first start.
+Then open <http://localhost:8000>. The app creates its SQLite database and loads the
+made-up demo households on first start.
 
 **Without Docker** (Python 3.12+):
 
@@ -98,8 +97,7 @@ separate non-authenticating flow.
 
 ## Run the demo
 
-1. Sign in as an officer at `/officer/login`, then open the Home screen at
-   `/officer/dashboard` and click a household group, or open **Record visit** to add
+1. Open the Home screen and click a household group, or open **Record visit** to add
    a new one.
 2. Open a household group and click **Draft advice**. You land on the Agent run
    screen and watch each tool call (and its source) arrive live over
