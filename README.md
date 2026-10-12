@@ -42,6 +42,24 @@ cp .env.example .env
 uvicorn backend.main:app --reload
 ```
 
+**Run the regression tests on Windows (PowerShell):** use the standard Windows
+CPython installation, not the MSYS Python runtime. If `py -3.12` is unavailable,
+install Python 3.12 for Windows from python.org, then open a new PowerShell
+terminal. From the repository root, create an isolated environment and invoke its
+Python directly:
+
+```powershell
+py -3.12 -m venv .venv
+.\.venv\Scripts\python.exe -c "import sys; print(sys.executable); print(sys.platform)"
+.\.venv\Scripts\python.exe -m pip install --upgrade pip
+.\.venv\Scripts\python.exe -m pip install --only-binary=:all: -r requirements.txt
+.\.venv\Scripts\python.exe -m pytest tests/test_farmer_and_ussd.py tests/test_officer.py
+```
+
+The printed executable should be inside this repository's `.venv` and the platform
+should be `win32`. `--only-binary=:all:` requires published wheels, so pip will not
+try to compile Pydantic, Ruff or other dependencies from source.
+
 Keys needed in `.env` (all optional - the app runs fully without any of them):
 
 | Key | What it is for | Where to get it |
@@ -107,10 +125,9 @@ follow-ups in **Farmer follow-ups**. Follow-up answers are accepted only for
 approved advice belonging to that farmer's household group.
 
 The active farmer portal is served at `/farmer` from `frontend/farmer/templates`.
-The root-level `farmer_portal.html` and `templates/farmer_portal.html` are older,
-unmounted prototypes; their report form uses `/api/reports`, which is not part of
-the active API contract. The phone-number check in this demo resolves a seeded
-household; it is not production authentication.
+The old unmounted root-level farmer portal prototypes, which used the inactive
+`/api/reports` endpoint, have been removed. The phone-number check in this demo
+resolves a seeded household; it is not production authentication.
 
 The USSD handler uses the same request and reply shape as a real USSD gateway (such
 as Africa's Talking): a session id, a phone number, and the digits typed so far; a
