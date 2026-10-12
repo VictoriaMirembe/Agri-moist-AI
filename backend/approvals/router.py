@@ -5,21 +5,16 @@
 # decided) can be acted on.
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, field_validator
 from sqlmodel import select
 
 from backend.agent.model_client import translate_text
-from backend.auth_router import require_officer, require_session_officer
 from backend.core.config import settings
 from backend.core.database import session_scope
 from backend.db.models import Advice, AdviceSource, Approval, Officer
 
-router = APIRouter(
-    prefix="/api/approvals",
-    tags=["approvals"],
-    dependencies=[Depends(require_officer)],
-)
+router = APIRouter(prefix="/api/approvals", tags=["approvals"])
 
 
 class ApproveRequest(BaseModel):
@@ -112,8 +107,7 @@ def _translate_and_store(session, advice: Advice) -> str:
 
 
 @router.post("/{advice_id}/approve")
-def approve(advice_id: int, body: ApproveRequest, request: Request):
-    require_session_officer(request, body.officer_id)
+def approve(advice_id: int, body: ApproveRequest):
     with session_scope() as session:
         advice = _pending_or_409(session, advice_id)
         officer = _officer_or_400(session, body.officer_id)
@@ -127,8 +121,7 @@ def approve(advice_id: int, body: ApproveRequest, request: Request):
 
 
 @router.post("/{advice_id}/edit")
-def edit_and_approve(advice_id: int, body: EditRequest, request: Request):
-    require_session_officer(request, body.officer_id)
+def edit_and_approve(advice_id: int, body: EditRequest):
     with session_scope() as session:
         advice = _pending_or_409(session, advice_id)
         officer = _officer_or_400(session, body.officer_id)
@@ -142,8 +135,7 @@ def edit_and_approve(advice_id: int, body: EditRequest, request: Request):
 
 
 @router.post("/{advice_id}/reject")
-def reject(advice_id: int, body: RejectRequest, request: Request):
-    require_session_officer(request, body.officer_id)
+def reject(advice_id: int, body: RejectRequest):
     with session_scope() as session:
         advice = _pending_or_409(session, advice_id)
         officer = _officer_or_400(session, body.officer_id)

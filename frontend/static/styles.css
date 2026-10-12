@@ -144,59 +144,6 @@ th { color: var(--muted); font-weight: 600; }
 .farmer-container { max-width: 480px; margin: 0 auto; padding: 1.25rem 1rem 3rem; }
 .farmer-container h1 { font-size: 1.5rem; }
 
-.login-page {
-  min-height: 100vh;
-  display: grid;
-  place-items: center;
-  padding: 1rem;
-  color: #f8fafc;
-  background: #0f172a;
-}
-.login-card {
-  width: min(100%, 28rem);
-  padding: 2rem;
-  border: 1px solid #334155;
-  border-radius: 14px;
-  background: #1e293b;
-  box-shadow: 0 24px 50px rgb(0 0 0 / 28%);
-}
-.login-card h1 {
-  margin: 0;
-  color: #34d399;
-  text-align: center;
-  font-size: 1.6rem;
-}
-.login-intro, .login-demo { color: #cbd5e1; text-align: center; }
-.login-intro { margin: 0.4rem 0 1.5rem; font-size: 0.95rem; }
-.login-card label { color: #e2e8f0; }
-.login-card input {
-  color: #f8fafc;
-  background: #0f172a;
-  border-color: #475569;
-}
-.login-card input:focus {
-  outline: 2px solid #34d399;
-  outline-offset: 2px;
-}
-.login-card .btn {
-  margin: 1.25rem 0 0;
-  border-color: #059669;
-  background: #059669;
-}
-.login-card .btn:hover { background: #10b981; }
-.login-card .btn:disabled { opacity: 0.65; cursor: wait; }
-.login-demo { margin: 1.25rem 0 0; font-size: 0.8rem; }
-.login-error {
-  margin: 1rem 0 0;
-  padding: 0.75rem;
-  border: 1px solid #ef4444;
-  border-radius: 8px;
-  color: #fecaca;
-  background: rgb(127 29 29 / 45%);
-  text-align: center;
-  font-size: 0.9rem;
-}
-
 .ussd-screen {
   background: #12210f;
   color: #c8ffb0;
