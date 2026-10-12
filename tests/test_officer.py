@@ -2,6 +2,9 @@
 # log (backend/officer/router.py).
 from __future__ import annotations
 
+from backend.core.database import session_scope
+from backend.db.models import Officer
+
 
 def test_record_visit_shows_up_through_get_field_records(client):
     r = client.post(
@@ -70,6 +73,67 @@ def test_officer_pages_render(client):
     ):
         r = client.get(path)
         assert r.status_code == 200, f"{path} returned {r.status_code}"
+
+
+def test_officer_routes_require_a_signed_in_officer(client):
+    client.cookies.clear()
+
+    assert client.get("/followups").status_code == 403
+    assert client.get("/api/followups").status_code == 403
+    assert client.get("/").status_code == 403
+
+    login_page = client.get("/officer/login")
+    assert login_page.status_code == 200
+    assert 'id="officer-login-form"' in login_page.text
+
+
+def test_officer_login_creates_session_and_logout_clears_it(client):
+    client.cookies.clear()
+
+    invalid = client.post(
+        "/api/officer/login",
+        data={"username": "test-officer", "password": "wrong"},
+    )
+    assert invalid.status_code == 401
+
+    login = client.post(
+        "/api/officer/login",
+        data={"username": "test-officer", "password": "test-officer-password"},
+    )
+    assert login.status_code == 200
+    assert login.json() == {"status": "success", "role": "officer", "redirect_url": "/"}
+    assert client.get("/api/followups").status_code == 200
+
+    with session_scope() as session:
+        officer = session.get(Officer, 1)
+        assert officer is not None
+        assert officer.login_username == "test-officer"
+        assert officer.password_hash is not None
+        assert officer.password_hash.startswith("pbkdf2_sha256$")
+        assert officer.password_hash != "test-officer-password"
+
+    logout = client.post("/api/officer/logout")
+    assert logout.status_code == 200
+    assert client.get("/api/followups").status_code == 403
+
+
+def test_officer_actions_are_bound_to_signed_in_officer(client):
+    officers = client.get("/api/officers").json()
+    assert len(officers) == 1
+    assert officers[0]["id"] == 1
+
+    pending = client.get("/api/approvals", params={"status": "pending_review"}).json()[0]
+    approve = client.post(
+        f"/api/approvals/{pending['id']}/approve",
+        json={"officer_id": 2},
+    )
+    assert approve.status_code == 403
+
+    visit = client.post(
+        "/api/visits",
+        json={"household_code": "H-001", "officer_id": 2},
+    )
+    assert visit.status_code == 403
 
 
 def test_farmer_pages_render(client):

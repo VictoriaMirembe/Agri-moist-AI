@@ -1,27 +1,45 @@
 {% extends "base.html" %}
-{% block title %}AgriMoist AI{% endblock %}
+{% block title %}TerraMoist AI - Portal Login{% endblock %}
 {% block content %}
-<h1>AgriMoist AI</h1>
-<p>Enter your phone number to continue.</p>
-<form id="sign-in-form">
-  <label for="phone">Phone number</label>
-  <input id="phone" type="tel" placeholder="+256700000001" required>
-  <p id="error" class="pill red" style="display:none;margin-top:0.8rem;"></p>
-  <button class="btn big" type="submit" style="margin-top:1rem;">Continue</button>
-</form>
-<p class="muted">Demo numbers: +256700000001 to +256700000010 (made-up households).</p>
+<section class="login-page">
+  <div class="login-card">
+    <h1>TerraMoist AI</h1>
+    <p class="login-intro">Log in to access your farmer portal</p>
+
+    <form id="sign-in-form">
+      <label for="phone">Phone number</label>
+      <input id="phone" name="phone" type="tel" inputmode="tel"
+             placeholder="+256700000001" autocomplete="tel" required>
+      <button class="btn big" type="submit">Log in</button>
+    </form>
+
+    <p id="error" class="login-error" role="alert" hidden></p>
+    <p class="login-demo">Demo numbers: +256700000001 to +256700000010</p>
+    <p class="login-demo"><a href="/officer/login">Extension officer sign in</a></p>
+  </div>
+</section>
 
 <script>
 document.getElementById("sign-in-form").addEventListener("submit", async (e) => {
   e.preventDefault();
   const phone = document.getElementById("phone").value.trim();
   const errorEl = document.getElementById("error");
-  errorEl.style.display = "none";
+  errorEl.hidden = true;
+  const submitButton = e.currentTarget.querySelector('button[type="submit"]');
+  submitButton.disabled = true;
   try {
-    await getJSON("/api/farmer/profile?phone=" + encodeURIComponent(phone));
-    window.location.href = "/farmer/home?phone=" + encodeURIComponent(phone);
+    const form = new FormData();
+    form.set("phone", phone);
+    const response = await fetch("/api/login", { method: "POST", body: form });
+    const result = await response.json();
+    if (!response.ok) {
+      throw new Error(result.detail || response.statusText);
+    }
+    window.location.href = result.redirect_url;
   } catch (err) {
-    showError(errorEl, err);
+    errorEl.textContent = err.message || "Network error. Please try again.";
+    errorEl.hidden = false;
+    submitButton.disabled = false;
   }
 });
 </script>

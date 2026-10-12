@@ -5,11 +5,20 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+        env_ignore_empty=True,
+        extra="ignore",
+    )
 
     database_url: str = "sqlite:///./data/agrimoist.db"
     app_port: int = 8000
     app_env: str = "development"
+    session_secret_key: str | None = None
+    officer_login_username: str | None = None
+    officer_login_password: str | None = None
+    officer_login_id: int | None = None
 
     # Open-weights model (Groq, OpenAI-compatible API). Blank key = deterministic stub mode.
     groq_api_key: str | None = None

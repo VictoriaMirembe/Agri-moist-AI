@@ -32,6 +32,19 @@ approval states.
 Only this router may change an advice row's status to `approved` or
 `edited_and_approved` - see `backend/approvals/router.py`.
 
+## Officer authentication
+
+| Method | Path | Body / query | Returns |
+| --- | --- | --- | --- |
+| `POST` | `/api/officer/login` | Form fields `username`, `password` | Starts a signed officer session when bootstrap credentials match a real configured officer |
+| `POST` | `/api/officer/logout` | - | Clears the current session |
+
+Officer pages, officer APIs, and the approval API require the signed officer session;
+otherwise they return HTTP 403. Actions that identify an officer must use the ID
+bound to the current session. Configure the demo bootstrap account and session secret
+in `.env`; the password is PBKDF2-hashed in the matching officer record. Never commit
+the environment values.
+
 ## Farmer reports and visit flags
 
 | Method | Path | Body / query | Returns |
@@ -48,6 +61,7 @@ Only this router may change an advice row's status to `approved` or
 
 | Method | Path | Body / query | Returns |
 | --- | --- | --- | --- |
+| `POST` | `/api/login` | Form field `phone` | Demo farmer contact lookup and `/farmer/home` redirect URL; does not authenticate officers |
 | `GET` | `/api/farmer/profile` | `?phone=` | Registered household code and group for the farmer portal |
 | `GET` | `/api/farmer/advice` | `?phone=` | Most recent `approved`/`edited_and_approved` advice for that phone's household group, translated text if available |
 | `POST` | `/api/farmer/followup` | `{phone, advice_id, followed, helped}` | Saves a follow-up answer for approved advice belonging to that farmer's group |
@@ -56,13 +70,19 @@ Farmer reports and visit requests are saved against the registered phone's house
 and appear in the officer's Farmer reports and Visit flags screens. Approved advice
 is returned only to a registered household in its group. Farmer follow-up responses
 are scoped to that household's approved advice and appear in the officer's Farmer
-follow-ups screen.
+follow-ups screen. The phone-number login is only a demo lookup, not proof of
+identity. Officer authentication is provided by the separately configured bootstrap
+account; `/api/login` does not authenticate officers.
 
 ## USSD (simulated)
 
 | Method | Path | Body | Returns |
 | --- | --- | --- | --- |
-| `POST` | `/ussd` | `{session_id, phone, text}` (Africa's Talking request shape) | `CON ...` or `END ...` reply text |
+| `POST` | `/ussd` | Africa's Talking form fields `sessionId`, `serviceCode`, `phoneNumber`, `text`; JSON `{sessionId, phoneNumber, text}` remains supported by the simulator | `CON ...` or `END ...` plain text reply |
+
+This callback uses the application's existing SQLite records and approval states:
+farmers receive only `approved` or `edited_and_approved` advice, farmer reports are
+saved as unchecked observations, and visit requests are saved as open visit flags.
 
 ## Logs and reference data
 
@@ -71,7 +91,7 @@ follow-ups screen.
 | `GET` | `/api/logs` | `?run_id=` | Tool log rows, newest first |
 | `GET` | `/api/runs` | - | Recent agent runs with model, outcome, cost and timing |
 | `GET` | `/api/runs/{id}` | - | One run's summary |
-| `GET` | `/api/officers` | - | Officer list, for the Visit form and Approval queue selectors |
+| `GET` | `/api/officers` | - | The signed-in officer, for identity-bound action forms |
 
 ## Approval states
 

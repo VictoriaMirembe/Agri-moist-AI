@@ -1,5 +1,5 @@
-# Tests for the farmer web API and the simulated USSD menu
-# (backend/farmer/router.py, USSD_MENU.md).
+# Tests for the farmer web API and USSD callback
+# (backend/farmer/router.py, backend/ussd_router.py, USSD_MENU.md).
 from __future__ import annotations
 
 
@@ -18,6 +18,64 @@ def test_main_menu(client):
     reply = _ussd(client, "s1", "+256700000001", "")
     assert reply.startswith("CON AgriMoist")
     assert "1. My advice" in reply
+
+
+def test_ussd_accepts_africas_talking_form_callback(client):
+    response = client.post(
+        "/ussd",
+        data={
+            "sessionId": "at-session-1",
+            "serviceCode": "*123#",
+            "phoneNumber": "+256700000001",
+            "text": "",
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("text/plain")
+    assert response.text.startswith("CON AgriMoist")
+
+
+def test_ussd_form_callback_keeps_approved_advice_gate(client):
+    pending = client.get("/api/approvals", params={"status": "pending_review"}).json()[0]
+    approved = client.post(
+        f"/api/approvals/{pending['id']}/approve",
+        json={"officer_id": 1},
+    )
+    assert approved.status_code == 200
+
+    response = client.post(
+        "/ussd",
+        data={
+            "sessionId": "at-session-2",
+            "serviceCode": "*123#",
+            "phoneNumber": "+256700000004",
+            "text": "1",
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.text.startswith("END")
+    assert "Heavy rain fell at H-004" in response.text
+
+
+def test_ussd_form_callback_records_farmer_report_for_registered_group(client):
+    response = client.post(
+        "/ussd",
+        data={
+            "sessionId": "at-session-3",
+            "serviceCode": "*123#",
+            "phoneNumber": "+256700000008",
+            "text": "2*1*2",
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.text == "END Thank you. Your officer will check this report."
+    reports = client.get("/api/farmer-reports", params={"checked": "unchecked"}).json()
+    report = next(row for row in reports if row["household_code"] == "H-008")
+    assert report["source"] == "farmer_ussd"
+    assert report["group_id"] == 3
 
 
 def test_my_advice_before_approval_shows_no_new_advice(client):
@@ -93,6 +151,36 @@ def test_farmer_profile_resolves_the_registered_household(client):
 
     unknown = client.get("/api/farmer/profile", params={"phone": "+19999999999"})
     assert unknown.status_code == 404
+
+
+def test_farmer_sign_in_page_uses_demo_login_endpoint(client):
+    response = client.get("/farmer")
+
+    assert response.status_code == 200
+    assert "TerraMoist AI" in response.text
+    assert 'id="sign-in-form"' in response.text
+    assert 'fetch("/api/login"' in response.text
+    assert "result.redirect_url" in response.text
+
+
+def test_demo_login_resolves_registered_farmer(client):
+    response = client.post("/api/login", data={"phone": "+256700000001"})
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "status": "success",
+        "role": "farmer",
+        "phone": "+256700000001",
+        "full_name": "Akello Susan",
+        "redirect_url": "/farmer/home?phone=%2B256700000001",
+    }
+
+
+def test_demo_login_rejects_unregistered_phone(client):
+    response = client.post("/api/login", data={"phone": "+19999999999"})
+
+    assert response.status_code == 401
+    assert response.json()["detail"] == "Phone number not registered."
 
 
 def test_web_report_rejects_unknown_problem_type(client):

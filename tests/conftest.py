@@ -49,12 +49,23 @@ def seeded_session(test_db):
 
 
 @pytest.fixture()
-def client(test_db):
+def client(test_db, monkeypatch):
     """A TestClient whose app lifespan creates and seeds the same temp database
-    (test_db already pointed DATABASE_URL and the engine at it)."""
+    (test_db already pointed DATABASE_URL and the engine at it), signed in as the
+    seeded demo officer for the existing officer and approval API tests."""
     from fastapi.testclient import TestClient
 
+    from backend.core.config import settings
     from backend.main import app
 
+    monkeypatch.setattr(settings, "officer_login_id", 1)
+    monkeypatch.setattr(settings, "officer_login_username", "test-officer")
+    monkeypatch.setattr(settings, "officer_login_password", "test-officer-password")
+
     with TestClient(app) as c:
+        login = c.post(
+            "/api/officer/login",
+            data={"username": "test-officer", "password": "test-officer-password"},
+        )
+        assert login.status_code == 200
         yield c

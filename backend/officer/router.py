@@ -6,13 +6,14 @@ from __future__ import annotations
 import asyncio
 import json
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 from sqlmodel import func, select
 from sse_starlette.sse import EventSourceResponse
 
 from backend.agent import events
 from backend.agent.graph import execute_agent_run
+from backend.auth_router import require_officer, require_session_officer
 from backend.core.config import settings
 from backend.core.database import session_scope
 from backend.db.models import (
@@ -31,7 +32,7 @@ from backend.logging.tool_log import run_logged
 from backend.tools import agrimoist_tools as impl
 from backend.tools.errors import ToolError
 
-router = APIRouter(prefix="/api", tags=["officer"])
+router = APIRouter(prefix="/api", tags=["officer"], dependencies=[Depends(require_officer)])
 
 # asyncio only holds a weak reference to a task once nothing else references it, so a
 # fire-and-forget asyncio.create_task() can be garbage-collected mid-run. Keep a
@@ -55,7 +56,8 @@ class VisitRequest(BaseModel):
 
 
 @router.post("/visits")
-def record_visit(body: VisitRequest):
+def record_visit(body: VisitRequest, request: Request):
+    require_session_officer(request, body.officer_id)
     with session_scope() as session:
         try:
             return run_logged(
@@ -274,7 +276,8 @@ class CheckReportRequest(BaseModel):
 
 
 @router.post("/farmer-reports/{observation_id}/check")
-def check_farmer_report(observation_id: int, body: CheckReportRequest):
+def check_farmer_report(observation_id: int, body: CheckReportRequest, request: Request):
+    require_session_officer(request, body.officer_id)
     with session_scope() as session:
         observation = session.get(Observation, observation_id)
         if observation is None:
@@ -400,7 +403,7 @@ def list_runs():
 
 
 @router.get("/officers")
-def list_officers():
+def list_officers(request: Request):
     with session_scope() as session:
-        rows = session.exec(select(Officer)).all()
-        return [{"id": o.id, "name": o.name, "role": o.role} for o in rows]
+        officer = session.get(Officer, request.session["officer_id"])
+        return [{"id": officer.id, "name": officer.name, "role": officer.role}] if officer else []

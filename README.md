@@ -53,7 +53,7 @@ py -3.12 -m venv .venv
 .\.venv\Scripts\python.exe -c "import sys; print(sys.executable); print(sys.platform)"
 .\.venv\Scripts\python.exe -m pip install --upgrade pip
 .\.venv\Scripts\python.exe -m pip install --only-binary=:all: -r requirements.txt
-.\.venv\Scripts\python.exe -m pytest tests/test_farmer_and_ussd.py tests/test_officer.py
+.\.venv\Scripts\python.exe -m pytest tests/test_farmer_and_ussd.py tests/test_officer.py tests/test_approvals.py
 ```
 
 The printed executable should be inside this repository's `.venv` and the platform
@@ -69,6 +69,31 @@ Keys needed in `.env` (all optional - the app runs fully without any of them):
 | `WEATHER_OVERRIDE_PAST_MM` / `WEATHER_OVERRIDE_NEXT_MM` | Force a specific rain scenario instead of today's live weather, for a demo or an eval run. Always labelled `demo-override`, never shown as a live reading. | - |
 
 Open-Meteo needs no key.
+
+### Officer sign-in
+
+Officer API endpoints and pages require the signed server-side session created by
+`/api/officer/login`. The demo bootstrap uses an existing seeded officer row, selected
+by `OFFICER_LOGIN_ID`, with credentials configured only in `.env`. The configured
+password is stored as a salted PBKDF2 hash in the matching officer record:
+
+```dotenv
+OFFICER_LOGIN_ID=1
+OFFICER_LOGIN_USERNAME=your-officer-username
+OFFICER_LOGIN_PASSWORD=use-a-long-unique-password
+SESSION_SECRET_KEY=paste-a-random-secret-here
+```
+
+Generate the session key with standard Windows Python:
+
+```powershell
+.\.venv\Scripts\python.exe -c "import secrets; print(secrets.token_urlsafe(48))"
+```
+
+Use a password with at least 12 characters. Do not commit `.env`. In production,
+set `APP_ENV=production`, use HTTPS, and set a strong `SESSION_SECRET_KEY`; the app
+refuses to start in production without it. The demo farmer phone lookup remains a
+separate non-authenticating flow.
 
 ## Run the demo
 
@@ -127,7 +152,9 @@ approved advice belonging to that farmer's household group.
 The active farmer portal is served at `/farmer` from `frontend/farmer/templates`.
 The old unmounted root-level farmer portal prototypes, which used the inactive
 `/api/reports` endpoint, have been removed. The phone-number check in this demo
-resolves a seeded household; it is not production authentication.
+resolves a seeded household; it is not production authentication. The demo farmer
+login is a phone lookup only, and the current officer records do not have login
+credentials or an officer login endpoint.
 
 The USSD handler uses the same request and reply shape as a real USSD gateway (such
 as Africa's Talking): a session id, a phone number, and the digits typed so far; a

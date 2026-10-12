@@ -20,11 +20,20 @@
       <a href="/log">Log</a>
       <a href="/ussd">USSD simulator</a>
       <a href="/farmer">Farmer page</a>
+      <button type="button" id="officer-logout">Sign out</button>
     </nav>
   </header>
   <main class="container">
     {% block content %}{% endblock %}
   </main>
+  <script>
+    document.getElementById("officer-logout").addEventListener("click", async () => {
+      const response = await fetch("/api/officer/logout", { method: "POST" });
+      if (response.ok) {
+        window.location.href = "/officer/login";
+      }
+    });
+  </script>
   {% block scripts %}{% endblock %}
 </body>
 </html>

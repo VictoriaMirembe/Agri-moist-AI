@@ -7,10 +7,11 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Depends, Request
 from fastapi.templating import Jinja2Templates
 from sqlmodel import select
 
+from backend.auth_router import require_officer
 from backend.core.database import session_scope
 from backend.db.models import (
     Advice,
@@ -27,7 +28,7 @@ from backend.db.models import (
 TEMPLATES_DIR = Path(__file__).resolve().parent.parent.parent / "frontend" / "officer" / "templates"
 templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
 
-router = APIRouter(tags=["officer-pages"])
+router = APIRouter(tags=["officer-pages"], dependencies=[Depends(require_officer)])
 
 
 @router.get("/")
@@ -89,7 +90,8 @@ def home(request: Request):
 def visit_form(request: Request):
     with session_scope() as session:
         households = session.exec(select(Household).order_by(Household.code)).all()
-        officers = session.exec(select(Officer)).all()
+        officer = session.get(Officer, request.session["officer_id"])
+        officers = [officer] if officer else []
     return templates.TemplateResponse(
         request, "visit_form.html", {"households": households, "officers": officers}
     )
@@ -131,14 +133,16 @@ def run_page(request: Request, run_id: int):
 @router.get("/approvals")
 def approvals_page(request: Request):
     with session_scope() as session:
-        officers = session.exec(select(Officer)).all()
+        officer = session.get(Officer, request.session["officer_id"])
+        officers = [officer] if officer else []
     return templates.TemplateResponse(request, "approvals.html", {"officers": officers})
 
 
 @router.get("/farmer-reports")
 def farmer_reports_page(request: Request):
     with session_scope() as session:
-        officers = session.exec(select(Officer)).all()
+        officer = session.get(Officer, request.session["officer_id"])
+        officers = [officer] if officer else []
     return templates.TemplateResponse(request, "farmer_reports.html", {"officers": officers})
 
 

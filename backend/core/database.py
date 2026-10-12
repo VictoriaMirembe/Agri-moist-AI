@@ -4,9 +4,11 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Iterator
 
+from sqlalchemy import inspect
 from sqlmodel import Session, SQLModel, create_engine
 
 from backend.core.config import settings
+from backend.db.models import Officer
 
 if settings.database_url.startswith("sqlite"):
     db_path = settings.database_url.split("///")[-1]
@@ -18,10 +20,13 @@ engine = create_engine(settings.database_url, echo=False, connect_args=connect_a
 
 def init_db() -> None:
     """Create tables and the farmer-visible advice view. Safe to call every start."""
-    import backend.db.models  # noqa: F401  (register models with SQLModel.metadata)
-
     SQLModel.metadata.create_all(engine)
     with engine.begin() as conn:
+        officer_columns = {column["name"] for column in inspect(conn).get_columns(Officer.__tablename__)}
+        if "login_username" not in officer_columns:
+            conn.exec_driver_sql(f"ALTER TABLE {Officer.__tablename__} ADD COLUMN login_username VARCHAR")
+        if "password_hash" not in officer_columns:
+            conn.exec_driver_sql(f"ALTER TABLE {Officer.__tablename__} ADD COLUMN password_hash VARCHAR")
         conn.exec_driver_sql(
             """
             CREATE VIEW IF NOT EXISTS advice_visible_to_farmer AS

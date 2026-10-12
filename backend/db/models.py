@@ -49,6 +49,8 @@ class Officer(SQLModel, table=True):
     district_id: int = Field(foreign_key="district.id")
     name: str
     role: str = "extension officer"
+    login_username: Optional[str] = None
+    password_hash: Optional[str] = None
 
 
 class Plot(SQLModel, table=True):

@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Officer sign in - TerraMoist AI</title>
+  <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body class="farmer">
+  <main class="farmer-container login-page">
+    <section class="login-card">
+      <h1>TerraMoist AI</h1>
+      <p class="login-intro">Extension officer sign in</p>
+      <form id="officer-login-form">
+        <label for="username">Username</label>
+        <input id="username" name="username" autocomplete="username" required>
+        <label for="password">Password</label>
+        <input id="password" name="password" type="password" autocomplete="current-password" required>
+        <button class="btn big" type="submit">Sign in</button>
+      </form>
+      <p id="error" class="login-error" role="alert" hidden></p>
+      <p class="login-demo"><a href="/farmer">Farmer sign in</a></p>
+    </section>
+  </main>
+  <script>
+    document.getElementById("officer-login-form").addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const form = event.currentTarget;
+      const button = form.querySelector('button[type="submit"]');
+      const error = document.getElementById("error");
+      error.hidden = true;
+      button.disabled = true;
+      try {
+        const response = await fetch("/api/officer/login", {
+          method: "POST",
+          body: new FormData(form),
+        });
+        const result = await response.json();
+        if (!response.ok) {
+          throw new Error(result.detail || response.statusText);
+        }
+        window.location.href = result.redirect_url;
+      } catch (err) {
+        error.textContent = err.message || "Network error. Please try again.";
+        error.hidden = false;
+        button.disabled = false;
+      }
+    });
+  </script>
+</body>
+</html>
