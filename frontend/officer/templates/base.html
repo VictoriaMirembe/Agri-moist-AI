@@ -6,6 +6,26 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>{% block title %}AgriMoist AI{% endblock %} - Officer</title>
   <link rel="stylesheet" href="/static/styles.css">
+  <style>
+    /* Notification badge on nav links */
+    .nav-badge {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      background: #b3261e;
+      color: #fff;
+      border-radius: 999px;
+      font-size: 0.7rem;
+      font-weight: 700;
+      min-width: 1.2em;
+      height: 1.2em;
+      padding: 0 0.25em;
+      margin-left: 0.3em;
+      vertical-align: middle;
+      line-height: 1;
+    }
+    .nav-badge.amber { background: #8a5a00; }
+  </style>
 </head>
 <script src="/static/app.js"></script>
 <body>
@@ -14,10 +34,10 @@
     <nav>
       <a href="/">Home</a>
       <a href="/visits/new">Record visit</a>
-      <a href="/approvals">Approvals</a>
-      <a href="/farmer-reports">Farmer reports</a>
+      <a href="/approvals">Approvals<span class="nav-badge amber" id="nav-badge-approvals" style="display:none;"></span></a>
+      <a href="/farmer-reports">Farmer reports<span class="nav-badge" id="nav-badge-reports" style="display:none;"></span></a>
       <a href="/followups">Farmer follow-ups</a>
-      <a href="/flags">Visit flags</a>
+      <a href="/flags">Visit flags<span class="nav-badge" id="nav-badge-flags" style="display:none;"></span></a>
       <a href="/log">Log</a>
       <a href="/ussd">USSD simulator</a>
       <a href="/farmer">Farmer page</a>
@@ -27,5 +47,30 @@
     {% block content %}{% endblock %}
   </main>
   {% block scripts %}{% endblock %}
+
+  <script>
+  // Load live badge counts for pending items in nav bar
+  (async function loadNavBadges() {
+    try {
+      const summary = await getJSON("/api/pending-summary");
+
+      if (summary.unchecked_reports > 0) {
+        const el = document.getElementById("nav-badge-reports");
+        el.textContent = summary.unchecked_reports;
+        el.style.display = "";
+      }
+      if (summary.open_flags > 0) {
+        const el = document.getElementById("nav-badge-flags");
+        el.textContent = summary.open_flags;
+        el.style.display = "";
+      }
+      if (summary.pending_advice > 0) {
+        const el = document.getElementById("nav-badge-approvals");
+        el.textContent = summary.pending_advice;
+        el.style.display = "";
+      }
+    } catch (_) { /* ignore badge errors silently */ }
+  })();
+  </script>
 </body>
 </html>

@@ -271,6 +271,7 @@ def list_farmer_reports(checked: str | None = None):
                     "crop": o.crop,
                     "pest_seen": o.pest_seen,
                     "rain_last_7_days": o.rain_last_7_days,
+                    "crop_condition": o.crop_condition,
                     "notes": o.notes,
                 }
             )
@@ -412,3 +413,32 @@ def list_officers():
     with session_scope() as session:
         rows = session.exec(select(Officer)).all()
         return [{"id": o.id, "name": o.name, "role": o.role} for o in rows]
+
+
+# ---------------------------------------------------------------------------
+# Pending summary: unified badge counts for the officer nav bar
+# ---------------------------------------------------------------------------
+@router.get("/pending-summary")
+def pending_summary():
+    """Returns counts of items needing officer attention: pending advice drafts,
+    unchecked farmer reports, and open visit flags."""
+    with session_scope() as session:
+        from sqlmodel import func
+        pending_advice = session.exec(
+            select(func.count()).select_from(Advice).where(Advice.status == "pending_review")
+        ).one()
+        unchecked_reports = session.exec(
+            select(func.count()).select_from(Observation).where(
+                Observation.source.in_(["farmer_ussd", "farmer_web"]),
+                Observation.checked == "unchecked",
+            )
+        ).one()
+        open_flags = session.exec(
+            select(func.count()).select_from(VisitFlag).where(VisitFlag.status == "open")
+        ).one()
+    return {
+        "pending_advice": pending_advice,
+        "unchecked_reports": unchecked_reports,
+        "open_flags": open_flags,
+        "total_pending": pending_advice + unchecked_reports + open_flags,
+    }

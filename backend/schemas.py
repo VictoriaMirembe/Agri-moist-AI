@@ -1,5 +1,5 @@
 """
-Pydantic Data Schemas for TerraMoist AI (Track C: Farmer Channels)
+Pydantic Data Schemas for AgriMoist AI (Track C: Farmer Channels)
 Handles validation for crop problem reports, officer visit requests, and farmer records.
 """
 

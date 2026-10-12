@@ -1,5 +1,5 @@
 """
-Data Access and Storage Layer for TerraMoist AI (Track C: Farmer Channels)
+Data Access and Storage Layer for AgriMoist AI (Track C: Farmer Channels)
 
 Connects to existing workspace datasets (Data folder/crop_calendar.csv)
 and provides structured in-memory repositories for reports and visit requests,
@@ -21,7 +21,7 @@ from backend.schemas import (
     CropCalendarItem,
 )
 
-logger = logging.getLogger("terramoist.database")
+logger = logging.getLogger("agrimoist.database")
 
 # Workspace root path calculation
 BASE_DIR = Path(__file__).resolve().parent.parent

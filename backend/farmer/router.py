@@ -5,6 +5,7 @@
 # edited_and_approved rows (see backend/core/database.py).
 from __future__ import annotations
 
+import re
 from datetime import date
 from typing import Literal
 
@@ -45,10 +46,36 @@ PROBLEM_FIELD_MAP = {
 }
 
 
+def _normalize_phone(phone: str) -> str:
+    """Normalise a Uganda phone number to E.164 (+256…) for comparison.
+
+    Handles the most common variants that farmers or officers enter:
+      * +256700000001  (already canonical)
+      * 0700000001     (local format, leading 0)
+      * 256700000001   (no leading +)
+      * 0772 890 123   (spaces)
+      * 07-00-000-001  (dashes)
+    """
+    cleaned = re.sub(r"[\s\-]", "", phone).strip()
+    if cleaned.startswith("0") and len(cleaned) == 10:
+        # local Uganda format 07xxxxxxxx → +25607xxxxxxxx (strip leading 0)
+        cleaned = "+256" + cleaned[1:]
+    elif cleaned.startswith("256") and not cleaned.startswith("+"):
+        cleaned = "+" + cleaned
+    return cleaned
+
+
 def _household_for_phone(session, phone: str) -> Household | None:
-    household = session.exec(
-        select(Household).join(Contact, Contact.household_id == Household.id).where(Contact.phone == phone)
-    ).first()
+    """Look up a household by phone, normalising both the query and stored numbers."""
+    normalised = _normalize_phone(phone)
+    contacts = session.exec(select(Contact)).all()
+    matching_contact = next(
+        (c for c in contacts if _normalize_phone(c.phone) == normalised),
+        None,
+    )
+    if matching_contact is None:
+        return None
+    household = session.get(Household, matching_contact.household_id)
     return household if household and household.consent_given else None
 
 

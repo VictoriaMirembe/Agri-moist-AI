@@ -1,3 +1,1 @@
-"""
-TerraMoist AI - Track C: Farmer Channels Backend Package
-"""
+"""AgriMoist AI - Track C: Farmer Channels Backend Package"""
