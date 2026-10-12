@@ -137,12 +137,14 @@ def test_farmer_dashboard_loads_registered_profile_and_approved_advice(client):
     response = client.get("/farmer/home", params={"phone": "+256700000001"})
 
     assert response.status_code == 200
-    assert 'id="farmer-name">farmer</span>' in response.text
+    assert '<span id="farmer-name">farmer</span>' in response.text
     assert 'getJSON("/api/farmer/dashboard?phone="' in response.text
     assert 'getJSON("/api/farmer/advice?phone="' in response.text
-    assert "/farmer/report?phone=%2B256700000001" in response.text
-    assert "/farmer/visit?phone=%2B256700000001" in response.text
-    assert response.text.index('<script src="/static/app.js"></script>') < response.text.index(
+    assert 'data-view-link="report"' in response.text
+    assert 'data-view-link="visit"' in response.text
+    assert "{%" not in response.text
+    assert "{{" not in response.text
+    assert response.text.index('<script src="../../static/app.js"></script>') < response.text.index(
         "async function loadDashboard()"
     )
 

@@ -1,212 +1,280 @@
-{% extends "base.html" %}
-{% block title %}My farm | TerraMoist AI{% endblock %}
-{% block container_class %}farmer-dashboard-shell{% endblock %}
-{% block content %}
-<div class="farmer-dashboard">
-  <header class="farmer-topbar">
-    <a class="farmer-brand" href="/farmer/home?phone={{ phone|urlencode }}" aria-label="TerraMoist AI home">
-      <span class="farmer-brand-mark" aria-hidden="true">T</span>
-      <span>TerraMoist <strong>AI</strong></span>
-    </a>
-    <span class="farmer-topbar-location">Karamoja farmer services</span>
-  </header>
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#174b38">
+  <title>My farm | TerraMoist AI</title>
+  <link rel="stylesheet" href="../../static/styles.css">
+  <script src="../../static/app.js"></script>
+</head>
+<body class="farmer">
+  <main class="farmer-container farmer-dashboard-shell">
+    <div class="farmer-dashboard">
+      <header class="farmer-topbar">
+        <a class="farmer-brand" href="#" data-view-link="dashboard" aria-label="TerraMoist AI home">
+          <span class="farmer-brand-mark" aria-hidden="true">T</span>
+          <span>TerraMoist <strong>AI</strong></span>
+        </a>
+        <span class="farmer-topbar-location">Karamoja farmer services</span>
+      </header>
 
-  <nav class="farmer-nav" aria-label="Farmer services">
-    <a class="{% if active_view == 'advice' %}is-active{% endif %}" href="/farmer/advice?phone={{ phone|urlencode }}">My advice</a>
-    <a class="{% if active_view == 'report' %}is-active{% endif %}" href="/farmer/report?phone={{ phone|urlencode }}">Report issue</a>
-    <a class="{% if active_view == 'visit' %}is-active{% endif %}" href="/farmer/visit?phone={{ phone|urlencode }}">Ask for a visit</a>
-    <a class="{% if active_view == 'dashboard' %}is-active{% endif %}" href="/farmer/home?phone={{ phone|urlencode }}">My farm</a>
-    <a class="farmer-signout" href="/farmer">Sign out</a>
-  </nav>
+      <nav class="farmer-nav" aria-label="Farmer services">
+        <a href="#" data-view-link="advice">My advice</a>
+        <a href="#" data-view-link="report">Report issue</a>
+        <a href="#" data-view-link="visit">Ask for a visit</a>
+        <a href="#" data-view-link="dashboard">My farm</a>
+        <a class="farmer-signout" href="#" data-view-link="signin">Sign out</a>
+      </nav>
 
-  {% if active_view == "dashboard" %}
-  <main>
-    <section class="farmer-welcome" aria-labelledby="welcome-heading">
-      <div class="farmer-welcome-copy">
-        <p class="farmer-eyebrow">YOUR FARM DASHBOARD</p>
-        <h1 id="welcome-heading">Welcome, <span id="farmer-name">farmer</span></h1>
-        <p class="farmer-household" id="farmer-location">Loading your registered farm details...</p>
-      </div>
-      <div class="farmer-welcome-actions">
-        <a class="farmer-button farmer-button-light" href="/farmer/report?phone={{ phone|urlencode }}">Report an issue</a>
-        <a class="farmer-button farmer-button-outline" href="/farmer/visit?phone={{ phone|urlencode }}">Request a visit</a>
-      </div>
-    </section>
-
-    <div class="farmer-dashboard-grid">
-      <div class="farmer-dashboard-main">
-        <section class="farmer-panel" aria-labelledby="conditions-heading">
-          <div class="farmer-panel-heading">
-            <div>
-              <p class="farmer-eyebrow">FIELD CONDITIONS</p>
-              <h2 id="conditions-heading">Rainfall and latest field record</h2>
-            </div>
-            <span class="farmer-status" id="weather-status">Loading</span>
-          </div>
-          <p class="farmer-panel-description">Weather is from the local forecast. Field conditions are from the latest recorded observation.</p>
-          <div class="farmer-metrics">
-            <article class="farmer-metric">
-              <p class="farmer-metric-label">Rain in the past 7 days</p>
-              <p class="farmer-metric-value" id="rain-past">Loading</p>
-              <p class="farmer-metric-note">Forecast service data</p>
-            </article>
-            <article class="farmer-metric">
-              <p class="farmer-metric-label">Rain forecast, next 7 days</p>
-              <p class="farmer-metric-value" id="rain-next">Loading</p>
-              <p class="farmer-metric-note">Forecast service data</p>
-            </article>
-            <article class="farmer-metric">
-              <p class="farmer-metric-label">Latest recorded soil condition</p>
-              <p class="farmer-metric-value farmer-metric-value-text" id="soil-condition">Loading</p>
-              <p class="farmer-metric-note" id="observation-date">From your latest field record</p>
-            </article>
-          </div>
-          <p class="farmer-data-note" id="weather-note" hidden></p>
-          <p class="farmer-data-note" id="observation-note" hidden></p>
-        </section>
-
-        <section class="farmer-panel farmer-advice-panel" aria-labelledby="advice-heading">
-          <div class="farmer-panel-heading">
-            <div>
-              <p class="farmer-eyebrow">REVIEWED BY YOUR EXTENSION OFFICER</p>
-              <h2 id="advice-heading">My advice</h2>
-            </div>
-            <span class="farmer-status" id="advice-status">Loading</span>
-          </div>
-          <p id="advice-preview" class="farmer-advice-preview" aria-live="polite">Loading your latest approved advice...</p>
-          <div class="farmer-advice-footer">
-            <p id="advice-credit" class="farmer-advice-credit" hidden></p>
-            <a class="farmer-link-button" href="/farmer/advice?phone={{ phone|urlencode }}">Read my advice</a>
-          </div>
-        </section>
-
-        <section class="farmer-panel" aria-labelledby="shortcuts-heading">
-          <div class="farmer-panel-heading">
-            <div>
-              <p class="farmer-eyebrow">FARMER SERVICES</p>
-              <h2 id="shortcuts-heading">Farm shortcuts</h2>
-            </div>
-          </div>
-          <div class="farmer-action-grid">
-            <a class="farmer-action-card" href="/farmer/report?phone={{ phone|urlencode }}">
-              <span class="farmer-action-label">Report issue</span>
-              <span class="farmer-action-copy">Tell your extension officer about a crop or field problem.</span>
-            </a>
-            <a class="farmer-action-card" href="/farmer/visit?phone={{ phone|urlencode }}">
-              <span class="farmer-action-label">Request a visit</span>
-              <span class="farmer-action-copy">Ask your extension officer to visit your farm.</span>
-            </a>
-            <a class="farmer-action-card" href="/farmer/followup?phone={{ phone|urlencode }}">
-              <span class="farmer-action-label">Advice follow-up</span>
-              <span class="farmer-action-copy">Share whether the approved advice helped.</span>
-            </a>
-          </div>
-        </section>
+      <div id="local-file-notice" class="farmer-data-note" role="status" hidden>
+        You are viewing the dashboard file directly. Open the farmer portal through the running AgriMoist AI app to load registered farm data and use its services.
       </div>
 
-      <aside class="farmer-dashboard-side">
-        <section class="farmer-panel farmer-profile-card" aria-labelledby="profile-heading">
-          <p class="farmer-eyebrow">YOUR DETAILS</p>
-          <h2 id="profile-heading">Farm profile</h2>
-          <dl class="farmer-profile-list">
-            <div><dt>Household</dt><dd id="profile-household">Loading</dd></div>
-            <div><dt>Household group</dt><dd id="profile-group">Loading</dd></div>
-            <div><dt>Registered phone</dt><dd>{{ phone }}</dd></div>
-            <div><dt>Crops on record</dt><dd id="profile-crops">Loading</dd></div>
-          </dl>
+      <section id="dashboard-view">
+        <section class="farmer-welcome" aria-labelledby="welcome-heading">
+          <div class="farmer-welcome-copy">
+            <p class="farmer-eyebrow">YOUR FARM DASHBOARD</p>
+            <h1 id="welcome-heading">Welcome, <span id="farmer-name">farmer</span></h1>
+            <p class="farmer-household" id="farmer-location">Loading your registered farm details...</p>
+          </div>
+          <div class="farmer-welcome-actions">
+            <a class="farmer-button farmer-button-light" href="#" data-view-link="report">Report an issue</a>
+            <a class="farmer-button farmer-button-outline" href="#" data-view-link="visit">Request a visit</a>
+          </div>
         </section>
 
-        <section class="farmer-panel farmer-calendar-panel" aria-labelledby="calendar-heading">
-          <p class="farmer-eyebrow">LOCAL CROP CALENDAR</p>
-          <h2 id="calendar-heading">Planting windows</h2>
-          <p class="farmer-panel-description" id="calendar-zone">Using the calendar for your recorded agroclimatic zone.</p>
-          <div id="crop-calendars" class="farmer-crop-calendars" aria-live="polite">
-            <p class="farmer-loading">Loading sourced crop calendar...</p>
+        <div class="farmer-dashboard-grid">
+          <div class="farmer-dashboard-main">
+            <section class="farmer-panel" aria-labelledby="conditions-heading">
+              <div class="farmer-panel-heading">
+                <div>
+                  <p class="farmer-eyebrow">FIELD CONDITIONS</p>
+                  <h2 id="conditions-heading">Rainfall and latest field record</h2>
+                </div>
+                <span class="farmer-status" id="weather-status">Loading</span>
+              </div>
+              <p class="farmer-panel-description">Weather is from the local forecast. Field conditions are from the latest recorded observation.</p>
+              <div class="farmer-metrics">
+                <article class="farmer-metric">
+                  <p class="farmer-metric-label">Rain in the past 7 days</p>
+                  <p class="farmer-metric-value" id="rain-past">Loading</p>
+                  <p class="farmer-metric-note">Forecast service data</p>
+                </article>
+                <article class="farmer-metric">
+                  <p class="farmer-metric-label">Rain forecast, next 7 days</p>
+                  <p class="farmer-metric-value" id="rain-next">Loading</p>
+                  <p class="farmer-metric-note">Forecast service data</p>
+                </article>
+                <article class="farmer-metric">
+                  <p class="farmer-metric-label">Latest recorded soil condition</p>
+                  <p class="farmer-metric-value farmer-metric-value-text" id="soil-condition">Loading</p>
+                  <p class="farmer-metric-note" id="observation-date">From your latest field record</p>
+                </article>
+              </div>
+              <p class="farmer-data-note" id="weather-note" hidden></p>
+              <p class="farmer-data-note" id="observation-note" hidden></p>
+            </section>
+
+            <section class="farmer-panel farmer-advice-panel" aria-labelledby="advice-heading">
+              <div class="farmer-panel-heading">
+                <div>
+                  <p class="farmer-eyebrow">REVIEWED BY YOUR EXTENSION OFFICER</p>
+                  <h2 id="advice-heading">My advice</h2>
+                </div>
+                <span class="farmer-status" id="advice-status">Loading</span>
+              </div>
+              <p id="advice-preview" class="farmer-advice-preview" aria-live="polite">Loading your latest approved advice...</p>
+              <div class="farmer-advice-footer">
+                <p id="advice-credit" class="farmer-advice-credit" hidden></p>
+                <a class="farmer-link-button" href="#" data-view-link="advice">Read my advice</a>
+              </div>
+            </section>
+
+            <section class="farmer-panel" aria-labelledby="shortcuts-heading">
+              <div class="farmer-panel-heading">
+                <div>
+                  <p class="farmer-eyebrow">FARMER SERVICES</p>
+                  <h2 id="shortcuts-heading">Farm shortcuts</h2>
+                </div>
+              </div>
+              <div class="farmer-action-grid">
+                <a class="farmer-action-card" href="#" data-view-link="report">
+                  <span class="farmer-action-label">Report issue</span>
+                  <span class="farmer-action-copy">Tell your extension officer about a crop or field problem.</span>
+                </a>
+                <a class="farmer-action-card" href="#" data-view-link="visit">
+                  <span class="farmer-action-label">Request a visit</span>
+                  <span class="farmer-action-copy">Ask your extension officer to visit your farm.</span>
+                </a>
+                <a class="farmer-action-card" href="#" data-view-link="followup">
+                  <span class="farmer-action-label">Advice follow-up</span>
+                  <span class="farmer-action-copy">Share whether the approved advice helped.</span>
+                </a>
+              </div>
+            </section>
           </div>
-          <p class="farmer-source-note">Calendar dates are guidance, not a guarantee of rainfall or soil conditions.</p>
-        </section>
-      </aside>
+
+          <aside class="farmer-dashboard-side">
+            <section class="farmer-panel farmer-profile-card" aria-labelledby="profile-heading">
+              <p class="farmer-eyebrow">YOUR DETAILS</p>
+              <h2 id="profile-heading">Farm profile</h2>
+              <dl class="farmer-profile-list">
+                <div><dt>Household</dt><dd id="profile-household">Loading</dd></div>
+                <div><dt>Household group</dt><dd id="profile-group">Loading</dd></div>
+                <div><dt>Registered phone</dt><dd id="profile-phone">Not loaded</dd></div>
+                <div><dt>Crops on record</dt><dd id="profile-crops">Loading</dd></div>
+              </dl>
+            </section>
+
+            <section class="farmer-panel farmer-calendar-panel" aria-labelledby="calendar-heading">
+              <p class="farmer-eyebrow">LOCAL CROP CALENDAR</p>
+              <h2 id="calendar-heading">Planting windows</h2>
+              <p class="farmer-panel-description" id="calendar-zone">Using the calendar for your recorded agroclimatic zone.</p>
+              <div id="crop-calendars" class="farmer-crop-calendars" aria-live="polite">
+                <p class="farmer-loading">Loading sourced crop calendar...</p>
+              </div>
+              <p class="farmer-source-note">Calendar dates are guidance, not a guarantee of rainfall or soil conditions.</p>
+            </section>
+          </aside>
+        </div>
+      </section>
+
+      <section id="advice-view" class="farmer-action-page farmer-panel" aria-labelledby="advice-page-heading" hidden>
+        <a class="farmer-link-button farmer-back-link" href="#" data-view-link="dashboard">Back to my farm</a>
+        <p class="farmer-eyebrow">REVIEWED BY YOUR EXTENSION OFFICER</p>
+        <h1 id="advice-page-heading">My advice</h1>
+        <p id="advice-detail" class="farmer-advice-preview" aria-live="polite">Loading your latest approved advice...</p>
+        <p id="advice-detail-meta" class="farmer-advice-credit"></p>
+      </section>
+
+      <section id="report-view" class="farmer-action-page farmer-panel" aria-labelledby="report-heading" hidden>
+        <a class="farmer-link-button farmer-back-link" href="#" data-view-link="dashboard">Back to my farm</a>
+        <p class="farmer-eyebrow">FARMER SERVICES</p>
+        <h1 id="report-heading">Report an issue</h1>
+        <p class="farmer-panel-description">Your report will be shared with your extension officer for review.</p>
+        <form id="report-form" class="farmer-form">
+          <label for="problem">What did you see?</label>
+          <select id="problem">
+            <option value="pests">Pests</option>
+            <option value="no_rain">No rain</option>
+            <option value="heavy_rain">Too much rain</option>
+            <option value="crop_sick">Crop looks sick</option>
+          </select>
+          <label for="crop">Which crop?</label>
+          <select id="crop">
+            <option value="sorghum">Sorghum</option>
+            <option value="maize">Maize</option>
+            <option value="">Other</option>
+          </select>
+          <p id="report-error" class="farmer-form-error" role="alert" hidden></p>
+          <button class="farmer-button farmer-button-primary" type="submit">Send report</button>
+        </form>
+        <p id="report-done" class="farmer-success" role="status" hidden>Thank you. Your officer will check this report.</p>
+      </section>
+
+      <section id="visit-view" class="farmer-action-page farmer-panel" aria-labelledby="visit-heading" hidden>
+        <a class="farmer-link-button farmer-back-link" href="#" data-view-link="dashboard">Back to my farm</a>
+        <p class="farmer-eyebrow">FARMER SERVICES</p>
+        <h1 id="visit-heading">Request an officer visit</h1>
+        <p class="farmer-panel-description">Let your extension officer know why you need a visit.</p>
+        <form id="visit-form" class="farmer-form">
+          <label for="reason">Reason for the visit</label>
+          <select id="reason">
+            <option value="Pests">Pests</option>
+            <option value="Little food left">Little food left</option>
+            <option value="Other">Other</option>
+          </select>
+          <p id="visit-error" class="farmer-form-error" role="alert" hidden></p>
+          <button class="farmer-button farmer-button-primary" type="submit">Send visit request</button>
+        </form>
+        <p id="visit-done" class="farmer-success" role="status" hidden>Request sent. Your officer will plan a visit.</p>
+      </section>
+
+      <section id="followup-view" class="farmer-action-page farmer-panel" aria-labelledby="followup-heading" hidden>
+        <a class="farmer-link-button farmer-back-link" href="#" data-view-link="dashboard">Back to my farm</a>
+        <p class="farmer-eyebrow">FARMER SERVICES</p>
+        <h1 id="followup-heading">Advice follow-up</h1>
+        <p id="followup-loading" class="farmer-panel-description">Checking for approved advice...</p>
+        <form id="followup-form" class="farmer-form" hidden>
+          <label for="followed">Did you follow the last advice?</label>
+          <select id="followed">
+            <option value="yes">Yes</option>
+            <option value="partly">Partly</option>
+            <option value="no">No</option>
+          </select>
+          <label for="helped">Did it help?</label>
+          <select id="helped">
+            <option value="yes">Yes</option>
+            <option value="no">No</option>
+            <option value="">Too early to say</option>
+          </select>
+          <p id="followup-error" class="farmer-form-error" role="alert" hidden></p>
+          <button class="farmer-button farmer-button-primary" type="submit">Send follow-up</button>
+        </form>
+        <p id="followup-done" class="farmer-success" role="status" hidden>Thank you. This helps improve advice.</p>
+        <p id="followup-none" class="farmer-data-note" hidden>You have no approved advice to answer about yet.</p>
+      </section>
+
+      <section id="signin-view" class="farmer-signin-card" aria-labelledby="signin-heading" hidden>
+        <a class="farmer-brand farmer-signin-brand" href="#" data-view-link="dashboard">
+          <span class="farmer-brand-mark" aria-hidden="true">T</span>
+          <span>TerraMoist <strong>AI</strong></span>
+        </a>
+        <p class="farmer-eyebrow">FARMER PORTAL</p>
+        <h1 id="signin-heading">Sign in to your farm</h1>
+        <p class="farmer-panel-description">Enter the phone number registered with your extension officer.</p>
+        <form id="sign-in-form" class="farmer-form">
+          <label for="phone">Phone number</label>
+          <input id="phone" type="tel" inputmode="tel" autocomplete="tel" placeholder="+256700000001" required>
+          <p id="signin-error" class="farmer-form-error" role="alert" hidden></p>
+          <button class="farmer-button farmer-button-primary" type="submit">Continue</button>
+        </form>
+      </section>
     </div>
   </main>
-  {% else %}
-  <main class="farmer-action-page">
-    <section class="farmer-panel" aria-labelledby="action-heading">
-      <a class="farmer-link-button farmer-back-link" href="/farmer/home?phone={{ phone|urlencode }}">Back to my farm</a>
-
-      {% if active_view == "advice" %}
-      <p class="farmer-eyebrow">REVIEWED BY YOUR EXTENSION OFFICER</p>
-      <h1 id="action-heading">My advice</h1>
-      <p id="advice-detail" class="farmer-advice-preview" aria-live="polite">Loading your latest approved advice...</p>
-      <p id="advice-detail-meta" class="farmer-advice-credit"></p>
-      {% elif active_view == "report" %}
-      <p class="farmer-eyebrow">FARMER SERVICES</p>
-      <h1 id="action-heading">Report an issue</h1>
-      <p class="farmer-panel-description">Your report will be shared with your extension officer for review.</p>
-      <form id="report-form" class="farmer-form">
-        <label for="problem">What did you see?</label>
-        <select id="problem">
-          <option value="pests">Pests</option>
-          <option value="no_rain">No rain</option>
-          <option value="heavy_rain">Too much rain</option>
-          <option value="crop_sick">Crop looks sick</option>
-        </select>
-        <label for="crop">Which crop?</label>
-        <select id="crop">
-          <option value="sorghum">Sorghum</option>
-          <option value="maize">Maize</option>
-          <option value="">Other</option>
-        </select>
-        <p id="report-error" class="farmer-form-error" role="alert" hidden></p>
-        <button class="farmer-button farmer-button-primary" type="submit">Send report</button>
-      </form>
-      <p id="report-done" class="farmer-success" role="status" hidden>Thank you. Your officer will check this report.</p>
-      {% elif active_view == "visit" %}
-      <p class="farmer-eyebrow">FARMER SERVICES</p>
-      <h1 id="action-heading">Request an officer visit</h1>
-      <p class="farmer-panel-description">Let your extension officer know why you need a visit.</p>
-      <form id="visit-form" class="farmer-form">
-        <label for="reason">Reason for the visit</label>
-        <select id="reason">
-          <option value="Pests">Pests</option>
-          <option value="Little food left">Little food left</option>
-          <option value="Other">Other</option>
-        </select>
-        <p id="visit-error" class="farmer-form-error" role="alert" hidden></p>
-        <button class="farmer-button farmer-button-primary" type="submit">Send visit request</button>
-      </form>
-      <p id="visit-done" class="farmer-success" role="status" hidden>Request sent. Your officer will plan a visit.</p>
-      {% elif active_view == "followup" %}
-      <p class="farmer-eyebrow">FARMER SERVICES</p>
-      <h1 id="action-heading">Advice follow-up</h1>
-      <p id="followup-loading" class="farmer-panel-description">Checking for approved advice...</p>
-      <form id="followup-form" class="farmer-form" hidden>
-        <label for="followed">Did you follow the last advice?</label>
-        <select id="followed">
-          <option value="yes">Yes</option>
-          <option value="partly">Partly</option>
-          <option value="no">No</option>
-        </select>
-        <label for="helped">Did it help?</label>
-        <select id="helped">
-          <option value="yes">Yes</option>
-          <option value="no">No</option>
-          <option value="">Too early to say</option>
-        </select>
-        <p id="followup-error" class="farmer-form-error" role="alert" hidden></p>
-        <button class="farmer-button farmer-button-primary" type="submit">Send follow-up</button>
-      </form>
-      <p id="followup-done" class="farmer-success" role="status" hidden>Thank you. This helps improve advice.</p>
-      <p id="followup-none" class="farmer-data-note" hidden>You have no approved advice to answer about yet.</p>
-      {% endif %}
-    </section>
-  </main>
-  {% endif %}
-</div>
 
 <script>
-const farmerPhone = {{ phone|tojson }};
-const activeView = {{ active_view|tojson }};
+const params = new URLSearchParams(window.location.search);
+const isFilePreview = window.location.protocol === "file:";
+let farmerPhone = params.get("phone") || "";
 let currentAdviceId = null;
+let activeView = params.get("view") || "dashboard";
+
+if (!isFilePreview) {
+  const routeViews = {
+    "/farmer/home": "dashboard",
+    "/farmer/advice": "advice",
+    "/farmer/report": "report",
+    "/farmer/visit": "visit",
+    "/farmer/followup": "followup",
+    "/farmer": "signin",
+  };
+  activeView = routeViews[window.location.pathname] || activeView;
+}
+
+if (isFilePreview) {
+  document.getElementById("local-file-notice").hidden = false;
+}
+document.getElementById("profile-phone").textContent = farmerPhone || "Sign in to view";
+
+document.querySelectorAll("[data-view-link]").forEach((link) => {
+  const view = link.dataset.viewLink;
+  link.classList.toggle("is-active", view === activeView);
+  if (isFilePreview) {
+    link.href = "?view=" + encodeURIComponent(view) +
+      (farmerPhone ? "&phone=" + encodeURIComponent(farmerPhone) : "");
+  } else if (view === "signin") {
+    link.href = "/farmer";
+  } else {
+    const route = view === "dashboard" ? "/farmer/home" : "/farmer/" + view;
+    link.href = route + (farmerPhone ? "?phone=" + encodeURIComponent(farmerPhone) : "");
+  }
+});
+
+["dashboard", "advice", "report", "visit", "followup", "signin"].forEach((view) => {
+  document.getElementById(view + "-view").hidden = view !== activeView;
+});
 
 function formatRain(value) {
   return typeof value === "number" ? value.toLocaleString(undefined, { maximumFractionDigits: 1 }) + " mm" : "Unavailable";
@@ -220,105 +288,13 @@ function formatCalendarDate(monthDay) {
 
 function calendarStatus(entry) {
   const current = new Date();
-  const year = current.getFullYear();
   const fromParts = entry.plant_from.split("-").map(Number);
   const toParts = entry.plant_to.split("-").map(Number);
-  const start = new Date(year, fromParts[0] - 1, fromParts[1]);
-  const end = new Date(year, toParts[0] - 1, toParts[1]);
+  const start = new Date(current.getFullYear(), fromParts[0] - 1, fromParts[1]);
+  const end = new Date(current.getFullYear(), toParts[0] - 1, toParts[1]);
   if (current < start) return "Opens " + formatCalendarDate(entry.plant_from);
   if (current <= end) return "Within planting window";
   return "Window closed for this year";
-}
-
-async function loadDashboard() {
-  try {
-    const [dashboard, advice] = await Promise.all([
-      getJSON("/api/farmer/dashboard?phone=" + encodeURIComponent(farmerPhone)),
-      getJSON("/api/farmer/advice?phone=" + encodeURIComponent(farmerPhone)),
-    ]);
-    const profile = dashboard.profile;
-    document.getElementById("farmer-name").textContent = profile.full_name;
-    document.getElementById("farmer-location").textContent =
-      [profile.village, profile.district, profile.household_code].filter(Boolean).join(" · ");
-    document.getElementById("profile-household").textContent = profile.household_code || "Not recorded";
-    document.getElementById("profile-group").textContent = profile.group_id ? "Group " + profile.group_id : "Not recorded";
-    document.getElementById("profile-crops").textContent =
-      profile.crops.length ? profile.crops.map((crop) => crop[0].toUpperCase() + crop.slice(1)).join(", ") : "Not recorded";
-
-    const weatherStatus = document.getElementById("weather-status");
-    const weatherNote = document.getElementById("weather-note");
-    if (dashboard.weather) {
-      document.getElementById("rain-past").textContent = formatRain(dashboard.weather.past_7_days_rain_mm);
-      document.getElementById("rain-next").textContent = formatRain(dashboard.weather.next_7_days_rain_mm);
-      weatherStatus.textContent = "Available";
-      if (dashboard.weather.source_ref && dashboard.weather.source_ref.startsWith("demo-override")) {
-        weatherStatus.textContent = "Demo data";
-        weatherNote.hidden = false;
-        weatherNote.textContent = "Weather values are from a configured demo override, not a live forecast.";
-      }
-    } else {
-      document.getElementById("rain-past").textContent = "Unavailable";
-      document.getElementById("rain-next").textContent = "Unavailable";
-      weatherStatus.textContent = "Unavailable";
-      weatherNote.hidden = false;
-      weatherNote.textContent = dashboard.weather_error || "No weather reading is available for this farm.";
-    }
-
-    const observation = dashboard.latest_observation;
-    const soilCondition = document.getElementById("soil-condition");
-    const observationDate = document.getElementById("observation-date");
-    const observationNote = document.getElementById("observation-note");
-    if (observation && observation.soil_wetness) {
-      soilCondition.textContent = observation.soil_wetness[0].toUpperCase() + observation.soil_wetness.slice(1);
-      observationDate.textContent = "Recorded " + observation.observed_on;
-    } else {
-      soilCondition.textContent = "Not recorded";
-      observationDate.textContent = "No soil condition recorded for this farm";
-      observationNote.hidden = false;
-      observationNote.textContent = "This app has no soil sensor readings. The field condition shown here is based only on recorded observations.";
-    }
-
-    const calendar = document.getElementById("crop-calendars");
-    document.getElementById("calendar-zone").textContent =
-      profile.zone ? "Planting guidance for " + profile.zone + "." : "No agroclimatic zone is recorded for this farm.";
-    calendar.replaceChildren();
-    if (dashboard.crop_calendar.length) {
-      dashboard.crop_calendar.forEach((entry) => {
-        const card = document.createElement("article");
-        card.className = "farmer-crop-card";
-        const heading = document.createElement("h3");
-        heading.textContent = entry.crop[0].toUpperCase() + entry.crop.slice(1);
-        const status = document.createElement("p");
-        status.className = "farmer-crop-status";
-        status.textContent = calendarStatus(entry);
-        const window = document.createElement("p");
-        window.className = "farmer-crop-window";
-        window.textContent = formatCalendarDate(entry.plant_from) + " – " + formatCalendarDate(entry.plant_to);
-        const source = document.createElement("a");
-        source.className = "farmer-source-link";
-        source.href = entry.source_url;
-        source.target = "_blank";
-        source.rel = "noopener noreferrer";
-        source.textContent = "View source";
-        card.append(heading, status, window, source);
-        calendar.append(card);
-      });
-    } else {
-      const noCalendar = document.createElement("p");
-      noCalendar.className = "farmer-data-note";
-      noCalendar.textContent = "No crop calendar is available for this farm's recorded zone.";
-      calendar.append(noCalendar);
-    }
-
-    renderAdvice(advice);
-  } catch (error) {
-    document.getElementById("farmer-location").textContent = error.message || "Could not load your registered farm details.";
-    document.getElementById("weather-status").textContent = "Unavailable";
-    document.getElementById("weather-note").hidden = false;
-    document.getElementById("weather-note").textContent = "Farm details could not be loaded.";
-    document.getElementById("crop-calendars").textContent = "Crop calendar unavailable.";
-    document.getElementById("advice-preview").textContent = "Could not load approved advice.";
-  }
 }
 
 function renderAdvice(advice) {
@@ -358,6 +334,115 @@ function renderAdvice(advice) {
   }
 }
 
+async function loadDashboard() {
+  if (!farmerPhone) {
+    const notice = document.getElementById("weather-note");
+    notice.textContent = "Sign in with your registered phone number through the running app to load your farm information.";
+    notice.hidden = false;
+    document.getElementById("rain-past").textContent = "Unavailable";
+    document.getElementById("rain-next").textContent = "Unavailable";
+    document.getElementById("soil-condition").textContent = "Not recorded";
+    document.getElementById("profile-household").textContent = "Not loaded";
+    document.getElementById("profile-group").textContent = "Not loaded";
+    document.getElementById("profile-crops").textContent = "Not loaded";
+    document.getElementById("weather-status").textContent = "Not loaded";
+    document.getElementById("crop-calendars").textContent = "Farm data not loaded.";
+    document.getElementById("advice-preview").textContent = "Sign in through the running app to view officer-approved advice.";
+    document.getElementById("advice-status").textContent = "Not loaded";
+    return;
+  }
+
+  try {
+    const [dashboard, advice] = await Promise.all([
+      getJSON("/api/farmer/dashboard?phone=" + encodeURIComponent(farmerPhone)),
+      getJSON("/api/farmer/advice?phone=" + encodeURIComponent(farmerPhone)),
+    ]);
+    const profile = dashboard.profile;
+    document.getElementById("farmer-name").textContent = profile.full_name;
+    document.getElementById("farmer-location").textContent =
+      [profile.village, profile.district, profile.household_code].filter(Boolean).join(" · ");
+    document.getElementById("profile-household").textContent = profile.household_code || "Not recorded";
+    document.getElementById("profile-group").textContent = profile.group_id ? "Group " + profile.group_id : "Not recorded";
+    document.getElementById("profile-crops").textContent =
+      profile.crops.length ? profile.crops.map((crop) => crop[0].toUpperCase() + crop.slice(1)).join(", ") : "Not recorded";
+
+    const weatherStatus = document.getElementById("weather-status");
+    const weatherNote = document.getElementById("weather-note");
+    if (dashboard.weather) {
+      document.getElementById("rain-past").textContent = formatRain(dashboard.weather.past_7_days_rain_mm);
+      document.getElementById("rain-next").textContent = formatRain(dashboard.weather.next_7_days_rain_mm);
+      weatherStatus.textContent = "Available";
+      if (dashboard.weather.source_ref && dashboard.weather.source_ref.startsWith("demo-override")) {
+        weatherStatus.textContent = "Demo data";
+        weatherNote.hidden = false;
+        weatherNote.textContent = "Weather values are from a configured demo override, not a live forecast.";
+      }
+    } else {
+      document.getElementById("rain-past").textContent = "Unavailable";
+      document.getElementById("rain-next").textContent = "Unavailable";
+      weatherStatus.textContent = "Unavailable";
+      weatherNote.hidden = false;
+      weatherNote.textContent = dashboard.weather_error || "No weather reading is available for this farm.";
+    }
+
+    const observation = dashboard.latest_observation;
+    if (observation && observation.soil_wetness) {
+      document.getElementById("soil-condition").textContent =
+        observation.soil_wetness[0].toUpperCase() + observation.soil_wetness.slice(1);
+      document.getElementById("observation-date").textContent = "Recorded " + observation.observed_on;
+    } else {
+      document.getElementById("soil-condition").textContent = "Not recorded";
+      document.getElementById("observation-date").textContent = "No soil condition recorded for this farm";
+      const note = document.getElementById("observation-note");
+      note.textContent = "This app has no soil sensor readings. The field condition shown here is based only on recorded observations.";
+      note.hidden = false;
+    }
+
+    const calendar = document.getElementById("crop-calendars");
+    document.getElementById("calendar-zone").textContent =
+      profile.zone ? "Planting guidance for " + profile.zone + "." : "No agroclimatic zone is recorded for this farm.";
+    calendar.replaceChildren();
+    if (dashboard.crop_calendar.length) {
+      dashboard.crop_calendar.forEach((entry) => {
+        const card = document.createElement("article");
+        card.className = "farmer-crop-card";
+        const heading = document.createElement("h3");
+        heading.textContent = entry.crop[0].toUpperCase() + entry.crop.slice(1);
+        const status = document.createElement("p");
+        status.className = "farmer-crop-status";
+        status.textContent = calendarStatus(entry);
+        const window = document.createElement("p");
+        window.className = "farmer-crop-window";
+        window.textContent = formatCalendarDate(entry.plant_from) + " – " + formatCalendarDate(entry.plant_to);
+        const source = document.createElement("a");
+        source.className = "farmer-source-link";
+        source.href = entry.source_url;
+        source.target = "_blank";
+        source.rel = "noopener noreferrer";
+        source.textContent = "View source";
+        card.append(heading, status, window, source);
+        calendar.append(card);
+      });
+    } else {
+      const noCalendar = document.createElement("p");
+      noCalendar.className = "farmer-data-note";
+      noCalendar.textContent = "No crop calendar is available for this farm's recorded zone.";
+      calendar.append(noCalendar);
+    }
+    renderAdvice(advice);
+  } catch (error) {
+    document.getElementById("farmer-location").textContent = error.message || "Could not load your registered farm details.";
+    document.getElementById("weather-status").textContent = "Unavailable";
+    const note = document.getElementById("weather-note");
+    note.textContent = isFilePreview
+      ? "Live farm data cannot be loaded from a file preview. Open the farmer portal through the running app."
+      : "Farm details could not be loaded.";
+    note.hidden = false;
+    document.getElementById("crop-calendars").textContent = "Crop calendar unavailable.";
+    document.getElementById("advice-preview").textContent = "Could not load approved advice.";
+  }
+}
+
 function connectSubmit(formId, errorId, doneId, url, makeBody) {
   const form = document.getElementById(formId);
   if (!form) return;
@@ -365,6 +450,11 @@ function connectSubmit(formId, errorId, doneId, url, makeBody) {
     event.preventDefault();
     const error = document.getElementById(errorId);
     error.hidden = true;
+    if (isFilePreview) {
+      error.textContent = "This service needs the running AgriMoist AI app. Open the portal there to submit your request.";
+      error.hidden = false;
+      return;
+    }
     try {
       await postJSON(url, makeBody());
       form.hidden = true;
@@ -392,9 +482,28 @@ connectSubmit("followup-form", "followup-error", "followup-done", "/api/farmer/f
   helped: document.getElementById("helped").value || null,
 }));
 
+const signInForm = document.getElementById("sign-in-form");
+signInForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const error = document.getElementById("signin-error");
+  if (isFilePreview) {
+    error.textContent = "Sign-in requires the running AgriMoist AI app. Open the portal there to continue.";
+    error.hidden = false;
+    return;
+  }
+  const phone = document.getElementById("phone").value.trim();
+  try {
+    await getJSON("/api/farmer/profile?phone=" + encodeURIComponent(phone));
+    window.location.href = "/farmer/home?phone=" + encodeURIComponent(phone);
+  } catch (failure) {
+    error.textContent = failure.message || "Could not sign in. Check your phone number and try again.";
+    error.hidden = false;
+  }
+});
+
 if (activeView === "dashboard") {
   loadDashboard();
-} else if (activeView === "advice" || activeView === "followup") {
+} else if (!isFilePreview && (activeView === "advice" || activeView === "followup")) {
   getJSON("/api/farmer/advice?phone=" + encodeURIComponent(farmerPhone))
     .then(renderAdvice)
     .catch((error) => {
@@ -406,4 +515,5 @@ if (activeView === "dashboard") {
     });
 }
 </script>
-{% endblock %}
+</body>
+</html>

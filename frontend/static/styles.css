@@ -374,6 +374,7 @@ body.farmer {
   color: var(--farmer-ink);
 }
 
+.farmer [hidden] { display: none !important; }
 .farmer-container.farmer-dashboard-shell {
   width: min(100%, 1320px);
   max-width: 1320px;
