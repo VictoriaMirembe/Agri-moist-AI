@@ -4,9 +4,9 @@
 {% block content %}
 <h1>Home</h1>
 <div class="row">
-  <div class="card"><strong>{{ drafts_total }}</strong><div class="muted">drafts waiting for approval</div></div>
-  <div class="card"><strong>{{ open_flags_total }}</strong><div class="muted">open visit flags</div></div>
-  <div class="card"><strong>{{ unchecked_reports }}</strong><div class="muted">unchecked farmer reports</div></div>
+  <div class="card"><strong id="home-drafts">{{ drafts_total }}</strong><div class="muted">drafts waiting for approval</div></div>
+  <div class="card"><strong id="home-flags">{{ open_flags_total }}</strong><div class="muted">open visit flags</div></div>
+  <div class="card"><strong id="home-reports">{{ unchecked_reports }}</strong><div class="muted">unchecked farmer reports</div></div>
 </div>
 
 <h2>Household groups</h2>
@@ -16,15 +16,45 @@
   </thead>
   <tbody>
     {% for g in groups %}
-    <tr>
+    <tr data-group-id="{{ g.group_id }}">
       <td>G-{{ g.group_id }}</td>
       <td>{{ g.village }}</td>
       <td>{{ g.household_count }}</td>
-      <td>{% if g.open_flags %}<span class="pill red">{{ g.open_flags }}</span>{% else %}0{% endif %}</td>
-      <td>{% if g.drafts_waiting %}<span class="pill amber">{{ g.drafts_waiting }}</span>{% else %}0{% endif %}</td>
+      <td class="group-flags">{% if g.open_flags %}<span class="pill red">{{ g.open_flags }}</span>{% else %}0{% endif %}</td>
+      <td class="group-drafts">{% if g.drafts_waiting %}<span class="pill amber">{{ g.drafts_waiting }}</span>{% else %}0{% endif %}</td>
       <td><a class="btn secondary" href="/groups/{{ g.group_id }}">Open</a></td>
     </tr>
     {% endfor %}
   </tbody>
 </table></div>
+
+<script>
+// The counts above are rendered by the server; refresh them every 30 seconds from
+// the existing JSON routes so new farmer reports, flags and drafts show up.
+function setCountCell(cell, count, pillClass) {
+  if (count > 0) {
+    const pill = document.createElement("span");
+    pill.className = "pill " + pillClass;
+    pill.textContent = count;
+    cell.replaceChildren(pill);
+  } else {
+    cell.textContent = "0";
+  }
+}
+
+async function refreshHome() {
+  const [summary, groups] = await Promise.all([getJSON("/api/pending-summary"), getJSON("/api/groups")]);
+  document.getElementById("home-drafts").textContent = summary.pending_advice;
+  document.getElementById("home-flags").textContent = summary.open_flags;
+  document.getElementById("home-reports").textContent = summary.unchecked_reports;
+  for (const g of groups) {
+    const row = document.querySelector(`tr[data-group-id="${Number(g.group_id)}"]`);
+    if (!row) continue;  // a group added since the page loaded shows after a reload
+    setCountCell(row.querySelector(".group-flags"), g.open_flags, "red");
+    setCountCell(row.querySelector(".group-drafts"), g.drafts_waiting, "amber");
+  }
+}
+
+autoRefresh(refreshHome);
+</script>
 {% endblock %}

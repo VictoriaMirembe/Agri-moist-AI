@@ -2,7 +2,7 @@
 # protocol through two subprocesses (our server and the borrowed mcp-server-time).
 # Slower than the other tests (each spawns two Python subprocesses and makes one real
 # network call to Open-Meteo) but these are the tests that prove the whole pipeline -
-# plan, gather, check sources, draft or flag, retry, log - actually works together.
+# plan, gather, check urgent, draft or flag, retry, log - actually works together.
 from __future__ import annotations
 
 import pytest
@@ -108,3 +108,50 @@ async def test_weather_failure_switch_marks_a_gap_and_still_drafts(test_db, monk
         )
         assert weather_source.source_ref.startswith("unavailable")
         assert "missing" in advice.draft_text.lower() or "missing" in weather_source.fact.lower()
+
+
+async def test_open_food_visit_request_flags_the_group_instead_of_drafting(test_db):
+    # Group 3 normally drafts (see the test above). A farmer's open visit request
+    # about food must make the agent flag it instead, like food_left "none".
+    test_db.init_db()
+    with test_db.session_scope() as session:
+        from backend.db.seed import seed
+
+        seed(session)
+        from backend.db.models import VisitFlag
+
+        session.add(VisitFlag(group_id=3, reason="H-009 asked for a visit: little food left", raised_by="farmer_ussd"))
+        session.commit()
+
+    run_id = await _run(test_db, group_id=3)
+
+    with test_db.session_scope() as session:
+        run = session.get(Run, run_id)
+        assert run.outcome == "flagged"
+        assert session.exec(select(Advice).where(Advice.run_id == run_id)).first() is None
+        events = [log.tool for log in session.exec(select(ToolLog).where(ToolLog.run_id == run_id)).all()]
+        assert "flag_for_visit" in events and "draft_advice" not in events
+
+
+async def test_check_urgent_step_reasons(seeded_session):
+    from backend.agent.graph import check_urgent_node
+    from backend.db.models import VisitFlag
+
+    emitted = []
+
+    async def emit(run_id, event):
+        emitted.append(event)
+
+    recent = {"records": [], "households_in_group": 3, "days_since_last_visit_by_household": {"H-007": 2}}
+    base = {"run_id": 1, "_emit": emit, "field_records": recent}
+
+    # A non-food visit request alone is not urgent.
+    seeded_session.add(VisitFlag(group_id=3, reason="H-007 asked for a visit: pests", raised_by="farmer_web"))
+    seeded_session.commit()
+    assert (await check_urgent_node({**base, "group_id": 3}))["flag_reason"] is None
+
+    seeded_session.add(VisitFlag(group_id=3, reason="H-008 asked for a visit: little food left", raised_by="farmer_web"))
+    seeded_session.commit()
+    reason = (await check_urgent_node({**base, "group_id": 3}))["flag_reason"]
+    assert reason == "Open visit request mentions food: H-008 asked for a visit: little food left"
+    assert emitted[-1] == {"type": "check_urgent", "flag_reason": reason}

@@ -149,7 +149,9 @@ def followups_page(request: Request):
 
 @router.get("/flags")
 def flags_page(request: Request):
-    return templates.TemplateResponse(request, "flags.html", {})
+    with session_scope() as session:
+        officers = session.exec(select(Officer)).all()
+    return templates.TemplateResponse(request, "flags.html", {"officers": officers})
 
 
 @router.get("/log")

@@ -114,7 +114,8 @@ function renderReport(r) {
     ${groupId ? `<p><a href="/groups/${groupId}">Open household group G-${groupId}</a></p>` : ""}
     ${details ? `<p>${details}</p>` : ""}
     <p>${notes}</p>
-    ${r.checked === 'unchecked' ? `<button class="btn secondary" onclick="markChecked(${r.id})">Mark checked</button>` : ""}
+    ${r.checked === 'unchecked' ? `<div class="row actions"><button class="btn secondary" onclick="markChecked(${r.id})">Mark checked</button></div>` : ""}
+    <p class="error pill red" style="display:none;margin-top:0.6rem;"></p>
   </div>`;
 }
 
@@ -131,7 +132,9 @@ function renderFlag(f) {
     <p><strong>Group G-${groupId}</strong> <span class="pill ${f.status === 'open' ? 'red' : 'green'}">${escapeHTML(f.status)}</span> <span class="muted">${raisedBy} &ndash; ${escapeHTML(f.created_at)}</span></p>
     <p><a href="/groups/${groupId}">Open household group</a></p>
     <p>${escapeHTML(f.reason)}</p>
-    ${f.status === 'open' ? `<button class="btn secondary" onclick="markVisited(${f.id})">Mark visited</button>` : ""}
+    ${f.visited_by ? `<p class="muted">Visited - marked by ${escapeHTML(f.visited_by)} ${escapeHTML(String(f.visited_at || "").slice(0, 10))}</p>` : ""}
+    ${f.status === 'open' ? `<div class="row actions"><button class="btn secondary" onclick="markVisited(${f.id})">Mark visited</button></div>` : ""}
+    <p class="error pill red" style="display:none;margin-top:0.6rem;"></p>
   </div>`;
 }
 
@@ -144,9 +147,12 @@ async function loadAdvice() {
     const items = await getJSON("/api/approvals?status=pending_review");
     document.getElementById("count-advice").textContent = items.length;
     document.getElementById("badge-advice").style.borderColor = items.length > 0 ? "var(--amber)" : "var(--border)";
-    listEl.innerHTML = items.length ? items.map(renderAdvice).join("") : "<p class='muted'>Nothing waiting for approval.</p>";
+    // A card the officer is editing (unsaved text, focus, a request in progress or
+    // an error showing) is kept exactly as it is - see replaceCards in app.js.
+    replaceCards(listEl, items.length ? items.map(renderAdvice).join("") : "<p class='muted'>Nothing waiting for approval.</p>", "data-id");
+    listEl.dataset.loaded = "1";
   } catch (err) {
-    listEl.textContent = "Could not load: " + err.message;
+    showLoadError(listEl, err);
   }
 }
 
@@ -157,9 +163,10 @@ async function loadReports() {
     const unchecked = items.filter(r => r.checked === "unchecked");
     document.getElementById("count-reports").textContent = unchecked.length;
     document.getElementById("badge-reports").style.borderColor = unchecked.length > 0 ? "var(--amber)" : "var(--border)";
-    listEl.innerHTML = items.length ? items.map(renderReport).join("") : "<p class='muted'>No farmer reports yet.</p>";
+    replaceCards(listEl, items.length ? items.map(renderReport).join("") : "<p class='muted'>No farmer reports yet.</p>", "data-report-id");
+    listEl.dataset.loaded = "1";
   } catch (err) {
-    listEl.textContent = "Could not load: " + err.message;
+    showLoadError(listEl, err);
   }
 }
 
@@ -170,9 +177,10 @@ async function loadFlags() {
     const open = items.filter(f => f.status === "open");
     document.getElementById("count-flags").textContent = open.length;
     document.getElementById("badge-flags").style.borderColor = open.length > 0 ? "var(--red)" : "var(--border)";
-    listEl.innerHTML = items.length ? items.map(renderFlag).join("") : "<p class='muted'>No visit flags.</p>";
+    replaceCards(listEl, items.length ? items.map(renderFlag).join("") : "<p class='muted'>No visit flags.</p>", "data-flag-id");
+    listEl.dataset.loaded = "1";
   } catch (err) {
-    listEl.textContent = "Could not load: " + err.message;
+    showLoadError(listEl, err);
   }
 }
 
@@ -198,6 +206,9 @@ async function decide(id, path, body) {
   document.querySelector(`[data-id="${id}"] .error`).style.display = "none";
   try {
     await whileBusy(cardButtons(id), () => postJSON(`/api/approvals/${id}/${path}`, body));
+    // Decided: remove the card first, otherwise its disabled buttons would make the
+    // refresh treat it as still in use and keep it on screen.
+    document.querySelector(`[data-id="${id}"]`).remove();
     loadAll();
   } catch (err) { cardError(id, err); }
 }
@@ -225,20 +236,17 @@ function reject(id) {
 // ---------------------------------------------------------------------------
 // Report / flag actions
 // ---------------------------------------------------------------------------
-async function markChecked(id) {
-  try {
-    await postJSON(`/api/farmer-reports/${id}/check`, { officer_id: parseInt(officerSelect.value, 10) });
-    loadReports();
-  } catch (err) { alert(err.message); }
+function markChecked(id) {
+  const card = document.querySelector(`[data-report-id="${id}"]`);
+  return cardAction(card, () => postJSON(`/api/farmer-reports/${id}/check`, { officer_id: parseInt(officerSelect.value, 10) }), loadReports);
 }
 
-async function markVisited(id) {
-  try {
-    await postJSON(`/api/flags/${id}/visited`, {});
-    loadFlags();
-  } catch (err) { alert(err.message); }
+function markVisited(id) {
+  const card = document.querySelector(`[data-flag-id="${id}"]`);
+  return cardAction(card, () => postJSON(`/api/flags/${id}/visited`, { officer_id: parseInt(officerSelect.value, 10) }), loadFlags);
 }
 
 loadAll();
+autoRefresh(() => Promise.all([loadAdvice(), loadReports(), loadFlags()]));
 </script>
 {% endblock %}

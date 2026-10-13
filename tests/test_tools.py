@@ -137,8 +137,17 @@ def test_get_weather_failure_switch(monkeypatch):
 
 
 def test_get_weather_real_call_has_a_source():
-    # Open-Meteo needs no key; this is a real network call.
-    result = impl.get_weather(latitude=2.3833, longitude=34.3333)
+    # Open-Meteo needs no key; this is a real network call. With no network (no
+    # connection, DNS failure or a timeout) it is skipped, not failed; any other
+    # error, such as a bad response or a parsing bug, still fails.
+    import httpx
+
+    try:
+        result = impl.get_weather(latitude=2.3833, longitude=34.3333)
+    except ToolError as exc:
+        if isinstance(exc.__cause__, httpx.TransportError):
+            pytest.skip(f"no network for the live Open-Meteo call: {exc.__cause__!r}")
+        raise
     assert "past_7_days_rain_mm" in result
     assert "next_7_days_rain_mm" in result
     assert result["source_ref"].startswith("https://api.open-meteo.com/")
@@ -168,3 +177,21 @@ def test_list_numbering_is_not_treated_as_an_invented_number(seeded_session):
         draft_text="1. Check sorghum daily.\n2. Only 8.0mm fell in the last 7 days.", why_text="Rain.", sources=sources,
     )
     assert result["status"] == "pending_review"
+
+
+def test_live_weather_test_skips_without_network_but_fails_on_other_errors(monkeypatch):
+    import httpx
+
+    def no_network(*args, **kwargs):
+        raise httpx.ConnectError("no route to host")
+
+    monkeypatch.setattr(impl.httpx, "get", no_network)
+    with pytest.raises(pytest.skip.Exception):
+        test_get_weather_real_call_has_a_source()
+
+    def bad_response(*args, **kwargs):
+        raise httpx.HTTPStatusError("500", request=httpx.Request("GET", "https://x"), response=httpx.Response(500))
+
+    monkeypatch.setattr(impl.httpx, "get", bad_response)
+    with pytest.raises(ToolError):
+        test_get_weather_real_call_has_a_source()

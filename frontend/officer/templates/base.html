@@ -49,28 +49,24 @@
   {% block scripts %}{% endblock %}
 
   <script>
-  // Load live badge counts for pending items in nav bar
-  (async function loadNavBadges() {
+  // Live badge counts for pending items in the nav bar, refreshed every 30 seconds.
+  function setNavBadge(id, count) {
+    const el = document.getElementById(id);
+    el.textContent = count;
+    el.style.display = count > 0 ? "" : "none";
+  }
+
+  async function loadNavBadges() {
     try {
       const summary = await getJSON("/api/pending-summary");
-
-      if (summary.unchecked_reports > 0) {
-        const el = document.getElementById("nav-badge-reports");
-        el.textContent = summary.unchecked_reports;
-        el.style.display = "";
-      }
-      if (summary.open_flags > 0) {
-        const el = document.getElementById("nav-badge-flags");
-        el.textContent = summary.open_flags;
-        el.style.display = "";
-      }
-      if (summary.pending_advice > 0) {
-        const el = document.getElementById("nav-badge-approvals");
-        el.textContent = summary.pending_advice;
-        el.style.display = "";
-      }
+      setNavBadge("nav-badge-reports", summary.unchecked_reports);
+      setNavBadge("nav-badge-flags", summary.open_flags);
+      setNavBadge("nav-badge-approvals", summary.pending_advice);
     } catch (_) { /* ignore badge errors silently */ }
-  })();
+  }
+
+  loadNavBadges();
+  autoRefresh(loadNavBadges);
   </script>
 </body>
 </html>

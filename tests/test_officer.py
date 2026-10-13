@@ -242,7 +242,7 @@ def test_home_counts_match_the_queues_they_summarise(client):
     page = client.get("/").text
 
     def count(label):
-        return int(re.search(r"<strong>(\d+)</strong><div class=\"muted\">" + label, page).group(1))
+        return int(re.search(r"<strong[^>]*>(\d+)</strong><div class=\"muted\">" + label, page).group(1))
 
     drafts = client.get("/api/approvals", params={"status": "pending_review"}).json()
     flags = client.get("/api/flags", params={"status": "open"}).json()
@@ -261,3 +261,111 @@ def test_every_officer_file_starts_with_a_comment():
     for folder in ("backend/officer", "backend/approvals"):
         for path in (root / folder).glob("*.py"):
             assert path.read_text().startswith("#"), f"{path} has no header comment"
+
+
+def test_officer_screens_auto_refresh_from_existing_json_routes(client):
+    # Each screen that shows farmer activity re-fetches its data on a timer.
+    for path in ("/", "/approvals", "/farmer-reports", "/flags", "/followups"):
+        assert "autoRefresh(" in client.get(path).text, f"{path} does not auto-refresh"
+    home = client.get("/").text
+    for element_id in ("home-drafts", "home-flags", "home-reports"):
+        assert f'id="{element_id}"' in home
+    assert 'data-group-id="1"' in home
+    approvals = client.get("/approvals").text
+    assert "replaceCards(listEl" in approvals  # cards being edited are kept
+
+
+def test_auto_refresh_pauses_while_hidden_and_refreshes_when_visible():
+    import json
+    import shutil
+    import subprocess
+    from pathlib import Path
+
+    import pytest
+
+    node = shutil.which("node")
+    if node is None:
+        pytest.skip("node is not installed")
+    app_js = Path(__file__).resolve().parent.parent / "frontend" / "static" / "app.js"
+    script = """
+const listeners = {};
+const timers = new Map();
+let nextId = 1;
+global.document = {
+  visibilityState: "visible",
+  addEventListener: (name, fn) => { listeners[name] = fn; },
+};
+global.setInterval = (fn, ms) => { const id = nextId++; timers.set(id, { fn, ms }); return id; };
+global.clearInterval = (id) => { timers.delete(id); };
+""" + app_js.read_text() + """
+(async () => {
+  const log = [];
+  let calls = 0;
+  autoRefresh(async () => { calls += 1; }, 30000);
+  const flush = () => new Promise((r) => setImmediate(r));
+
+  log.push(["started", timers.size, [...timers.values()][0].ms]);
+  for (const t of timers.values()) await t.fn();
+  await flush();
+  log.push(["after one tick", calls]);
+
+  document.visibilityState = "hidden";
+  listeners.visibilitychange();
+  log.push(["hidden: timers", timers.size]);
+
+  document.visibilityState = "visible";
+  listeners.visibilitychange();
+  await flush();
+  log.push(["visible again", calls, timers.size]);
+  console.log(JSON.stringify(log));
+})();
+"""
+    out = subprocess.run([node, "-e", script], capture_output=True, text=True, check=True).stdout
+    assert json.loads(out) == [
+        ["started", 1, 30000],       # one 30-second timer while visible
+        ["after one tick", 1],
+        ["hidden: timers", 0],       # polling stops while the tab is hidden
+        ["visible again", 2, 1],     # refreshes at once and restarts the timer
+    ]
+
+
+def test_mark_visited_records_and_logs_the_officer(client):
+    flag = client.get("/api/flags", params={"status": "open"}).json()[0]
+    r = client.post(f"/api/flags/{flag['id']}/visited", json={"officer_id": 2})
+    assert r.status_code == 200
+    assert r.json() == {"id": flag["id"], "status": "visited", "visited_by": "Lomuria Peter"}
+
+    listed = next(f for f in client.get("/api/flags").json() if f["id"] == flag["id"])
+    assert listed["visited_by"] == "Lomuria Peter" and listed["visited_at"]
+    log = next(row for row in client.get("/api/logs").json() if row["tool"] == "mark_flag_visited")
+    assert log["actor"] == "2" and log["source"] == "officer"
+
+
+def test_mark_visited_still_accepts_the_original_empty_body(client):
+    flag = client.get("/api/flags", params={"status": "open"}).json()[0]
+    assert client.post(f"/api/flags/{flag['id']}/visited", json={}).status_code == 200
+    listed = next(f for f in client.get("/api/flags").json() if f["id"] == flag["id"])
+    assert listed["status"] == "visited" and listed["visited_by"] is None
+    log = next(row for row in client.get("/api/logs").json() if row["tool"] == "mark_flag_visited")
+    assert log["actor"] == "officer (not named)"
+
+
+def test_mark_visited_rejects_an_unknown_officer(client):
+    flag = client.get("/api/flags", params={"status": "open"}).json()[0]
+    assert client.post(f"/api/flags/{flag['id']}/visited", json={"officer_id": 999}).status_code == 400
+    assert next(f for f in client.get("/api/flags").json() if f["id"] == flag["id"])["status"] == "open"
+
+
+def test_report_and_flag_actions_use_whilebusy_and_card_errors_not_alerts(client):
+    from pathlib import Path
+
+    templates = Path(__file__).resolve().parent.parent / "frontend" / "officer" / "templates"
+    for name in ("approvals.html", "farmer_reports.html", "flags.html"):
+        source = (templates / name).read_text()
+        assert "alert(" not in source, name
+    approvals = (templates / "approvals.html").read_text()
+    assert "cardAction(card, () => postJSON(`/api/farmer-reports/${id}/check`" in approvals
+    assert "cardAction(card, () => postJSON(`/api/flags/${id}/visited`, { officer_id:" in approvals
+    app_js = (templates.parent.parent / "static" / "app.js").read_text()
+    assert "await whileBusy(buttons, request);" in app_js
+    assert 'id="officer"' in client.get("/flags").text  # the Visit flags page now has "Acting as"

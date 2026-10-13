@@ -19,6 +19,7 @@ from backend.db.models import (
     Advice,
     District,
     Followup,
+    FollowupAnswer,
     Household,
     Observation,
     Officer,
@@ -26,6 +27,7 @@ from backend.db.models import (
     ToolLog,
     Village,
     VisitFlag,
+    VisitFlagVisit,
 )
 from backend.logging.tool_log import run_logged
 from backend.tools import agrimoist_tools as impl
@@ -324,9 +326,30 @@ def list_followups():
                 "followed": followup.followed,
                 "helped": followup.helped,
                 "answered_via": followup.answered_via,
+                "answers": _household_answers(session, advice.id),
             }
             for followup, advice in rows
         ]
+
+
+def _household_answers(session, advice_id: int) -> list[dict]:
+    """Every household's own answer for one piece of advice (FollowupAnswer)."""
+    rows = session.exec(
+        select(FollowupAnswer, Household)
+        .join(Household, FollowupAnswer.household_id == Household.id)
+        .where(FollowupAnswer.advice_id == advice_id)
+        .order_by(Household.code)
+    ).all()
+    return [
+        {
+            "household_code": household.code,
+            "followed": answer.followed,
+            "helped": answer.helped,
+            "answered_via": answer.answered_via,
+            "answered_at": answer.answered_at.isoformat(),
+        }
+        for answer, household in rows
+    ]
 
 
 # ---------------------------------------------------------------------------
@@ -347,21 +370,52 @@ def list_flags(status: str | None = None):
                 "raised_by": f.raised_by,
                 "status": f.status,
                 "created_at": f.created_at.isoformat(),
+                **_visit_record(session, f.id),
             }
             for f in rows
         ]
 
 
+def _visit_record(session, flag_id: int) -> dict:
+    """Who marked this flag visited and when (latest), if recorded."""
+    row = session.exec(
+        select(VisitFlagVisit).where(VisitFlagVisit.flag_id == flag_id).order_by(VisitFlagVisit.visited_at.desc())
+    ).first()
+    if row is None:
+        return {"visited_by": None, "visited_at": None}
+    officer = session.get(Officer, row.officer_id) if row.officer_id is not None else None
+    return {"visited_by": officer.name if officer else None, "visited_at": row.visited_at.isoformat()}
+
+
+class MarkVisitedRequest(BaseModel):
+    officer_id: int | None = None  # optional, so the original {} body still works
+
+
 @router.post("/flags/{flag_id}/visited")
-def mark_flag_visited(flag_id: int):
+def mark_flag_visited(flag_id: int, body: MarkVisitedRequest | None = None):
+    officer_id = body.officer_id if body else None
     with session_scope() as session:
         flag = session.get(VisitFlag, flag_id)
         if flag is None:
             raise HTTPException(404, "No such flag")
+        officer = session.get(Officer, officer_id) if officer_id is not None else None
+        if officer_id is not None and officer is None:
+            raise HTTPException(400, f"No officer with id {officer_id}")
         flag.status = "visited"
         session.add(flag)
+        session.add(VisitFlagVisit(flag_id=flag.id, officer_id=officer_id))
         session.commit()
-        return {"id": flag.id, "status": flag.status}
+        result = {"id": flag.id, "status": flag.status, "visited_by": officer.name if officer else None}
+        run_logged(
+            session,
+            tool="mark_flag_visited",
+            inputs={"flag_id": flag_id, "officer_id": officer_id},
+            actor=str(officer_id) if officer_id is not None else "officer (not named)",
+            source="officer",
+            run_id=None,
+            func=lambda: result,
+        )
+        return result
 
 
 # ---------------------------------------------------------------------------

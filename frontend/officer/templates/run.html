@@ -40,9 +40,9 @@ source.addEventListener("tool_error", (e) => {
   const d = JSON.parse(e.data);
   line(`   FAILED ${d.tool}: ${d.error}${d.final ? " (giving up after retry; gap will be marked)" : " (retrying once)"}`, "err");
 });
-source.addEventListener("check_sources", (e) => {
+source.addEventListener("check_urgent", (e) => {
   const d = JSON.parse(e.data);
-  line(`check_sources: ${d.flag_reason ? "needs a visit - " + d.flag_reason : "no urgent flag; drafting advice"}`);
+  line(`check_urgent: ${d.flag_reason ? "needs a visit - " + d.flag_reason : "no urgent flag; drafting advice"}`);
 });
 source.addEventListener("model_call", () => line("-> drafting with the model"));
 source.addEventListener("model_result", (e) => {

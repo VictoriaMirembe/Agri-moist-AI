@@ -12,6 +12,7 @@ async function loadFollowups() {
   try {
     const rows = await getJSON("/api/followups");
     list.replaceChildren();
+    list.dataset.loaded = "1";
     if (!rows.length) {
       list.textContent = "No follow-up records yet.";
       return;
@@ -32,20 +33,35 @@ async function loadFollowups() {
       advice.textContent = row.advice_text || "Approved advice text unavailable.";
       card.append(advice);
 
-      const response = document.createElement("p");
-      if (row.answered_via) {
-        response.textContent = `Followed: ${row.followed || "not recorded"}; helped: ${row.helped || "not recorded"}; received via ${row.answered_via}.`;
+      const answers = row.answers || [];
+      if (answers.length) {
+        // One line per household, built as text so nothing a farmer sends becomes HTML.
+        const listEl = document.createElement("ul");
+        listEl.className = "source-list";
+        for (const a of answers) {
+          const item = document.createElement("li");
+          item.textContent = `${a.household_code}: followed ${a.followed || "not recorded"}; helped ${a.helped || "not recorded"} (via ${a.answered_via}, ${String(a.answered_at).slice(0, 10)})`;
+          listEl.append(item);
+        }
+        card.append(listEl);
       } else {
-        response.textContent = `Awaiting farmer response · due ${row.due_on}.`;
+        const response = document.createElement("p");
+        if (row.answered_via) {
+          // An answer saved before per-household answers were recorded.
+          response.textContent = `Followed: ${row.followed || "not recorded"}; helped: ${row.helped || "not recorded"}; received via ${row.answered_via}.`;
+        } else {
+          response.textContent = `Awaiting farmer response · due ${row.due_on}.`;
+        }
+        card.append(response);
       }
-      card.append(response);
       list.append(card);
     }
   } catch (err) {
-    list.textContent = "Could not load follow-ups: " + err.message;
+    showLoadError(list, err, "Could not load follow-ups: ");
   }
 }
 
 loadFollowups();
+autoRefresh(loadFollowups);
 </script>
 {% endblock %}

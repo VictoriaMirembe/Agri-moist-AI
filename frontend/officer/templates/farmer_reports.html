@@ -37,6 +37,7 @@ function renderReport(r) {
       ${r.checked === 'unchecked' ? `<button class="btn secondary" onclick="markChecked(${r.id})">Mark checked</button>` : ""}
       ${groupId ? `<a class="btn secondary" href="/approvals">View approval queue</a>` : ""}
     </div>
+    <p class="error pill red" style="display:none;margin-top:0.6rem;"></p>
   </div>`;
 }
 
@@ -44,19 +45,19 @@ async function load() {
   const listEl = document.getElementById("list");
   try {
     const items = await getJSON("/api/farmer-reports");
-    listEl.innerHTML = items.length ? items.map(renderReport).join("") : "<p class='muted'>No farmer reports yet.</p>";
+    replaceCards(listEl, items.length ? items.map(renderReport).join("") : "<p class='muted'>No farmer reports yet.</p>", "data-id");
+    listEl.dataset.loaded = "1";
   } catch (err) {
-    listEl.textContent = "Could not load: " + err.message;
+    showLoadError(listEl, err);
   }
 }
 
-async function markChecked(id) {
-  try {
-    await postJSON(`/api/farmer-reports/${id}/check`, { officer_id: parseInt(officerSelect.value, 10) });
-    load();
-  } catch (err) { alert(err.message); }
+function markChecked(id) {
+  const card = document.querySelector(`[data-id="${id}"]`);
+  return cardAction(card, () => postJSON(`/api/farmer-reports/${id}/check`, { officer_id: parseInt(officerSelect.value, 10) }), load);
 }
 
 load();
+autoRefresh(load);
 </script>
 {% endblock %}
