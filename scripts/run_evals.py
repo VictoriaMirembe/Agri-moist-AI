@@ -85,6 +85,11 @@ async def run_agent(database_module, group_id: int):
     return run_id, elapsed
 
 
+# Full advice text of the current run, saved with that run's result so a failure can
+# be read in full afterwards (the per-run databases are deleted at the end).
+CAPTURED: dict = {}
+
+
 def get_run_and_advice(database_module, run_id: int):
     from sqlmodel import select
 
@@ -97,6 +102,10 @@ def get_run_and_advice(database_module, run_id: int):
         if advice:
             sources = session.exec(select(AdviceSource).where(AdviceSource.advice_id == advice.id)).all()
         logs = session.exec(select(ToolLog).where(ToolLog.run_id == run_id)).all()
+        if advice:
+            CAPTURED.update(
+                advice_status=advice.status, advice_text=advice.draft_text, why_text=advice.why_text
+            )
         return (
             {"outcome": run.outcome, "model": run.model, "cost": run.cost},
             (
@@ -398,11 +407,12 @@ async def main():
     for task_id, name, fn in TASKS:
         runs = []
         for i in range(3):
+            CAPTURED.clear()
             try:
                 ok, detail, elapsed, cost = await fn()
             except Exception as exc:  # noqa: BLE001
                 ok, detail, elapsed, cost = False, f"EXCEPTION: {exc}", 0.0, 0.0
-            runs.append({"pass": ok, "detail": detail, "seconds": round(elapsed, 2), "cost": cost})
+            runs.append({"pass": ok, "detail": detail, "seconds": round(elapsed, 2), "cost": cost, **CAPTURED})
             status = "SKIP" if ok is None else ("PASS" if ok else "FAIL")
             print(f"Task {task_id} run {i + 1}: {status} - {detail}")
             if MODEL_PAUSE_SECONDS:
