@@ -1,45 +1,54 @@
-{# Log: every agent run (model, outcome, cost) and every tool call (actor, source, result). Rendered by backend/officer/pages.py log_page(). #}
+{# Activity log: every AI draft run (model, outcome, cost) and every recorded action - tool calls, officer decisions and farmer actions - with who did it and when. Rendered by backend/officer/pages.py log_page(); raw inputs and outputs sit under a "Details" fold. #}
 {% extends "base.html" %}
-{% block title %}Log{% endblock %}
+{% block title %}Activity log{% endblock %}
 {% block content %}
-<h1>Log</h1>
-<p class="muted">Every tool call: inputs, outputs, source, actor and time. Errors show in red.</p>
+<div class="o-page-head">
+  <div>
+    <p class="o-eyebrow">Audit trail</p>
+    <h1>Activity log</h1>
+    <p class="o-lead">Everything the AI assistant, officers and farmers did, with who and when. Problems show in red.</p>
+  </div>
+</div>
 
-<h2>Runs</h2>
-<div class="table-wrap"><table>
-  <thead><tr><th>Run</th><th>Group</th><th>Model</th><th>Outcome</th><th>Cost (USD)</th><th>Started</th><th></th></tr></thead>
-  <tbody>
-    {% for r in runs %}
-    <tr>
-      <td>#{{ r.id }}</td>
-      <td>G-{{ r.group_id }}</td>
-      <td>{{ r.model }}</td>
-      <td>{% if r.outcome %}<span class="pill {% if r.outcome == 'drafted' %}green{% elif r.outcome == 'flagged' %}amber{% else %}red{% endif %}">{{ r.outcome }}</span>{% else %}<span class="pill amber">running</span>{% endif %}</td>
-      <td>{{ "%.6f"|format(r.cost) }}</td>
-      <td>{{ r.started_at.strftime("%Y-%m-%d %H:%M") }}</td>
-      <td><a class="btn secondary" href="/log?run_id={{ r.id }}">Filter</a></td>
-    </tr>
-    {% endfor %}
-  </tbody>
-</table></div>
+<section class="o-panel">
+  <h2>AI draft runs</h2>
+  <div class="table-wrap"><table class="o-table">
+    <thead><tr><th>Run</th><th>Group</th><th>AI model</th><th>Result</th><th>Cost (USD)</th><th>Started</th><th><span class="o-sr">Show actions</span></th></tr></thead>
+    <tbody>
+      {% for r in runs %}
+      <tr>
+        <td>#{{ r.id }}</td>
+        <td>Group {{ r.group_id }}</td>
+        <td>{{ "Demo data" if r.model == "seed-data" else r.model }}</td>
+        <td>{% if r.outcome %}<span class="pill {{ r.outcome | tone }}">{{ r.outcome | plain_status }}</span>{% else %}<span class="pill amber">Still running</span>{% endif %}</td>
+        <td>{{ "%.6f"|format(r.cost) }}</td>
+        <td>{{ r.started_at | when }}</td>
+        <td><a class="o-button o-button-small" href="/log?run_id={{ r.id }}">Show actions</a></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table></div>
+</section>
 
-<h2>Tool calls {% if selected_run_id %}(run #{{ selected_run_id }}) <a href="/log">clear filter</a>{% endif %}</h2>
-<div class="table-wrap"><table>
-  <thead><tr><th>At</th><th>Run</th><th>Tool</th><th>Actor</th><th>Source</th><th>Result</th></tr></thead>
-  <tbody>
-    {% for row in rows %}
-    <tr>
-      <td>{{ row.at.strftime("%Y-%m-%d %H:%M:%S") }}</td>
-      <td>{{ row.run_id or "-" }}</td>
-      <td>{{ row.tool }}</td>
-      <td>{{ row.actor }}</td>
-      <td>{{ row.source or "-" }}</td>
-      <td>
-        {% if row.error %}<span class="pill red">error</span> {{ row.error[:140] }}
-        {% else %}<span class="pill green">ok</span> {{ row.outputs[:140] }}{% endif %}
-      </td>
-    </tr>
-    {% endfor %}
-  </tbody>
-</table></div>
+<section class="o-panel">
+  <h2>Actions {% if selected_run_id %}in run #{{ selected_run_id }} <a href="/log">show all</a>{% endif %}</h2>
+  <div class="table-wrap"><table class="o-table">
+    <thead><tr><th>When</th><th>What happened</th><th>Who</th><th>Channel</th><th>Result</th></tr></thead>
+    <tbody>
+      {% for row in rows %}
+      <tr>
+        <td>{{ row.at | when }}{% if row.run_id %}<br><span class="muted">run #{{ row.run_id }}</span>{% endif %}</td>
+        <td>{{ row.tool | plain_tool }}</td>
+        <td>{% if row.actor in officer_names %}{{ officer_names[row.actor] }}{% elif row.actor == "farmer" %}Farmer{% elif row.actor == "assistant" %}AI assistant{% else %}{{ row.actor }}{% endif %}</td>
+        <td>{{ row.source | plain_channel }}</td>
+        <td>
+          {% if row.error %}<span class="pill red">Problem</span> {{ row.error[:140] }}
+          {% else %}<span class="pill green">Done</span>{% endif %}
+          <details class="o-fold"><summary>Details</summary><code>{{ row.outputs[:140] }}</code></details>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table></div>
+</section>
 {% endblock %}

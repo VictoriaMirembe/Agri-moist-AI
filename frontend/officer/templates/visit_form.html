@@ -1,71 +1,87 @@
-{# Record visit: the officer's field-visit form. Posts to POST /api/visits, then opens that household's group screen. #}
+{# Record a visit: the officer's field-visit form. Posts to POST /api/visits, then opens that household's group screen. #}
 {% extends "base.html" %}
-{% block title %}Record visit{% endblock %}
+{% block title %}Record a visit{% endblock %}
 {% block content %}
-<h1>Record a visit</h1>
-<div class="card">
-  <form id="visit-form">
-    <label for="household_code">Household</label>
-    <select id="household_code" required>
-      {% for h in households %}
-      <option value="{{ h.code }}">{{ h.code }} (group {{ h.group_id }})</option>
-      {% endfor %}
-    </select>
+<div class="o-page-head">
+  <div>
+    <p class="o-eyebrow">In the field</p>
+    <h1>Record a visit</h1>
+    <p class="o-lead">What you saw at the farm today. The AI assistant uses this when it drafts advice.</p>
+  </div>
+</div>
 
-    <label for="officer_id">Officer</label>
-    <select id="officer_id" required>
-      {% for o in officers %}
-      <option value="{{ o.id }}">{{ o.name }}</option>
-      {% endfor %}
-    </select>
+<section class="card o-panel">
+  <form id="visit-form" class="o-form">
+    <fieldset>
+      <legend>Who and where</legend>
+      <label for="household_code">Household</label>
+      <select id="household_code" required>
+        {% for h in households %}
+        <option value="{{ h.code }}">{{ h.code }} · Group {{ h.group_id }}</option>
+        {% endfor %}
+      </select>
 
-    <label for="crop">Crop</label>
-    <select id="crop">
-      <option value="sorghum">Sorghum</option>
-      <option value="maize">Maize</option>
-      <option value="">Other / not applicable</option>
-    </select>
+      <label for="officer_id">Officer</label>
+      <select id="officer_id" required>
+        {% for o in officers %}
+        <option value="{{ o.id }}">{{ o.name }}</option>
+        {% endfor %}
+      </select>
+    </fieldset>
 
-    <label for="soil_wetness">Soil wetness</label>
-    <select id="soil_wetness">
-      <option value="dry">Dry</option>
-      <option value="moist">Moist</option>
-      <option value="wet">Wet</option>
-    </select>
+    <fieldset>
+      <legend>The crop and the soil</legend>
+      <label for="crop">Crop</label>
+      <select id="crop">
+        <option value="sorghum">Sorghum</option>
+        <option value="maize">Maize</option>
+        <option value="">Other / not applicable</option>
+      </select>
 
-    <label for="rain_last_7_days">Rain in the last 7 days</label>
-    <select id="rain_last_7_days">
-      <option value="none">None</option>
-      <option value="some">Some</option>
-      <option value="heavy">Heavy</option>
-    </select>
+      <label for="soil_wetness">Soil wetness</label>
+      <select id="soil_wetness">
+        <option value="dry">Dry</option>
+        <option value="moist">Moist</option>
+        <option value="wet">Wet</option>
+      </select>
 
-    <label for="pest_seen">Pests seen (leave blank if none)</label>
-    <input id="pest_seen" type="text" placeholder="e.g. fall armyworm">
+      <label for="rain_last_7_days">Rain in the last 7 days</label>
+      <select id="rain_last_7_days">
+        <option value="none">None</option>
+        <option value="some">Some</option>
+        <option value="heavy">Heavy</option>
+      </select>
 
-    <label for="crop_condition">Crop condition</label>
-    <select id="crop_condition">
-      <option value="good">Good</option>
-      <option value="fair">Fair</option>
-      <option value="poor">Poor</option>
-    </select>
+      <label for="crop_condition">Crop condition</label>
+      <select id="crop_condition">
+        <option value="good">Good</option>
+        <option value="fair">Fair</option>
+        <option value="poor">Poor</option>
+      </select>
 
-    <label for="food_left">Food left at the household</label>
-    <select id="food_left">
-      <option value="enough">Enough</option>
-      <option value="little">Little</option>
-      <option value="none">None</option>
-    </select>
+      <label for="pest_seen">Pests seen (leave blank if none)</label>
+      <input id="pest_seen" type="text" placeholder="e.g. fall armyworm">
+    </fieldset>
 
-    <label for="notes">Notes</label>
-    <textarea id="notes" placeholder="Anything else worth recording"></textarea>
+    <fieldset>
+      <legend>The household</legend>
+      <label for="food_left">Food left at the household</label>
+      <select id="food_left">
+        <option value="enough">Enough</option>
+        <option value="little">Little</option>
+        <option value="none">None</option>
+      </select>
 
-    <label><input type="checkbox" id="consent" style="width:auto;display:inline-block;margin-right:0.5rem;" required> The household has given consent for this visit to be recorded</label>
+      <label for="notes">Notes</label>
+      <textarea id="notes" placeholder="Anything else worth recording"></textarea>
+
+      <label class="o-check"><input type="checkbox" id="consent" required> The household has given consent for this visit to be recorded</label>
+    </fieldset>
 
     <p id="error" class="pill red" style="display:none;margin-top:1rem;"></p>
-    <button class="btn" id="save-btn" type="submit" style="margin-top:1rem;">Save visit</button>
+    <button class="btn o-wide" id="save-btn" type="submit">Save visit</button>
   </form>
-</div>
+</section>
 
 <script>
 document.getElementById("visit-form").addEventListener("submit", async (e) => {

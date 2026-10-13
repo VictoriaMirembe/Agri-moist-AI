@@ -1,32 +1,126 @@
-{# Home: totals of drafts waiting, open visit flags and unchecked farmer reports, plus one row per household group. Rendered by backend/officer/pages.py home(). #}
+{# Home: today's work as three task cards (advice to approve, farmer messages, visits needed), "This week at a glance" numbers from the last 7 days, and one row per household group. Rendered by backend/officer/pages.py home(); counts refresh every 30 seconds from /api/pending-summary and /api/groups. #}
 {% extends "base.html" %}
 {% block title %}Home{% endblock %}
 {% block content %}
-<h1>Home</h1>
-<div class="row">
-  <div class="card"><strong id="home-drafts">{{ drafts_total }}</strong><div class="muted">drafts waiting for approval</div></div>
-  <div class="card"><strong id="home-flags">{{ open_flags_total }}</strong><div class="muted">open visit flags</div></div>
-  <div class="card"><strong id="home-reports">{{ unchecked_reports }}</strong><div class="muted">unchecked farmer reports</div></div>
+{%- set waiting = drafts_total + unchecked_reports + open_flags_total -%}
+<section class="o-hero" aria-labelledby="home-heading">
+  <div>
+    <p class="o-eyebrow">Today's work</p>
+    <h1 id="home-heading">Home</h1>
+    <p class="o-hero-line"><span id="home-total">{{ waiting }}</span> <span id="home-total-words">{{ "thing needs" if waiting == 1 else "things need" }}</span> your attention.</p>
+  </div>
+  <a class="o-button o-button-light" href="/visits/new">+ Record a visit</a>
+</section>
+
+<div class="o-task-grid">
+  <a class="o-task {% if not drafts_total %}is-done{% endif %}" href="/approvals" data-task="drafts">
+    <span class="o-task-top">
+      <span class="o-task-name">Approve advice</span>
+      <strong class="o-task-count" id="home-drafts">{{ drafts_total }}</strong>
+    </span>
+    <span class="o-task-text">AI drafts waiting for you. No farmer sees advice until you approve it.</span>
+    <span class="o-task-go"><span class="o-task-done">All done</span><span class="o-task-open">Open Approve advice</span> →</span>
+  </a>
+  <a class="o-task {% if not unchecked_reports %}is-done{% endif %}" href="/farmer-reports" data-task="reports">
+    <span class="o-task-top">
+      <span class="o-task-name">Farmer messages</span>
+      <strong class="o-task-count" id="home-reports">{{ unchecked_reports }}</strong>
+    </span>
+    <span class="o-task-text">New reports from farmers by phone or web, not checked yet.</span>
+    <span class="o-task-go"><span class="o-task-done">All done</span><span class="o-task-open">Open Farmer messages</span> →</span>
+  </a>
+  <a class="o-task {% if not open_flags_total %}is-done{% endif %}" href="/flags" data-task="flags">
+    <span class="o-task-top">
+      <span class="o-task-name">Visits needed</span>
+      <strong class="o-task-count" id="home-flags">{{ open_flags_total }}</strong>
+    </span>
+    <span class="o-task-text">Groups asking for, or needing, an officer visit.</span>
+    <span class="o-task-go"><span class="o-task-done">All done</span><span class="o-task-open">Open Visits needed</span> →</span>
+  </a>
 </div>
 
-<h2>Household groups</h2>
-<div class="table-wrap"><table>
-  <thead>
-    <tr><th>Group</th><th>Village</th><th>Households</th><th>Open flags</th><th>Drafts waiting</th><th></th></tr>
-  </thead>
-  <tbody>
-    {% for g in groups %}
-    <tr data-group-id="{{ g.group_id }}">
-      <td>G-{{ g.group_id }}</td>
-      <td>{{ g.village }}</td>
-      <td>{{ g.household_count }}</td>
-      <td class="group-flags">{% if g.open_flags %}<span class="pill red">{{ g.open_flags }}</span>{% else %}0{% endif %}</td>
-      <td class="group-drafts">{% if g.drafts_waiting %}<span class="pill amber">{{ g.drafts_waiting }}</span>{% else %}0{% endif %}</td>
-      <td><a class="btn secondary" href="/groups/{{ g.group_id }}">Open</a></td>
-    </tr>
-    {% endfor %}
-  </tbody>
-</table></div>
+<section class="o-panel" aria-labelledby="week-heading">
+  <div class="o-panel-heading">
+    <div>
+      <p class="o-eyebrow">Last 7 days</p>
+      <h2 id="week-heading">This week at a glance</h2>
+    </div>
+    {% if demo %}<span class="pill amber" title="These numbers come from made-up demo households, not real farms.">Demo data</span>{% endif %}
+  </div>
+  {%- set d = week.drafts -%}
+  {%- macro bar(parts, total) -%}
+  <span class="o-bar" aria-hidden="true">
+    {%- for value, tone in parts %}{% if value %}<span class="o-bar-{{ tone }}" style="width: {{ (100 * value / total) | round(1) }}%"></span>{% endif %}{% endfor -%}
+  </span>
+  {%- endmacro -%}
+  <div class="o-stats">
+    <div class="o-stat">
+      <p class="o-stat-label">Field visits recorded</p>
+      <p class="o-stat-value" data-stat="field_visits">{{ week.field_visits }}</p>
+      <p class="o-stat-note">by officers this week</p>
+    </div>
+    <div class="o-stat">
+      <p class="o-stat-label">AI drafts made</p>
+      <p class="o-stat-value" data-stat="drafts_total">{{ week.drafts_total }}</p>
+      {% if week.drafts_total %}{{ bar([(d.approved, "green"), (d.edited_and_approved, "green2"), (d.rejected, "red"), (d.pending_review, "amber"), (d.blocked, "grey")], week.drafts_total) }}{% endif %}
+      <p class="o-stat-note">Officer decided: <span data-stat="drafts_approved">{{ d.approved }}</span> approved, <span data-stat="drafts_edited">{{ d.edited_and_approved }}</span> edited then approved, <span data-stat="drafts_rejected">{{ d.rejected }}</span> rejected. <span data-stat="drafts_waiting">{{ d.pending_review }}</span> waiting{% if d.blocked %}, {{ d.blocked }} blocked (no source){% endif %}.</p>
+    </div>
+    <div class="o-stat">
+      <p class="o-stat-label">Farmer messages</p>
+      <p class="o-stat-value" data-stat="messages_total">{{ week.messages_total }}</p>
+      <p class="o-stat-note"><span data-stat="messages_unchecked">{{ week.messages_unchecked }}</span> of these still new</p>
+    </div>
+    <div class="o-stat">
+      <p class="o-stat-label">Visit requests from farmers</p>
+      <p class="o-stat-value" data-stat="visit_requests_total">{{ week.visit_requests_total }}</p>
+      {% if week.visit_requests_total %}{{ bar([(week.visit_requests_visited, "green"), (week.visit_requests_open, "red")], week.visit_requests_total) }}{% endif %}
+      <p class="o-stat-note"><span data-stat="visit_requests_open">{{ week.visit_requests_open }}</span> still need a visit, <span data-stat="visit_requests_visited">{{ week.visit_requests_visited }}</span> visited</p>
+    </div>
+    <div class="o-stat">
+      <p class="o-stat-label">Did the advice help?</p>
+      <p class="o-stat-value" data-stat="answers_total">{{ week.answers_total }}</p>
+      {% if week.answers_total %}{{ bar([(week.helped.yes, "green"), (week.helped.no, "red"), (week.helped.too_early, "amber")], week.answers_total) }}{% endif %}
+      <p class="o-stat-note">farmer answers: {{ week.helped.yes }} yes, {{ week.helped.no }} no, {{ week.helped.too_early }} too early to say</p>
+    </div>
+    <div class="o-stat">
+      <p class="o-stat-label">Farmers read approved advice</p>
+      <p class="o-stat-value" data-stat="reads_total">{{ week.reads_total }}</p>
+      <p class="o-stat-note">times: {{ week.reads_web }} on the web page, {{ week.reads_ussd }} by phone (USSD)</p>
+    </div>
+    <div class="o-stat">
+      <p class="o-stat-label">AI cost this week</p>
+      <p class="o-stat-value" data-stat="ai_cost">${{ "%.4f" | format(week.ai_cost) }}</p>
+      <p class="o-stat-note">about ${{ "%.5f" | format(week.ai_cost_per_draft) }} per advice draft</p>
+    </div>
+    <div class="o-stat">
+      <p class="o-stat-label">Groups not visited in 30+ days</p>
+      <p class="o-stat-value" data-stat="overdue_groups">{{ week.overdue_groups }}</p>
+      <p class="o-stat-note">of {{ week.groups_total }} groups. The AI sends these for a visit instead of drafting advice.</p>
+    </div>
+  </div>
+  {% if demo %}<p class="o-note">Demo data: these numbers come from the made-up demo households, not real farms.</p>{% endif %}
+</section>
+
+<section class="o-panel" aria-labelledby="groups-heading">
+  <p class="o-eyebrow">Your groups</p>
+  <h2 id="groups-heading">Household groups</h2>
+  <div class="table-wrap"><table class="o-table">
+    <thead>
+      <tr><th>Group</th><th>Households</th><th>Visits needed</th><th>Advice waiting</th><th><span class="o-sr">Open</span></th></tr>
+    </thead>
+    <tbody>
+      {% for g in groups %}
+      <tr data-group-id="{{ g.group_id }}">
+        <td><strong>Group {{ g.group_id }}</strong><br><span class="muted">{{ g.village }}</span></td>
+        <td>{{ g.household_count }}</td>
+        <td class="group-flags">{% if g.open_flags %}<span class="pill red">{{ g.open_flags }}</span>{% else %}0{% endif %}</td>
+        <td class="group-drafts">{% if g.drafts_waiting %}<span class="pill amber">{{ g.drafts_waiting }}</span>{% else %}0{% endif %}</td>
+        <td><a class="o-button o-button-small" href="/groups/{{ g.group_id }}">Open</a></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table></div>
+</section>
 
 <script>
 // The counts above are rendered by the server; refresh them every 30 seconds from
@@ -42,11 +136,19 @@ function setCountCell(cell, count, pillClass) {
   }
 }
 
+function setTaskCount(id, count) {
+  const el = document.getElementById(id);
+  el.textContent = count;
+  el.closest(".o-task").classList.toggle("is-done", count === 0);
+}
+
 async function refreshHome() {
   const [summary, groups] = await Promise.all([getJSON("/api/pending-summary"), getJSON("/api/groups")]);
-  document.getElementById("home-drafts").textContent = summary.pending_advice;
-  document.getElementById("home-flags").textContent = summary.open_flags;
-  document.getElementById("home-reports").textContent = summary.unchecked_reports;
+  setTaskCount("home-drafts", summary.pending_advice);
+  setTaskCount("home-flags", summary.open_flags);
+  setTaskCount("home-reports", summary.unchecked_reports);
+  document.getElementById("home-total").textContent = summary.total_pending;
+  document.getElementById("home-total-words").textContent = summary.total_pending === 1 ? "thing needs" : "things need";
   for (const g of groups) {
     const row = document.querySelector(`tr[data-group-id="${Number(g.group_id)}"]`);
     if (!row) continue;  // a group added since the page loaded shows after a reload

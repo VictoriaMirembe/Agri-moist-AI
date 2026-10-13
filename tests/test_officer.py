@@ -241,15 +241,17 @@ def test_home_counts_match_the_queues_they_summarise(client):
 
     page = client.get("/").text
 
-    def count(label):
-        return int(re.search(r"<strong[^>]*>(\d+)</strong><div class=\"muted\">" + label, page).group(1))
+    def count(element_id):
+        return int(re.search(rf'id="{element_id}">(\d+)<', page).group(1))
 
     drafts = client.get("/api/approvals", params={"status": "pending_review"}).json()
     flags = client.get("/api/flags", params={"status": "open"}).json()
     reports = client.get("/api/farmer-reports", params={"checked": "unchecked"}).json()
-    assert count("drafts waiting for approval") == len(drafts)
-    assert count("open visit flags") == len(flags)
-    assert count("unchecked farmer reports") == len(reports)
+    # The Home task cards: Approve advice, Visits needed, Farmer messages.
+    assert count("home-drafts") == len(drafts)
+    assert count("home-flags") == len(flags)
+    assert count("home-reports") == len(reports)
+    assert count("home-total") == len(drafts) + len(flags) + len(reports)
 
 
 def test_every_officer_file_starts_with_a_comment():
@@ -369,3 +371,56 @@ def test_report_and_flag_actions_use_whilebusy_and_card_errors_not_alerts(client
     app_js = (templates.parent.parent / "static" / "app.js").read_text()
     assert "await whileBusy(buttons, request);" in app_js
     assert 'id="officer"' in client.get("/flags").text  # the Visit flags page now has "Acting as"
+
+
+def test_week_at_a_glance_numbers_match_the_api_lists(client):
+    """Each "This week at a glance" number on Home equals what the other screens'
+    API lists give for the last 7 days."""
+    import re
+    from datetime import datetime, timedelta, timezone
+
+    since = datetime.now(timezone.utc) - timedelta(days=7)
+
+    def recent(value):
+        moment = datetime.fromisoformat(value)
+        return (moment if moment.tzinfo else moment.replace(tzinfo=timezone.utc)) >= since
+
+    # Some activity first, so the numbers are not all zero.
+    client.post("/api/farmer-reports", json={"phone": "+256700000003", "problem": "pests", "crop": "maize"})
+    client.post("/api/visit-requests", json={"phone": "+256700000003", "reason": "Pests"})
+    client.get("/api/farmer/advice", params={"phone": "+256700000001"})
+
+    page = client.get("/").text
+
+    def stat(name):
+        return re.search(rf'data-stat="{name}">\$?([\d.]+)<', page).group(1)
+
+    reports = [r for r in client.get("/api/farmer-reports").json() if recent(r["observed_on"])]
+    assert int(stat("messages_total")) == len(reports)
+    assert int(stat("messages_unchecked")) == sum(1 for r in reports if r["checked"] == "unchecked")
+
+    farmer_flags = [
+        f for f in client.get("/api/flags").json()
+        if f["raised_by"] in ("farmer_ussd", "farmer_web") and recent(f["created_at"])
+    ]
+    assert int(stat("visit_requests_total")) == len(farmer_flags)
+    assert int(stat("visit_requests_open")) == sum(1 for f in farmer_flags if f["status"] == "open")
+
+    drafts = [a for a in client.get("/api/approvals").json() if recent(a["created_at"])]
+    assert int(stat("drafts_total")) == len(drafts)
+    assert int(stat("drafts_approved")) == sum(1 for a in drafts if a["status"] == "approved")
+    assert int(stat("drafts_waiting")) == sum(1 for a in drafts if a["status"] == "pending_review")
+
+    reads = [
+        r for r in client.get("/api/logs").json()
+        if r["tool"] == "farmer_viewed_advice" and r["error"] is None and recent(r["at"])
+    ]
+    assert int(stat("reads_total")) == len(reads) >= 1
+
+    overdue = 0
+    for group in client.get("/api/groups").json():
+        days = client.get(f"/api/groups/{group['group_id']}").json()["field_records"]["days_since_last_visit_by_household"]
+        overdue += any(d is None or d > 30 for d in days.values())
+    assert int(stat("overdue_groups")) == overdue
+
+    assert "Demo data" in page  # seeded households are labelled as demo data

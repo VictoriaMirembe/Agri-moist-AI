@@ -1,39 +1,38 @@
-{# Visit flags: groups flagged for an urgent visit by the assistant or by farmers (GET /api/flags); an officer can mark each one visited. #}
+{# Visits needed: groups that need an officer visit, asked for by farmers or by the AI assistant (GET /api/flags); an officer marks each one as visited, recorded under the "Acting as" officer. #}
 {% extends "base.html" %}
-{% block title %}Visit flags{% endblock %}
+{% block title %}Visits needed{% endblock %}
 {% block content %}
-<h1>Visit flags</h1>
-<p class="muted">Groups flagged by the assistant or by farmers for an officer visit.</p>
+<div class="o-page-head">
+  <div>
+    <p class="o-eyebrow">In the field</p>
+    <h1>Visits needed</h1>
+    <p class="o-lead">Groups that asked for a visit, or that the AI assistant sent for a visit instead of drafting advice.</p>
+  </div>
+  <div class="o-acting">
+    <label for="officer">Acting as</label>
+    <select id="officer">
+      {% for o in officers %}
+      <option value="{{ o.id }}">{{ o.name }}</option>
+      {% endfor %}
+    </select>
+  </div>
+</div>
 
-<label for="officer">Acting as</label>
-<select id="officer" style="max-width:320px;">
-  {% for o in officers %}
-  <option value="{{ o.id }}">{{ o.name }}</option>
-  {% endfor %}
-</select>
-
-<div id="list" class="muted" style="margin-top:1rem;">Loading...</div>
+<div id="list" class="muted">Loading...</div>
 
 <script>
 const officerSelect = document.getElementById("officer");
+window.GROUP_VILLAGES = {{ group_villages | tojson }};
 
 function renderFlag(f) {
-  return `
-  <div class="card" data-id="${f.id}">
-    <p><strong>Group G-${escapeHTML(f.group_id)}</strong> <span class="pill ${f.status === 'open' ? 'red' : 'green'}">${escapeHTML(f.status)}</span> <span class="muted">${escapeHTML(f.raised_by)} - ${escapeHTML(f.created_at)}</span></p>
-    <p><a href="/groups/${encodeURIComponent(f.group_id)}">Open household group</a></p>
-    <p>${escapeHTML(f.reason)}</p>
-    ${f.visited_by ? `<p class="muted">Visited - marked by ${escapeHTML(f.visited_by)} ${escapeHTML(String(f.visited_at || "").slice(0, 10))}</p>` : ""}
-    ${f.status === 'open' ? `<div class="row actions"><button class="btn secondary" onclick="markVisited(${f.id})">Mark visited</button></div>` : ""}
-    <p class="error pill red" style="display:none;margin-top:0.6rem;"></p>
-  </div>`;
+  return flagCard(f, "data-id");
 }
 
 async function load() {
   const listEl = document.getElementById("list");
   try {
     const items = await getJSON("/api/flags");
-    replaceCards(listEl, items.length ? items.map(renderFlag).join("") : "<p class='muted'>No visit flags.</p>", "data-id");
+    replaceCards(listEl, items.length ? items.map(renderFlag).join("") : "<p class='o-empty'>No visits needed.</p>", "data-id");
     listEl.dataset.loaded = "1";
   } catch (err) {
     showLoadError(listEl, err);
