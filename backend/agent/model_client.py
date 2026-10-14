@@ -222,6 +222,40 @@ def _translate_with_sunbird(text: str, target_language: str) -> dict[str, Any] |
         return {"translated_text": None, "model": f"fallback (sunbird translation failed: {exc})", "cost": 0.0}
 
 
+# Sunbird text-to-speech voices (GET /tasks/voice/speakers). Sunbird has no
+# Karamojong voice, so Karamojong text is read by the Ateso voice: both are
+# Teso-Turkana languages, close enough that it sounds far more natural than a
+# generic browser voice.
+SUNBIRD_VOICES = {
+    "en": ("eng", "salt_eng_0001"),
+    "sw": ("swa", "waxal_swa_0006"),
+    "kdj": ("teo", "salt_teo_0001"),
+}
+
+
+def synthesize_speech(text: str, lang: str) -> dict[str, Any] | None:
+    """Read text aloud with Sunbird AI's Orpheus TTS. Returns the signed audio URL
+    (valid for 30 minutes), or None when there is no key, the language has no
+    voice, or the call fails - the farmer page then falls back to the browser voice."""
+    if not settings.translator_configured or not text.strip() or lang not in SUNBIRD_VOICES:
+        return None
+    language, voice = SUNBIRD_VOICES[lang]
+    try:
+        response = httpx.post(
+            settings.sunbird_api_url.rstrip("/") + "/tasks/audio/speech",
+            headers={"Authorization": f"Bearer {settings.sunbird_api_key}"},
+            json={"text": text.strip(), "language": language, "voice": voice, "response_mode": "url"},
+            timeout=90,
+        )
+        response.raise_for_status()
+        body = response.json()
+        if not body.get("audio_url"):
+            return None
+        return {"audio_url": body["audio_url"], "voice": body.get("voice", voice), "duration_seconds": body.get("duration_seconds")}
+    except Exception:  # noqa: BLE001 - any failure falls back to the browser voice
+        return None
+
+
 def _translate_with_groq(text: str, target_language: str) -> dict[str, Any] | None:
     client = _get_client()
     if client is None:

@@ -574,27 +574,14 @@ body.farmer {
   flex-shrink: 0;
 }
 
-/* Floating Audio Player Bar */
+/* Audio player: sits in the page under the menu while reading, not floating over it */
 .farmer-audio-player-bar {
-  position: fixed;
-  bottom: 1.5rem;
-  left: 50%;
-  transform: translateX(-50%);
-  width: min(94%, 740px);
+  margin: 0.75rem 0 1rem;
   background: #174b38;
   color: #ffffff;
-  border-radius: 16px;
+  border-radius: 12px;
   padding: 0.85rem 1.25rem;
-  box-shadow: 0 16px 40px rgba(10, 40, 25, 0.38), 0 2px 8px rgba(0, 0, 0, 0.2);
   border: 1px solid rgba(255, 255, 255, 0.22);
-  z-index: 1000;
-  animation: slideUpAudio 0.32s cubic-bezier(0.16, 1, 0.3, 1);
-  backdrop-filter: blur(14px);
-}
-
-@keyframes slideUpAudio {
-  from { opacity: 0; transform: translate(-50%, 25px); }
-  to { opacity: 1; transform: translate(-50%, 0); }
 }
 
 .farmer-audio-player-inner {
@@ -1008,7 +995,7 @@ body.farmer {
   .farmer-lang-wrap { flex: 1; min-width: 0; }
   .farmer-lang-select { width: 100%; font-size: 0.8rem; }
   .farmer-voice-btn { font-size: 0.8rem; padding: 0.35rem 0.75rem; }
-  .farmer-audio-player-bar { width: calc(100% - 1.25rem); bottom: 0.65rem; padding: 0.7rem 0.9rem; }
+  .farmer-audio-player-bar { padding: 0.7rem 0.9rem; }
   .farmer-brand { font-size: 1.02rem; }
   .farmer-topbar-location { font-size: 0.72rem; text-align: right; }
   .farmer-nav { flex-wrap: nowrap; gap: 0.25rem; min-height: 52px; margin-right: -0.85rem; margin-left: -0.85rem; padding: 0 0.85rem; overflow-x: auto; scrollbar-width: thin; }

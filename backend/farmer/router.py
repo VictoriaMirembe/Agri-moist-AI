@@ -8,6 +8,7 @@ from __future__ import annotations
 import hmac
 import logging
 import re
+import time
 from datetime import date, datetime, timezone
 from typing import Literal
 
@@ -38,6 +39,7 @@ from backend.db.models import (
     VisitFlag,
     utcnow,
 )
+from backend.agent import model_client
 from backend.logging.tool_log import run_logged
 from backend.tools import agrimoist_tools as impl
 from backend.tools.errors import ToolError
@@ -976,3 +978,34 @@ def get_farmer_voice_script(phone: str = "", lang: str = "en", view: str = "dash
         "sentences": sentences,
         "full_script": full_text,
     }
+
+
+class VoiceAudioRequest(BaseModel):
+    text: str = Field(min_length=1, max_length=1000)
+    lang: str = "en"
+
+
+# (lang, text) -> (stored_at, result). Sunbird's signed audio URLs last 30 minutes,
+# so a cached one is reused for 25; replaying a page is then instant and free.
+_VOICE_AUDIO_CACHE: dict[tuple[str, str], tuple[float, dict]] = {}
+_VOICE_AUDIO_TTL_SECONDS = 25 * 60
+
+
+@router.post("/api/farmer/voice-audio")
+def get_farmer_voice_audio(body: VoiceAudioRequest):
+    """Speech for one sentence of the voice script, from Sunbird AI's Ugandan TTS
+    voices. 503 when Sunbird is not configured or fails; the page then uses the
+    browser's own voice instead."""
+    lang = _canonical_voice_lang(body.lang)
+    key = (lang, body.text.strip())
+    now = time.monotonic()
+    cached = _VOICE_AUDIO_CACHE.get(key)
+    if cached and now - cached[0] < _VOICE_AUDIO_TTL_SECONDS:
+        return cached[1]
+    result = model_client.synthesize_speech(key[1], lang)
+    if result is None:
+        raise HTTPException(503, "Voice audio is unavailable; use the browser voice.")
+    if len(_VOICE_AUDIO_CACHE) > 500:
+        _VOICE_AUDIO_CACHE.clear()
+    _VOICE_AUDIO_CACHE[key] = (now, result)
+    return result

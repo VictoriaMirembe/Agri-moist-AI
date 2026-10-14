@@ -64,7 +64,7 @@
         <a class="farmer-signout" href="#" data-view-link="signin">Sign out</a>
       </nav>
 
-      <!-- Sticky / Floating Audio Player Bar -->
+      <!-- Audio player: shown in the page only while the farmer has asked for reading -->
       <aside id="farmer-audio-player-bar" class="farmer-audio-player-bar" role="region" aria-label="Audio reader controls" hidden>
         <div class="farmer-audio-player-inner">
           <div class="farmer-audio-player-info">
@@ -799,11 +799,9 @@ if (voiceLangSelect) {
   voiceLangSelect.addEventListener("change", (e) => {
     currentVoiceLang = e.target.value;
     localStorage.setItem("agrimoist_farmer_lang", currentVoiceLang);
+    // Changing language never starts reading on its own; the farmer presses Listen.
+    if (isReading) stopVoice();
     updateVoiceUI();
-    if (isReading) {
-      stopVoice();
-      startVoiceReading(activeSectionTarget);
-    }
   });
 }
 
@@ -955,25 +953,83 @@ function highlightSection(section) {
   }
 }
 
-function speakNextSentence() {
+// Sunbird AI voices (Ugandan TTS) read each sentence; the browser's own voice is
+// only the fallback when Sunbird is not configured or fails. Sunbird takes ~10s
+// per sentence, so the next sentence is fetched while the current one plays.
+const voiceAudio = new Audio();
+const SILENT_WAV = "data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA=";
+let sunbirdAvailable = !isFilePreview;
+let sentenceAudio = {};  // sentence index -> Promise of a Sunbird audio URL (or null)
+let playToken = 0;  // bumped on every new sentence/stop, so stale callbacks do nothing
+let voiceEngine = "none";  // "loading" | "sunbird" | "browser" | "none"
+
+function fetchSentenceAudio(index) {
+  if (!sunbirdAvailable || index >= voiceSentences.length) return Promise.resolve(null);
+  if (!(index in sentenceAudio)) {
+    sentenceAudio[index] = postJSON("/api/farmer/voice-audio", {
+      text: voiceSentences[index].text,
+      lang: currentVoiceLang,
+    }).then((d) => d.audio_url || null).catch(() => null);
+  }
+  return sentenceAudio[index];
+}
+
+function advanceSentence(token) {
+  if (token === playToken && isReading && !isPaused) {
+    currentSentenceIndex++;
+    setTimeout(speakNextSentence, 280);
+  }
+}
+
+async function speakNextSentence() {
   if (!isReading || currentSentenceIndex >= voiceSentences.length) {
     stopVoice();
     return;
   }
 
-  const currentItem = voiceSentences[currentSentenceIndex];
-  const cfg = LANG_CONFIG[currentVoiceLang] || LANG_CONFIG.en;
+  const token = ++playToken;
+  const index = currentSentenceIndex;
+  const currentItem = voiceSentences[index];
 
   if (playerLiveText) {
     playerLiveText.textContent = currentItem.text;
   }
   highlightSection(currentItem.label);
 
+  voiceAudio.pause();
+  if ("speechSynthesis" in window) window.speechSynthesis.cancel();
+
+  if (sunbirdAvailable) {
+    voiceEngine = "loading";
+    if (playerStatus && !isPaused) playerStatus.textContent = "Loading voice...";
+    const url = await fetchSentenceAudio(index);
+    if (token !== playToken || !isReading) return;
+    if (playerStatus && !isPaused) playerStatus.textContent = (LANG_CONFIG[currentVoiceLang] || LANG_CONFIG.en).playingStatus;
+    if (url) {
+      fetchSentenceAudio(index + 1);
+      voiceEngine = "sunbird";
+      voiceAudio.src = url;
+      voiceAudio.playbackRate = speeds[speedIndex];
+      voiceAudio.onended = () => advanceSentence(token);
+      voiceAudio.onerror = () => {
+        if (token === playToken) speakWithBrowser(currentItem, token);
+      };
+      if (!isPaused) {
+        voiceAudio.play().catch(() => speakWithBrowser(currentItem, token));
+      }
+      return;
+    }
+    sunbirdAvailable = false;  // no key or Sunbird is down: browser voice for the rest
+  }
+  speakWithBrowser(currentItem, token);
+}
+
+function speakWithBrowser(currentItem, token) {
+  const cfg = LANG_CONFIG[currentVoiceLang] || LANG_CONFIG.en;
+  voiceEngine = "browser";
+
   if (!("speechSynthesis" in window)) {
-    setTimeout(() => {
-      currentSentenceIndex++;
-      speakNextSentence();
-    }, 4500);
+    setTimeout(() => advanceSentence(token), 4500);
     return;
   }
 
@@ -989,19 +1045,8 @@ function speakNextSentence() {
     utterance.voice = matchedVoice;
   }
 
-  utterance.onend = () => {
-    if (isReading && !isPaused) {
-      currentSentenceIndex++;
-      setTimeout(speakNextSentence, 280);
-    }
-  };
-
-  utterance.onerror = () => {
-    if (isReading && !isPaused) {
-      currentSentenceIndex++;
-      setTimeout(speakNextSentence, 280);
-    }
-  };
+  utterance.onend = () => advanceSentence(token);
+  utterance.onerror = () => advanceSentence(token);
 
   window.speechSynthesis.speak(utterance);
 }
@@ -1011,6 +1056,13 @@ async function startVoiceReading(section = null) {
   isReading = true;
   isPaused = false;
   currentSentenceIndex = 0;
+  sunbirdAvailable = !isFilePreview;
+  sentenceAudio = {};
+
+  // Some browsers (Safari) only let an audio element play if it first played
+  // inside the click; the Sunbird audio arrives seconds later, so unlock it now.
+  voiceAudio.src = SILENT_WAV;
+  voiceAudio.play().catch(() => {});
 
   const cfg = LANG_CONFIG[currentVoiceLang] || LANG_CONFIG.en;
 
@@ -1043,6 +1095,7 @@ async function startVoiceReading(section = null) {
 function pauseVoice() {
   if (!isReading) return;
   isPaused = true;
+  voiceAudio.pause();
   if ("speechSynthesis" in window) {
     window.speechSynthesis.pause();
   }
@@ -1066,7 +1119,11 @@ function resumeVoice() {
   if (voiceWaves) voiceWaves.hidden = false;
   if (voiceBtnLabel) voiceBtnLabel.textContent = "Reading...";
 
-  if ("speechSynthesis" in window) {
+  if (voiceEngine === "sunbird") {
+    voiceAudio.play().catch(() => speakNextSentence());
+  } else if (voiceEngine === "loading") {
+    // the pending Sunbird request starts playing when it arrives
+  } else if ("speechSynthesis" in window) {
     if (window.speechSynthesis.paused) {
       window.speechSynthesis.resume();
     } else {
@@ -1081,6 +1138,9 @@ function stopVoice() {
   currentSentenceIndex = 0;
   voiceSentences = [];
   activeSectionTarget = null;
+  playToken++;
+  voiceEngine = "none";
+  voiceAudio.pause();
 
   if ("speechSynthesis" in window) {
     window.speechSynthesis.cancel();
@@ -1136,7 +1196,8 @@ if (speedBtn) {
   speedBtn.addEventListener("click", () => {
     speedIndex = (speedIndex + 1) % speeds.length;
     speedBtn.textContent = speeds[speedIndex] + "x";
-    if (isReading && !isPaused) {
+    voiceAudio.playbackRate = speeds[speedIndex];
+    if (isReading && !isPaused && voiceEngine === "browser") {
       speakNextSentence();
     }
   });
