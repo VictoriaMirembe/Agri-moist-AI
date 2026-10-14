@@ -24,6 +24,7 @@
         <a href="#" data-view-link="report">Report issue</a>
         <a href="#" data-view-link="visit">Ask for a visit</a>
         <a href="#" data-view-link="dashboard">My farm</a>
+        <a href="/farmer/ussd" data-ussd-link>Basic phone (USSD)</a>
         <a class="farmer-signout" href="#" data-view-link="signin">Sign out</a>
       </nav>
 
@@ -113,9 +114,27 @@
                 </a>
               </div>
             </section>
+            <section class="farmer-panel" aria-labelledby="requests-heading">
+              <div class="farmer-panel-heading">
+                <div>
+                  <p class="farmer-eyebrow">SENT TO YOUR OFFICER</p>
+                  <h2 id="requests-heading">My reports and requests</h2>
+                </div>
+                <span class="farmer-status" id="requests-status">Loading</span>
+              </div>
+              <p class="farmer-panel-description">Reports and visit requests sent from this page or by USSD on a basic phone.</p>
+              <ul id="recent-requests" class="farmer-request-list" aria-live="polite"></ul>
+            </section>
           </div>
 
           <aside class="farmer-dashboard-side">
+            <section class="farmer-panel farmer-ussd-card" aria-labelledby="ussd-heading">
+              <p class="farmer-eyebrow">NO SMARTPHONE OR DATA?</p>
+              <h2 id="ussd-heading">Use a basic phone</h2>
+              <p class="farmer-panel-description">Dial this code on any phone to read advice, report a problem or ask for a visit.</p>
+              <p class="farmer-ussd-code" id="ussd-code">*384*5951#</p>
+              <a class="farmer-link-button" href="/farmer/ussd" data-ussd-link>Try the USSD menu</a>
+            </section>
             <section class="farmer-panel farmer-profile-card" aria-labelledby="profile-heading">
               <p class="farmer-eyebrow">YOUR DETAILS</p>
               <h2 id="profile-heading">Farm profile</h2>
@@ -287,6 +306,10 @@ document.querySelectorAll("[data-view-link]").forEach((link) => {
   }
 });
 
+document.querySelectorAll("[data-ussd-link]").forEach((link) => {
+  link.href = "/farmer/ussd" + (farmerPhone ? "?phone=" + encodeURIComponent(farmerPhone) : "");
+});
+
 ["dashboard", "advice", "report", "visit", "followup", "signin"].forEach((view) => {
   document.getElementById(view + "-view").hidden = view !== activeView;
 });
@@ -310,6 +333,33 @@ function calendarStatus(entry) {
   if (current < start) return "Opens " + formatCalendarDate(entry.plant_from);
   if (current <= end) return "Within planting window";
   return "Window closed for this year";
+}
+
+function renderRecentRequests(items) {
+  const list = document.getElementById("recent-requests");
+  const status = document.getElementById("requests-status");
+  list.replaceChildren();
+  if (!items.length) {
+    status.textContent = "None yet";
+    const empty = document.createElement("li");
+    empty.className = "farmer-data-note";
+    empty.textContent = "Nothing sent yet. Use Report issue, Request a visit, or dial the USSD code.";
+    list.append(empty);
+    return;
+  }
+  status.textContent = items.length + " recent";
+  items.forEach((item) => {
+    const row = document.createElement("li");
+    const summary = document.createElement("strong");
+    summary.textContent = item.summary;
+    const channel = document.createElement("span");
+    channel.className = "farmer-channel-badge" + (item.channel === "USSD" ? " is-ussd" : "");
+    channel.textContent = item.channel;
+    const meta = document.createElement("small");
+    meta.textContent = item.at.slice(0, 10) + " · " + item.status;
+    row.append(summary, channel, meta);
+    list.append(row);
+  });
 }
 
 function renderAdvice(advice) {
@@ -364,6 +414,7 @@ async function loadDashboard() {
     document.getElementById("crop-calendars").textContent = "Farm data not loaded.";
     document.getElementById("advice-preview").textContent = "Sign in through the running app to view officer-approved advice.";
     document.getElementById("advice-status").textContent = "Not loaded";
+    document.getElementById("requests-status").textContent = "Not loaded";
     return;
   }
 
@@ -448,6 +499,10 @@ async function loadDashboard() {
       noCalendar.textContent = "No crop calendar is available for this farm's recorded zone.";
       calendar.append(noCalendar);
     }
+    if (dashboard.ussd_service_code) {
+      document.getElementById("ussd-code").textContent = dashboard.ussd_service_code;
+    }
+    renderRecentRequests(dashboard.recent_requests || []);
     renderAdvice(advice);
   } catch (error) {
     document.getElementById("farmer-location").textContent = error.message || "Could not load your registered farm details.";
@@ -459,6 +514,7 @@ async function loadDashboard() {
     note.hidden = false;
     document.getElementById("crop-calendars").textContent = "Crop calendar unavailable.";
     document.getElementById("advice-preview").textContent = "Could not load approved advice.";
+    document.getElementById("requests-status").textContent = "Unavailable";
   }
 }
 

@@ -2,6 +2,9 @@
 # (backend/farmer/router.py).
 from __future__ import annotations
 
+import pytest
+from sqlmodel import select
+
 
 def _ussd(client, session_id: str, phone: str, text: str) -> str:
     r = client.post("/ussd", json={"sessionId": session_id, "phoneNumber": phone, "text": text})
@@ -192,6 +195,7 @@ def test_no_tool_exists_to_order_inputs_or_request_credit(client):
     }
 
 
+<<<<<<< Updated upstream
 def test_sign_in_and_dashboard_accept_local_and_international_number_forms(client, monkeypatch):
     from backend.farmer import router as farmer_router
 
@@ -328,3 +332,159 @@ def test_report_form_shows_a_crop_box_only_for_other(client):
     assert '<div id="crop-other-field" hidden>' in page
     assert 'id="crop-other" type="text" maxlength="40"' in page
     assert "otherField.hidden = crop.value !== \"\";" in page
+=======
+# ---------------------------------------------------------------------------
+# Africa's Talking callback: form-encoded, as the real gateway sends it.
+# ---------------------------------------------------------------------------
+def _at(client, session_id: str, phone: str, text: str) -> str:
+    r = client.post(
+        "/ussd/africastalking",
+        data={
+            "sessionId": session_id,
+            "serviceCode": "*384*5951#",
+            "phoneNumber": phone,
+            "networkCode": "99999",
+            "text": text,
+        },
+    )
+    assert r.status_code == 200
+    assert r.headers["content-type"].startswith("text/plain")
+    return r.text
+
+
+def test_africastalking_form_callback_main_menu(client):
+    reply = _at(client, "ATUid_1", "+256700000001", "")
+    assert reply.startswith("CON AgriMoist")
+
+
+def test_africastalking_first_request_without_text_field(client):
+    r = client.post("/ussd/africastalking", data={"sessionId": "ATUid_2", "phoneNumber": "+256700000001"})
+    assert r.status_code == 200
+    assert r.text.startswith("CON AgriMoist")
+
+
+def test_africastalking_missing_fields_is_400(client):
+    r = client.post("/ussd/africastalking", data={"text": "1"})
+    assert r.status_code == 400
+
+
+def test_africastalking_back_and_home_navigation(client):
+    # Chose "Report a problem", went back (0), then chose "Ask for officer visit".
+    assert "Why?" in _at(client, "ATUid_3", "+256700000009", "2*0*3")
+    # "00" returns to the main menu from anywhere.
+    assert _at(client, "ATUid_3", "+256700000009", "2*1*00").startswith("CON AgriMoist")
+    # Full report after a back step still saves.
+    assert _at(client, "ATUid_3", "+256700000009", "2*1*0*1*2") == "END Thank you. Your officer will check this report."
+
+
+def test_africastalking_session_event_is_recorded(client):
+    _at(client, "ATUid_4", "+256700000001", "")
+    r = client.post(
+        "/ussd/africastalking/events",
+        data={
+            "sessionId": "ATUid_4",
+            "phoneNumber": "+256700000001",
+            "serviceCode": "*384*5951#",
+            "networkCode": "99999",
+            "status": "Success",
+            "durationInMillis": "5000",
+            "input": "1",
+        },
+    )
+    assert r.status_code == 200
+
+    from backend.core.database import session_scope
+    from backend.db.models import UssdSession
+
+    with session_scope() as session:
+        assert session.get(UssdSession, "ATUid_4").last_screen == "ended:Success"
+
+
+@pytest.fixture(autouse=True)
+def ussd_settings(monkeypatch):
+    """Pin the USSD settings so a local .env cannot change what these tests see."""
+    from backend.core.config import settings
+
+    monkeypatch.setattr(settings, "ussd_service_code", "*384*5951#")
+    monkeypatch.setattr(settings, "ussd_callback_token", "")
+    return settings
+
+
+def test_africastalking_wrong_choice_shows_the_same_screen_again(client):
+    reply = _at(client, "ATUid_5", "+256700000009", "2*1*7")
+    assert reply.startswith("CON That choice is not on the list.")
+    assert "Which crop?" in reply
+    # The farmer can carry on in the same session after the wrong key.
+    assert _at(client, "ATUid_5", "+256700000009", "2*1*7*2") == "END Thank you. Your officer will check this report."
+
+
+def test_africastalking_retry_does_not_save_twice(client):
+    from backend.core.database import session_scope
+    from backend.db.models import Observation
+
+    def ussd_reports():
+        with session_scope() as session:
+            return len(session.exec(select(Observation).where(Observation.source == "farmer_ussd")).all())
+
+    before = ussd_reports()
+    assert _at(client, "ATUid_6", "+256700000009", "2*1*2").startswith("END Thank you")
+    # The gateway resends the same final callback after a timeout.
+    assert _at(client, "ATUid_6", "+256700000009", "2*1*2").startswith("END Thank you, we already have this")
+    assert ussd_reports() == before + 1
+
+
+def test_africastalking_token_is_required_when_set(client, ussd_settings):
+    ussd_settings.ussd_callback_token = "s3cret"
+    form = {"sessionId": "ATUid_7", "phoneNumber": "+256700000001", "serviceCode": "*384*5951#", "text": ""}
+    assert client.post("/ussd/africastalking", data=form).status_code == 403
+    assert client.post("/ussd/africastalking?token=wrong", data=form).status_code == 403
+    assert client.post("/ussd/africastalking/events", data={"sessionId": "ATUid_7"}).status_code == 403
+    r = client.post("/ussd/africastalking?token=s3cret", data=form)
+    assert r.status_code == 200 and r.text.startswith("CON AgriMoist")
+
+
+def test_africastalking_other_service_code_is_refused(client):
+    r = client.post(
+        "/ussd/africastalking",
+        data={"sessionId": "ATUid_8", "phoneNumber": "+256700000001", "serviceCode": "*384*1#", "text": "2*1*2"},
+    )
+    assert r.text == "END This service is not available on this code."
+
+
+def test_africastalking_event_for_unknown_session_is_not_stored(client):
+    from backend.core.database import session_scope
+    from backend.db.models import UssdSession
+
+    r = client.post("/ussd/africastalking/events", data={"sessionId": "never-seen", "status": "Success"})
+    assert r.status_code == 200 and r.json()["recorded"] is False
+    with session_scope() as session:
+        assert session.get(UssdSession, "never-seen") is None
+
+
+def test_ussd_accepts_json_with_any_content_type_case(client):
+    r = client.post(
+        "/ussd",
+        content=b'{"sessionId": "S-json", "phoneNumber": "+256700000001", "text": ""}',
+        headers={"Content-Type": "Application/JSON; charset=utf-8"},
+    )
+    assert r.status_code == 200 and r.text.startswith("CON AgriMoist")
+
+
+def test_ussd_report_appears_on_farmer_dashboard(client):
+    assert _at(client, "ATUid_9", "+256700000009", "2*4*1").startswith("END Thank you")
+    assert _at(client, "ATUid_10", "+256700000009", "3*2").startswith("END Request sent")
+    dashboard = client.get("/api/farmer/dashboard", params={"phone": "+256700000009"}).json()
+    assert dashboard["ussd_service_code"] == "*384*5951#"
+    ussd_items = [item for item in dashboard["recent_requests"] if item["channel"] == "USSD"]
+    summaries = {item["summary"] for item in ussd_items}
+    assert "Crop looks sick on sorghum" in summaries
+    assert "Visit request: Little food left" in summaries
+
+
+def test_farmer_ussd_page_is_in_the_farmer_section(client):
+    page = client.get("/farmer/ussd", params={"phone": "+256700000009"})
+    assert page.status_code == 200
+    assert "*384*5951#" in page.text and "+256700000009" in page.text
+    home = client.get("/farmer/home", params={"phone": "+256700000009"}).text
+    assert "/farmer/ussd" in home and "My reports and requests" in home
+>>>>>>> Stashed changes

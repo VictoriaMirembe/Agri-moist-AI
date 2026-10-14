@@ -30,6 +30,13 @@ class Settings(BaseSettings):
 
     farmer_language: str = "Ngakarimojong"
 
+    # USSD short code shown in the simulator. Set it to the code Africa's Talking
+    # gives your channel (sandbox codes look like *384*NNNN#).
+    ussd_service_code: str = "*384*5951#"
+    # Shared secret for the Africa's Talking callback URLs (?token=...). Empty means
+    # no check, which is fine on localhost but not on a public host.
+    ussd_callback_token: str = ""
+
     @property
     def model_configured(self) -> bool:
         return bool(self.groq_api_key)

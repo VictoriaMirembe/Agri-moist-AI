@@ -8,6 +8,8 @@ from pathlib import Path
 from fastapi import APIRouter, Request
 from fastapi.templating import Jinja2Templates
 
+from backend.core.config import settings
+
 TEMPLATES_DIR = Path(__file__).resolve().parent.parent.parent / "frontend" / "farmer" / "templates"
 templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
 
@@ -51,5 +53,8 @@ def _farmer_page(request: Request, phone: str, active_view: str):
 
 
 @router.get("/ussd")
-def ussd_simulator(request: Request):
-    return templates.TemplateResponse(request, "ussd.html", {})
+@router.get("/farmer/ussd")
+def ussd_simulator(request: Request, phone: str = ""):
+    return templates.TemplateResponse(
+        request, "ussd.html", {"service_code": settings.ussd_service_code, "phone": phone}
+    )

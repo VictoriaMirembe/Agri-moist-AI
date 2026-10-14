@@ -1,7 +1,8 @@
 {# USSD simulator: a pretend basic phone that sends the same requests a real USSD gateway would (POST /ussd). The bar at the top links back to the officer screens and the farmer page; it sits outside the simulated phone. #}
 {% extends "base.html" %}
-{% block title %}USSD simulator{% endblock %}
+{% block title %}Basic phone (USSD) | AgriMoist AI{% endblock %}
 {% block content %}
+<<<<<<< Updated upstream
 <nav class="ussd-bar" aria-label="Leave the simulator">
   <div class="ussd-bar-links">
     <a href="/">&larr; Officer screens</a>
@@ -11,59 +12,119 @@
 </nav>
 <h1>USSD simulator</h1>
 <p class="muted">Simulates a basic-phone USSD session. Uses the same request and reply shape as a real USSD gateway - this page is the only part that is pretend.</p>
+=======
+<a class="farmer-link-button" id="back-link" href="/farmer">Back to my farm</a>
+<h1>Use a basic phone</h1>
+<p>No smartphone or data? Dial <strong>{{ service_code }}</strong> on any phone to read your advice, report a
+problem, ask for a visit or say whether advice helped. Reports sent this way show on your farm page.</p>
+<p class="muted">Try it below. This page sends each keypress as form data (<code>sessionId</code>,
+<code>serviceCode</code>, <code>phoneNumber</code>, <code>networkCode</code>, <code>text</code>), the same way
+Africa's Talking calls <code>/ussd/africastalking</code>, so it runs the real menu. Only the phone screen is pretend.</p>
+>>>>>>> Stashed changes
 
 <label for="phone">Phone number</label>
-<input id="phone" type="tel" value="+256700000001">
-<button class="btn" id="dial-btn" style="margin-top:0.8rem;">Dial *123#</button>
+<input id="phone" type="tel" value="{{ phone or '+256700000001' }}">
+<button class="btn" id="dial-btn" style="margin-top:0.8rem;">Dial {{ service_code }}</button>
 
-<div class="ussd-screen" id="screen" style="margin-top:1rem;">Dial to start a session.</div>
-<div class="keypad" id="keypad" style="display:none;">
-  <button data-k="1">1</button><button data-k="2">2</button><button data-k="3">3</button>
-  <button data-k="4">4</button><button data-k="0">0</button><button data-k="back">&larr; back</button>
+<div class="ussd-screen" id="screen" style="margin-top:1rem;" aria-live="polite">Dial to start a session.</div>
+<div id="reply-row" style="display:none;">
+  <label for="reply">Your reply</label>
+  <input id="reply" inputmode="numeric" autocomplete="off">
+  <div class="keypad" id="keypad" style="margin-top:0.6rem;">
+    <button data-k="1">1</button><button data-k="2">2</button><button data-k="3">3</button>
+    <button data-k="4">4</button><button data-k="5">5</button><button data-k="6">6</button>
+    <button data-k="7">7</button><button data-k="8">8</button><button data-k="9">9</button>
+    <button data-k="cancel">Cancel</button><button data-k="0">0</button><button data-k="send">Send</button>
+  </div>
 </div>
 
+<details style="margin-top:1rem;">
+  <summary>Last request sent</summary>
+  <pre id="last-request" class="muted">Nothing sent yet.</pre>
+</details>
+
 <script>
+const SERVICE_CODE = {{ service_code | tojson }};
+const NETWORK_CODE = "99999"; // Africa's Talking sandbox network code
+const ENDPOINT = "/ussd"; // same menu as /ussd/africastalking, without the gateway token check
 let sessionId = null;
-let steps = [];
+let typed = []; // every reply this session, never rewritten - like the real gateway
+
+const phoneInput = document.getElementById("phone");
+function updateBackLink() {
+  const phone = phoneInput.value.trim();
+  document.getElementById("back-link").href = phone ? "/farmer/home?phone=" + encodeURIComponent(phone) : "/farmer";
+}
+phoneInput.addEventListener("input", updateBackLink);
+updateBackLink();
 
 function render(text) {
   document.getElementById("screen").textContent = text.replace(/^(CON|END)\s/, "");
 }
 
+function endSession(message) {
+  sessionId = null;
+  document.getElementById("reply-row").style.display = "none";
+  document.getElementById("dial-btn").textContent = "Dial " + SERVICE_CODE + " again";
+  if (message) render(message);
+}
+
 async function send() {
-  const phone = document.getElementById("phone").value.trim();
-  const text = steps.join("*");
-  const res = await fetch("/ussd", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ sessionId: sessionId, phoneNumber: phone, text: text }),
+  const params = new URLSearchParams({
+    sessionId: sessionId,
+    serviceCode: SERVICE_CODE,
+    phoneNumber: phoneInput.value.trim(),
+    networkCode: NETWORK_CODE,
+    text: typed.join("*"),
   });
-  const reply = await res.text();
+  document.getElementById("last-request").textContent =
+    "POST " + ENDPOINT + "\nContent-Type: application/x-www-form-urlencoded\n\n" + params.toString();
+  let reply;
+  try {
+    const res = await fetch(ENDPOINT, {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: params,
+    });
+    if (!res.ok) throw new Error("HTTP " + res.status);
+    reply = await res.text();
+  } catch (error) {
+    return endSession("Connection problem or invalid MMI code.");
+  }
   render(reply);
-  const keypad = document.getElementById("keypad");
   if (reply.startsWith("END")) {
-    keypad.style.display = "none";
-    document.getElementById("dial-btn").textContent = "Dial *123# again";
+    endSession();
   } else {
-    keypad.style.display = "grid";
+    document.getElementById("reply-row").style.display = "block";
+    document.getElementById("reply").focus();
   }
 }
 
-document.getElementById("dial-btn").addEventListener("click", () => {
-  sessionId = crypto.randomUUID();
-  steps = [];
+function submitReply() {
+  const input = document.getElementById("reply");
+  const value = input.value.trim();
+  if (!value || !sessionId) return;
+  typed.push(value);
+  input.value = "";
   send();
+}
+
+document.getElementById("dial-btn").addEventListener("click", () => {
+  sessionId = "ATUid_sim_" + crypto.randomUUID().replace(/-/g, "");
+  typed = [];
+  send();
+});
+
+document.getElementById("reply").addEventListener("keydown", (e) => {
+  if (e.key === "Enter") submitReply();
 });
 
 document.getElementById("keypad").addEventListener("click", (e) => {
   const k = e.target.dataset.k;
   if (!k) return;
-  if (k === "back") {
-    steps.pop();
-  } else {
-    steps.push(k);
-  }
-  send();
+  if (k === "send") return submitReply();
+  if (k === "cancel") return endSession("Session cancelled.");
+  document.getElementById("reply").value += k;
 });
 </script>
 {% endblock %}
