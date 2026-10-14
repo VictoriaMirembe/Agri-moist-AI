@@ -1,32 +1,7 @@
-<<<<<<< HEAD
-{# Officer Dashboard: Real-time Open-Meteo weather, pending advice approval queue, visit flags, and household groups. #}
-=======
-{# Home: today's work as three task cards (advice to approve, farmer messages, visits needed), "This week at a glance" numbers from the last 7 days, and one row per household group. Rendered by backend/officer/pages.py home(); counts refresh every 30 seconds from /api/pending-summary and /api/groups. #}
->>>>>>> 992333983fe6595b29f0dd27276f6ee44df2668d
+{# Home: Officer Dashboard with real-time Open-Meteo weather, human-in-the-loop safeguard banner, pending approval KPIs, "This week at a glance" numbers from the last 7 days, and one row per household group. Counts refresh every 30 seconds. #}
 {% extends "base.html" %}
 {% block title %}Dashboard{% endblock %}
 {% block content %}
-<<<<<<< HEAD
-
-<!-- Header & Real-Time Sync Bar -->
-<div class="officer-dashboard-header">
-  <div>
-    <h1 style="margin: 0 0 0.25rem;">Extension Officer Dashboard</h1>
-    <p class="muted" style="margin: 0; font-size: 0.95rem;">
-      Real-time field monitoring, Open-Meteo weather integration, and human-in-the-loop advice approvals.
-    </p>
-  </div>
-  <div style="display:flex; align-items:center; gap:0.75rem; flex-wrap:wrap;">
-    <div class="officer-pulse-badge">
-      <span class="pulse-dot"></span>
-      <span id="sync-status-text">Open-Meteo Live</span>
-      <span class="muted" style="font-weight:normal;" id="sync-time-text">Syncing...</span>
-    </div>
-    <button class="btn secondary" id="btn-refresh-live" style="min-height:38px; padding:0.4rem 0.9rem; font-size:0.9rem;" onclick="refreshDashboardLive()">
-      ↻ Refresh Live
-    </button>
-  </div>
-</div>
 
 <!-- Human-in-the-Loop Safeguard Banner -->
 <div class="officer-action-banner">
@@ -65,16 +40,24 @@
   </a>
   <a href="/farmer-reports" class="officer-kpi-card" style="border-left: 4px solid var(--red);">
     <div class="officer-kpi-num"><strong>{{ unchecked_reports }}</strong><div class="muted">unchecked farmer reports</div></div>
-    <div class="muted" style="font-size:0.82rem; margin-top:0.3rem;">Incoming observations from USSD & web portal</div>
+    <div class="muted" style="font-size:0.82rem; margin-top:0.3rem;">Incoming observations from USSD &amp; web portal</div>
   </a>
 </div>
 
 <!-- Live Open-Meteo Weather Widget -->
-<div style="display:flex; justify-content:space-between; align-items:center; margin: 2rem 0 0.8rem;">
+<div style="display:flex; justify-content:space-between; align-items:center; margin: 1.5rem 0 0.8rem;">
   <h2 style="margin:0;">Live Village Weather (Open-Meteo)</h2>
-  <span class="muted" style="font-size:0.82rem;">Napak District • Karamoja Agro-Pastoral Zone</span>
+  <div style="display:flex; align-items:center; gap:0.75rem; flex-wrap:wrap;">
+    <div class="officer-pulse-badge">
+      <span class="pulse-dot"></span>
+      <span id="sync-status-text">Open-Meteo Live</span>
+      <span class="muted" style="font-weight:normal;" id="sync-time-text">Syncing...</span>
+    </div>
+    <button class="btn secondary" id="btn-refresh-live" style="min-height:38px; padding:0.4rem 0.9rem; font-size:0.9rem;" onclick="refreshDashboardLive()">
+      ↻ Refresh Live
+    </button>
+  </div>
 </div>
-
 <div class="officer-weather-grid" id="weather-cards-container">
   {% for w in weather_list %}
   <div class="officer-weather-card">
@@ -93,14 +76,12 @@
         {% endif %}
       </div>
     </div>
-
     <div style="display:flex; align-items:baseline; gap:0.5rem; margin-top:0.5rem;">
       <span style="font-size:2rem; font-weight:800; color:var(--ink);">
         {% if w.temperature_c is not none %}{{ w.temperature_c }}°C{% else %}--{% endif %}
       </span>
       <span class="muted" style="font-size:0.95rem; font-weight:600;">{{ w.condition }}</span>
     </div>
-
     <div class="weather-metrics-row">
       <div>
         <div class="muted" style="font-size:0.72rem; text-transform:uppercase;">Past 7d Rain</div>
@@ -117,7 +98,6 @@
         </div>
       </div>
     </div>
-
     <div style="display:flex; justify-content:space-between; align-items:center; margin-top:0.75rem; font-size:0.75rem;">
       <span class="muted">Source: Open-Meteo API</span>
       <a href="{{ w.source }}" target="_blank" rel="noopener" style="color:var(--green); font-weight:600;">View Raw API Data ↗</a>
@@ -126,29 +106,6 @@
   {% endfor %}
 </div>
 
-<!-- Pending Approvals Quick View (if any) -->
-{% if pending_advices %}
-<div class="card" style="margin-top: 2rem; border-left: 4px solid var(--amber);">
-  <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 0.75rem;">
-    <div>
-      <h3 style="margin:0; font-size:1.15rem;">Advice Drafts Ready for Officer Decision</h3>
-      <div class="muted" style="font-size:0.85rem;">Human approval required before any farmer receives this advice.</div>
-    </div>
-    <a href="/approvals" class="btn secondary" style="min-height:36px; padding:0.35rem 0.8rem; font-size:0.85rem;">Open Approval Queue</a>
-  </div>
-
-  <div class="table-wrap"><table>
-    <thead>
-      <tr><th>Draft ID</th><th>Household Group</th><th>AI Recommendation Preview</th><th></th></tr>
-    </thead>
-    <tbody>
-      {% for a in pending_advices[:3] %}
-      <tr>
-        <td><strong>#{{ a.id }}</strong></td>
-        <td>Group {{ a.group_id }}</td>
-        <td style="max-width:440px; font-size:0.9rem; line-height:1.35;">{{ a.draft_text[:140] }}{% if a.draft_text|length > 140 %}...{% endif %}</td>
-        <td style="text-align:right;"><a class="btn" style="min-height:36px; padding:0.35rem 0.85rem; font-size:0.85rem;" href="/approvals">Review</a></td>
-=======
 {%- set waiting = drafts_total + unchecked_reports + open_flags_total -%}
 <section class="o-hero" aria-labelledby="home-heading">
   <div>
@@ -266,59 +223,26 @@
         <td class="group-flags">{% if g.open_flags %}<span class="pill red">{{ g.open_flags }}</span>{% else %}0{% endif %}</td>
         <td class="group-drafts">{% if g.drafts_waiting %}<span class="pill amber">{{ g.drafts_waiting }}</span>{% else %}0{% endif %}</td>
         <td><a class="o-button o-button-small" href="/groups/{{ g.group_id }}">Open</a></td>
->>>>>>> 992333983fe6595b29f0dd27276f6ee44df2668d
       </tr>
       {% endfor %}
     </tbody>
   </table></div>
-<<<<<<< HEAD
-</div>
-{% endif %}
-
-<!-- Household Groups Overview -->
-<h2 style="margin-top: 2rem;">Household Groups in District</h2>
-<div class="table-wrap"><table>
-  <thead>
-    <tr><th>Group</th><th>Village</th><th>Households</th><th>Open flags</th><th>Drafts waiting</th><th>Actions</th></tr>
-  </thead>
-  <tbody id="groups-table-body">
-    {% for g in groups %}
-    <tr>
-      <td><strong>G-{{ g.group_id }}</strong></td>
-      <td>{{ g.village }}</td>
-      <td>{{ g.household_count }}</td>
-      <td>{% if g.open_flags %}<span class="pill red">{{ g.open_flags }}</span>{% else %}<span class="muted">0</span>{% endif %}</td>
-      <td>{% if g.drafts_waiting %}<span class="pill amber">{{ g.drafts_waiting }}</span>{% else %}<span class="muted">0</span>{% endif %}</td>
-      <td><a class="btn secondary" style="min-height:36px; padding:0.35rem 0.85rem; font-size:0.85rem;" href="/groups/{{ g.group_id }}">View Group</a></td>
-    </tr>
-    {% endfor %}
-  </tbody>
-</table></div>
+</section>
 
 {% endblock %}
 
 {% block scripts %}
 <script>
-// Real-time polling and live updates for Open-Meteo weather and dashboard queues
+// Real-time live refresh for Open-Meteo weather and dashboard queues
 async function refreshDashboardLive() {
   const syncTimeEl = document.getElementById("sync-time-text");
   const refreshBtn = document.getElementById("btn-refresh-live");
-  
+
   if (syncTimeEl) syncTimeEl.textContent = "Updating...";
   if (refreshBtn) refreshBtn.disabled = true;
 
   try {
     const data = await getJSON("/api/dashboard/live");
-
-    // Update KPI counters
-    if (data.counts) {
-      const draftsEl = document.getElementById("kpi-drafts");
-      const reportsEl = document.getElementById("kpi-reports");
-      const flagsEl = document.getElementById("kpi-flags");
-      if (draftsEl) draftsEl.textContent = data.counts.drafts_waiting;
-      if (reportsEl) reportsEl.textContent = data.counts.unchecked_reports;
-      if (flagsEl) flagsEl.textContent = data.counts.open_flags;
-    }
 
     // Update live weather cards
     if (data.weather && data.weather.length > 0) {
@@ -341,7 +265,6 @@ async function refreshDashboardLive() {
 function renderWeatherCards(weatherList) {
   const container = document.getElementById("weather-cards-container");
   if (!container) return;
-
   container.innerHTML = weatherList.map(w => `
     <div class="officer-weather-card">
       <div class="officer-weather-header">
@@ -355,29 +278,15 @@ function renderWeatherCards(weatherList) {
           </span>
         </div>
       </div>
-
       <div style="display:flex; align-items:baseline; gap:0.5rem; margin-top:0.5rem;">
-        <span style="font-size:2rem; font-weight:800; color:var(--ink);">
-          ${w.temperature_c !== null && w.temperature_c !== undefined ? w.temperature_c + '°C' : '--'}
-        </span>
+        <span style="font-size:2rem; font-weight:800; color:var(--ink);">${w.temperature_c !== null && w.temperature_c !== undefined ? w.temperature_c + '\u00b0C' : '--'}</span>
         <span class="muted" style="font-size:0.95rem; font-weight:600;">${escapeHTML(w.condition || 'Fair')}</span>
       </div>
-
       <div class="weather-metrics-row">
-        <div>
-          <div class="muted" style="font-size:0.72rem; text-transform:uppercase;">Past 7d Rain</div>
-          <div style="font-size:1.1rem; font-weight:700; color:var(--green);">${w.past_7_days_rain_mm} mm</div>
-        </div>
-        <div>
-          <div class="muted" style="font-size:0.72rem; text-transform:uppercase;">Next 7d Rain</div>
-          <div style="font-size:1.1rem; font-weight:700; color:#0077b6;">${w.next_7_days_rain_mm} mm</div>
-        </div>
-        <div>
-          <div class="muted" style="font-size:0.72rem; text-transform:uppercase;">Humidity</div>
-          <div style="font-size:1.1rem; font-weight:700; color:var(--ink);">${w.relative_humidity !== null && w.relative_humidity !== undefined ? w.relative_humidity + '%' : '--'}</div>
-        </div>
+        <div><div class="muted" style="font-size:0.72rem; text-transform:uppercase;">Past 7d Rain</div><div style="font-size:1.1rem; font-weight:700; color:var(--green);">${w.past_7_days_rain_mm} mm</div></div>
+        <div><div class="muted" style="font-size:0.72rem; text-transform:uppercase;">Next 7d Rain</div><div style="font-size:1.1rem; font-weight:700; color:#0077b6;">${w.next_7_days_rain_mm} mm</div></div>
+        <div><div class="muted" style="font-size:0.72rem; text-transform:uppercase;">Humidity</div><div style="font-size:1.1rem; font-weight:700; color:var(--ink);">${w.relative_humidity !== null && w.relative_humidity !== undefined ? w.relative_humidity + '%' : '--'}</div></div>
       </div>
-
       <div style="display:flex; justify-content:space-between; align-items:center; margin-top:0.75rem; font-size:0.75rem;">
         <span class="muted">Source: Open-Meteo API</span>
         <a href="${safeURL(w.source)}" target="_blank" rel="noopener" style="color:var(--green); font-weight:600;">View Raw API Data ↗</a>
@@ -386,17 +295,7 @@ function renderWeatherCards(weatherList) {
   `).join('');
 }
 
-// Initial sync on load and poll every 30 seconds
-document.addEventListener("DOMContentLoaded", () => {
-  refreshDashboardLive();
-  setInterval(refreshDashboardLive, 30000);
-});
-=======
-</section>
-
-<script>
-// The counts above are rendered by the server; refresh them every 30 seconds from
-// the existing JSON routes so new farmer reports, flags and drafts show up.
+// The task-card counts above are rendered server-side; refresh every 30 seconds.
 function setCountCell(cell, count, pillClass) {
   if (count > 0) {
     const pill = document.createElement("span");
@@ -423,13 +322,16 @@ async function refreshHome() {
   document.getElementById("home-total-words").textContent = summary.total_pending === 1 ? "thing needs" : "things need";
   for (const g of groups) {
     const row = document.querySelector(`tr[data-group-id="${Number(g.group_id)}"]`);
-    if (!row) continue;  // a group added since the page loaded shows after a reload
+    if (!row) continue;
     setCountCell(row.querySelector(".group-flags"), g.open_flags, "red");
     setCountCell(row.querySelector(".group-drafts"), g.drafts_waiting, "amber");
   }
 }
 
+// Initial weather sync and task-count refresh, then poll every 30 seconds.
+document.addEventListener("DOMContentLoaded", () => {
+  refreshDashboardLive();
+});
 autoRefresh(refreshHome);
->>>>>>> 992333983fe6595b29f0dd27276f6ee44df2668d
 </script>
 {% endblock %}

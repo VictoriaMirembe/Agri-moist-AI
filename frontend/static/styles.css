@@ -676,7 +676,6 @@ body.farmer {
   .farmer-metric:last-child { grid-column: auto; }
 }
 
-<<<<<<< HEAD
 /* Officer Dashboard Real-time Enhancements */
 .officer-dashboard-header {
   display: flex;
@@ -780,7 +779,7 @@ body.farmer {
   background: #f8faf8;
   padding: 0.75rem;
   border-radius: 8px;
-=======
+}
 /* ===========================================================================
    Officer screens. Every rule below is scoped to body.officer, so the farmer
    pages (body.farmer) keep exactly their own look. Colours, corners, buttons and
@@ -1138,5 +1137,4 @@ body.officer .o-table tbody tr:hover td { background: #f7faf8; }
   body.officer .o-stat { padding: 0.85rem; }
   body.officer .o-stat-head .o-kpi-icon { display: none; }  /* two tiles per row: room for the words first */
   body.officer .o-table th, body.officer .o-table td { padding: 0.7rem 0.65rem; }
->>>>>>> 992333983fe6595b29f0dd27276f6ee44df2668d
 }

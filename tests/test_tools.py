@@ -185,6 +185,7 @@ def test_live_weather_test_skips_without_network_but_fails_on_other_errors(monke
     def no_network(*args, **kwargs):
         raise httpx.ConnectError("no route to host")
 
+    impl._WEATHER_CACHE.clear()  # ensure the monkeypatched httpx.get is actually called
     monkeypatch.setattr(impl.httpx, "get", no_network)
     with pytest.raises(pytest.skip.Exception):
         test_get_weather_real_call_has_a_source()
@@ -192,6 +193,7 @@ def test_live_weather_test_skips_without_network_but_fails_on_other_errors(monke
     def bad_response(*args, **kwargs):
         raise httpx.HTTPStatusError("500", request=httpx.Request("GET", "https://x"), response=httpx.Response(500))
 
+    impl._WEATHER_CACHE.clear()  # clear again before the second scenario
     monkeypatch.setattr(impl.httpx, "get", bad_response)
     with pytest.raises(ToolError):
         test_get_weather_real_call_has_a_source()

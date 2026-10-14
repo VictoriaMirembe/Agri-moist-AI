@@ -350,7 +350,11 @@ def farmer_dashboard(phone: str):
         try:
             weather = impl.get_weather(latitude=coordinates[0], longitude=coordinates[1])
         except ToolError as exc:
-            weather_error = str(exc)
+            err_text = str(exc)
+            if "429" in err_text or "Too Many Requests" in err_text:
+                weather_error = "Weather service rate limit reached. Retrying automatically..."
+            else:
+                weather_error = err_text
 
     return {
         "profile": profile,

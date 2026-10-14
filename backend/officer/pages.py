@@ -32,11 +32,8 @@ from backend.db.models import (
     Village,
     VisitFlag,
 )
-<<<<<<< HEAD
 from backend.officer.router import fetch_village_weather
-=======
 from backend.tools import agrimoist_tools as impl
->>>>>>> 992333983fe6595b29f0dd27276f6ee44df2668d
 
 TEMPLATES_DIR = Path(__file__).resolve().parent.parent.parent / "frontend" / "officer" / "templates"
 templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
@@ -272,16 +269,12 @@ def home(request: Request):
             ).all()
         )
         open_flags_total = len(session.exec(select(VisitFlag).where(VisitFlag.status == "open")).all())
-<<<<<<< HEAD
         drafts_total = len(pending_advices)
         officers = session.exec(select(Officer)).all()
-
-    officer_name = request.session.get("officer_name") if "session" in request.scope else None
-=======
-        drafts_total = len(session.exec(select(Advice).where(Advice.status == "pending_review")).all())
         week = week_at_a_glance(session)
         demo = _is_demo_data(session)
->>>>>>> 992333983fe6595b29f0dd27276f6ee44df2668d
+
+    officer_name = request.session.get("officer_name") if "session" in request.scope else None
 
     return templates.TemplateResponse(
         request,
@@ -291,16 +284,13 @@ def home(request: Request):
             "unchecked_reports": unchecked_reports,
             "open_flags_total": open_flags_total,
             "drafts_total": drafts_total,
-<<<<<<< HEAD
             "weather_list": weather_list,
             "pending_advices": pending_advices,
             "officers": officers,
             "officer_name": officer_name,
             "user_role": user_role,
-=======
             "week": week,
             "demo": demo,
->>>>>>> 992333983fe6595b29f0dd27276f6ee44df2668d
         },
     )
 
@@ -395,18 +385,14 @@ def farmer_reports_page(request: Request):
 
 @router.get("/followups")
 def followups_page(request: Request):
-<<<<<<< HEAD
     user_role = request.session.get("role") if "session" in request.scope else None
     if not user_role:
         user_role = request.cookies.get("officer_role") or request.cookies.get("role")
     if user_role != "officer":
         raise HTTPException(status_code=403, detail="Access denied: Officers only.")
-    return templates.TemplateResponse(request, "followups.html", {})
-=======
     with session_scope() as session:
         group_villages = _group_villages(session)
     return templates.TemplateResponse(request, "followups.html", {"group_villages": group_villages})
->>>>>>> 992333983fe6595b29f0dd27276f6ee44df2668d
 
 
 @router.get("/officer/login")

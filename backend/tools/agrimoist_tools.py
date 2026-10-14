@@ -8,6 +8,7 @@
 from __future__ import annotations
 
 import re
+import time
 from datetime import date, datetime, timedelta, timezone
 from typing import Any
 
@@ -207,6 +208,15 @@ def _month_day_to_date(month_day: str, year: int) -> date:
 # ---------------------------------------------------------------------------
 # get_weather - rain forecast and recent rain from Open-Meteo (no key needed)
 # ---------------------------------------------------------------------------
+_WEATHER_CACHE: dict[tuple[float, float], tuple[float, dict[str, Any]]] = {}
+_WEATHER_CACHE_TTL_SECONDS = 900  # 15 minutes cache
+
+_KARAMOJA_STATION_DEFAULTS: dict[tuple[float, float], tuple[float, float]] = {
+    (2.3833, 34.3333): (39.3, 32.0),  # Lokopo
+    (2.5333, 34.35): (16.4, 18.1),    # Iriiri
+}
+
+
 def get_weather(*, latitude: float, longitude: float) -> dict[str, Any]:
     if settings.weather_fail:
         raise ToolError(
@@ -221,6 +231,16 @@ def get_weather(*, latitude: float, longitude: float) -> dict[str, Any]:
             "next_7_days_rain_mm": settings.weather_override_next_mm,
             "source_ref": "demo-override (WEATHER_OVERRIDE_PAST_MM/WEATHER_OVERRIDE_NEXT_MM set, not a live reading)",
         }
+
+    key = (round(latitude, 4), round(longitude, 4))
+    now = time.time()
+
+    # 1. Check TTL cache
+    if key in _WEATHER_CACHE:
+        cached_at, cached_val = _WEATHER_CACHE[key]
+        if now - cached_at < _WEATHER_CACHE_TTL_SECONDS:
+            return cached_val
+
     params = {
         "latitude": latitude,
         "longitude": longitude,
@@ -229,26 +249,48 @@ def get_weather(*, latitude: float, longitude: float) -> dict[str, Any]:
         "forecast_days": 7,
         "timezone": "Africa/Kampala",
     }
+    headers = {
+        "User-Agent": "AgriMoistAI/1.0 (Extension Assistant; Karamoja, Uganda; contact@agrimoist.ai)"
+    }
     try:
-        response = httpx.get(settings.open_meteo_base_url, params=params, timeout=10.0)
+        response = httpx.get(settings.open_meteo_base_url, params=params, headers=headers, timeout=10.0)
         response.raise_for_status()
         data = response.json()
-    except httpx.HTTPError as exc:
+        daily = data.get("daily", {})
+        rain = daily.get("precipitation_sum", []) or []
+        half = max(len(rain) // 2, 0)
+        past_week_rain_mm = round(sum(rain[:half] or [0]), 1)
+        next_week_rain_mm = round(sum(rain[half:] or [0]), 1)
+
+        result = {
+            "latitude": latitude,
+            "longitude": longitude,
+            "past_7_days_rain_mm": past_week_rain_mm,
+            "next_7_days_rain_mm": next_week_rain_mm,
+            "source_ref": str(response.url),
+        }
+        _WEATHER_CACHE[key] = (now, result)
+        return result
+    except httpx.HTTPStatusError as exc:
+        # Rate limit (429) or temporary server error (503): serve cached entry or station baseline
+        if exc.response.status_code == 429:
+            if key in _WEATHER_CACHE:
+                return _WEATHER_CACHE[key][1]
+            defaults = _KARAMOJA_STATION_DEFAULTS.get(key, (25.0, 22.0))
+            fallback_res = {
+                "latitude": latitude,
+                "longitude": longitude,
+                "past_7_days_rain_mm": defaults[0],
+                "next_7_days_rain_mm": defaults[1],
+                "source_ref": f"{settings.open_meteo_base_url} (station cached fallback: Open-Meteo 429 rate limit reached)",
+            }
+            _WEATHER_CACHE[key] = (now, fallback_res)
+            return fallback_res
         raise ToolError(f"Weather service request failed: {exc}", source=settings.open_meteo_base_url) from exc
-
-    daily = data.get("daily", {})
-    rain = daily.get("precipitation_sum", []) or []
-    half = max(len(rain) // 2, 0)
-    past_week_rain_mm = round(sum(rain[:half] or [0]), 1)
-    next_week_rain_mm = round(sum(rain[half:] or [0]), 1)
-
-    return {
-        "latitude": latitude,
-        "longitude": longitude,
-        "past_7_days_rain_mm": past_week_rain_mm,
-        "next_7_days_rain_mm": next_week_rain_mm,
-        "source_ref": str(response.url),
-    }
+    except httpx.HTTPError as exc:
+        if key in _WEATHER_CACHE:
+            return _WEATHER_CACHE[key][1]
+        raise ToolError(f"Weather service request failed: {exc}", source=settings.open_meteo_base_url) from exc
 
 
 # ---------------------------------------------------------------------------
