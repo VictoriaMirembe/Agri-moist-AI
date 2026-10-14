@@ -1,6 +1,14 @@
+{# USSD simulator: a pretend basic phone that sends the same requests a real USSD gateway would (POST /ussd). The bar at the top links back to the officer screens and the farmer page; it sits outside the simulated phone. #}
 {% extends "base.html" %}
 {% block title %}USSD simulator{% endblock %}
 {% block content %}
+<nav class="ussd-bar" aria-label="Leave the simulator">
+  <div class="ussd-bar-links">
+    <a href="/">&larr; Officer screens</a>
+    <a href="/farmer">Farmer page</a>
+  </div>
+  <p>This simulates a basic phone. Press Dial *123#, then tap the menu number, as a farmer would on *123#.</p>
+</nav>
 <h1>USSD simulator</h1>
 <p class="muted">Simulates a basic-phone USSD session. Uses the same request and reply shape as a real USSD gateway - this page is the only part that is pretend.</p>
 

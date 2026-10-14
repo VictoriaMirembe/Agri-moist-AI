@@ -11,6 +11,7 @@ or on a simple farmer web page on a smartphone.
 - **Theme:** Climate-smart advisory
 - **Office served (demo data):** Napak District Production Office, Karamoja, Uganda
 - **Team:** Ashelycole (core/agent), Victoria (officer app/approval gate), Evans (farmer channels/data)
+- **How it is built:** see [ARCHITECTURE.md](ARCHITECTURE.md) (one page: agent flow, MCP servers, model, data)
 
 > **Status:** All nine tools, the LangGraph agent, the approval gate, officer
 > screens, the USSD simulator and the farmer web page work end to end against real
@@ -73,19 +74,25 @@ Open-Meteo needs no key.
 
 ## Run the demo
 
-1. Open the Home screen and click a household group, or open **Record visit** to add
-   a new one.
-2. Open a household group and click **Draft advice**. You land on the Agent run
-   screen and watch each tool call (and its source) arrive live over
-   server-sent events.
-3. Open **Approvals**, read the draft and its sources (gaps show in red), then
-   approve, edit-and-approve, or reject it as the officer.
-4. Open the farmer page at `/farmer`, sign in with a demo number (`+256700000001`
-   to `+256700000010`), and read **My advice** - only what was just approved shows.
-5. Open the USSD simulator at `/ussd`, dial, and choose **1. My advice**. Same rule:
-   nothing unapproved ever appears.
-6. Open **Log** to see every tool call for every run, with its source, actor and
-   cost.
+On a desktop the officer screens are in the left sidebar: **Home**, **Approve
+advice**, **Farmer messages**, **Visits needed**, **Record a visit**, and under
+**More**: **Activity log**, **USSD simulator** and **Farmer page**. On a phone they are
+in the bottom tabs: **Home**, **Approve**, **Messages**, **Visits** and **More**.
+
+1. On **Home**, press **Open** next to a household group, or choose **Record a visit**
+   to add a new one.
+2. On the group's screen, press **Draft advice**. You land on the **AI draft** screen
+   and watch each step arrive live over server-sent events (the raw tool calls and
+   their sources are under **Technical details**).
+3. Open **Approve advice**, read the draft and its sources (gaps show in red), then
+   press **Approve**, **Save edit & approve**, or **Reject** as the officer.
+4. Open **Farmer page** (under **More**, or go to `/farmer`), sign in with a demo
+   number (`+256700000001` to `+256700000010`), and read **My advice** - only what was
+   just approved shows.
+5. Open **USSD simulator** (under **More**, or go to `/ussd`), press **Dial \*123#**,
+   and tap **1** (My advice). Same rule: nothing unapproved ever appears.
+6. Open **Activity log** (under **More**) to see every tool call for every run, with
+   its source and actor, and each run's cost.
 
 To see a deliberate failure: set `WEATHER_FAIL=1` in `.env`, restart, and draft
 advice again. The agent retries once, then marks "weather missing, check before
@@ -114,16 +121,19 @@ whose status is `approved` or `edited_and_approved`.
 | Farmer web page (`/farmer`) | Smartphones, weak signal | The same four actions |
 
 Farmer reports are saved as "farmer-reported, not yet checked" and appear on the
-officer's **Farmer reports** screen. The assistant may use them as signals, and each
-sourced fact built from one says so (`farmer_ussd` or `farmer_web`, `unchecked`).
+officer's **Farmer messages** screen (**Reports** tab). The assistant may use them as
+signals, and each sourced fact built from one says so (`farmer_ussd` or `farmer_web`,
+`unchecked`).
 
 The web portal and the extension-officer portal share the same backend records:
 farmer sign-in resolves the registered household, reports appear in **Farmer
-reports**, visit requests appear in **Visit flags**, and officers can open the
+messages**, visit requests appear in **Visits needed**, and officers can open the
 affected group directly from those queues. After an officer approves advice, the
 farmer can read it and submit a follow-up; officers see scheduled and answered
-follow-ups in **Farmer follow-ups**. Follow-up answers are accepted only for
-approved advice belonging to that farmer's household group.
+follow-ups in **Farmer messages** (**Did advice help?** tab), with each household's
+own answer listed.
+Follow-up answers are accepted only for approved advice belonging to that farmer's
+household group; visit requests name the household that asked.
 
 The active farmer portal is served at `/farmer` from `frontend/farmer/templates`.
 Its dashboard, advice, report, visit and follow-up views share one dashboard
@@ -165,8 +175,8 @@ window has closed; reimplementing timezone-safe clock handling ourselves would b
 exactly the kind of small, well-solved problem borrowing is for. Connected over
 stdio exactly like our own server (`backend/agent/mcp_client.py`).
 
-**Agent:** LangGraph (`backend/agent/graph.py`), four nodes - plan, gather, check
-sources, draft or flag - with one retry per failing tool call before the gap is
+**Agent:** LangGraph (`backend/agent/graph.py`), four nodes - plan, gather, check urgent
+(urgent food or overdue visits get flagged instead of drafted), draft or flag - with one retry per failing tool call before the gap is
 marked in the advice, never guessed.
 
 **Model:** [gpt-oss-120b](https://huggingface.co/openai/gpt-oss-120b) (open weights,
@@ -189,9 +199,11 @@ rule-based mode and farmers see the English text.
   has to read the wording against the sources listed under it.
 - If data is missing after one retry, the draft says so in plain words. It never
   guesses.
-- Every tool call, and every approve / edit / reject decision, is logged with its
-  inputs, outputs, time, source and actor (`backend/logging/tool_log.py`). Each
-  agent run records its model and cost; each approval records the translation
+- Every tool call, every approve / edit / reject decision, and every officer and
+  farmer action that saves something (mark checked, mark visited, follow-up
+  answers) is logged with its inputs, outputs, time, source and actor
+  (`backend/logging/tool_log.py`), as is each time a farmer is shown approved advice.
+  Each agent run records its model and cost; each approval records the translation
   model and cost.
 
 ## Data: where it came from and what it does not cover
@@ -205,9 +217,10 @@ rule-based mode and farmers see the English text.
 
 ## Cost per run
 
-Measured on `openai/gpt-oss-120b` over 15 real drafting runs (see [EVALS.md](EVALS.md)):
-**about $0.0006 per agent run** (highest $0.0008) and **about 3.4 seconds**. A
-translation attempt costs about $0.00006. Prices used: $0.15 per million input
+Measured on `openai/gpt-oss-120b` over 15 real drafting runs in the final check
+(see [EVALS.md](EVALS.md)): **about $0.0008 per agent run** (average
+$0.00077, highest $0.00089) and **about 6.0 seconds** on average (median 3.5
+seconds). A translation attempt costs about $0.00006. Prices used: $0.15 per million input
 tokens and $0.60 per million output tokens (Groq's published price for this model).
 
 ## Scaling beyond the hackathon
@@ -221,6 +234,15 @@ tokens and $0.60 per million output tokens (Groq's published price for this mode
 - **Bigger database:** move from SQLite to PostgreSQL when more than one office uses
   it (the app already uses SQLAlchemy/SQLModel, so this is a connection-string
   change, not a rewrite).
+- **Photo reports are not built yet.** Farmers can pick the problem and the pest from a
+  list, but cannot attach a photo of a damaged crop. Next step: optional photo upload
+  on the farmer web page for smartphone users, shown to the officer for diagnosis (the
+  officer still decides). USSD users on basic phones cannot send photos, and our
+  open-weights model reads text only, so photos would support the officer, not the AI
+  draft.
+- **Community alerts.** Officer-approved alerts to all farmers in an area (for example,
+  a disease outbreak warning), using the same approval gate and log as advice: a draft
+  alert is shown to farmers only after a named officer approves it.
 
 ## Known gaps
 
@@ -228,18 +250,39 @@ tokens and $0.60 per million output tokens (Groq's published price for this mode
   translate the language (EVALS task 10 failed 3 of 3). The app detects this and
   shows farmers the officer-approved English text instead; no translation has been
   checked by a speaker.
-- **The evals' wording checks were written for the rule-based mode.** Tasks 1, 2 and
-  11 look for exact phrases the rule-based mode writes, so the model's differently
-  worded advice fails them even when its meaning may be right - see EVALS.md.
+- **The model can still give wrong advice.** In the final check it told farmers to
+  water just before 45 mm of forecast rain in 3 of 3 runs (7 of 9 across the last
+  three runs; EVALS task 2).
+  The officer approval step is what stops this reaching a farmer - see EVALS.md.
 - **The model's wording is not checked fact-by-fact against the sources.** Only
-  numbers are checked automatically; the officer reviews the rest.
-- **No login.** The officer picks a name from an "Acting as" list, and farmers are
-  identified by phone number only. Fine for a demo, not for real use.
-- **Consent is checked from the stored household record.** The consent tick box on
-  the visit form is only enforced by the browser.
+  numbers are checked automatically, and only numbers written as digits ("8 mm",
+  not "eight millimetres"). The officer reviews the rest.
+- **No login for officers.** The officer picks a name from an "Acting as" list; no
+  password or account is checked. Fine for a demo, not for real use.
+- **Farmer sign-in is a phone-number lookup only.** Anyone who types a registered
+  number (`+256...`, `256...` or `07...`) sees that household's advice and details;
+  it is not authentication.
+- **The consent checkbox is browser-only.** The tick box on the visit form is not
+  sent to the server; the server checks the consent stored on the household record.
 - **No real SMS or USSD sending** - the USSD menu is simulated in the browser at
   `/ussd`, using the real gateway request/reply shape.
+- **USSD pest reports cannot name the pest.** The USSD menu only offers "Pests", so
+  those reports say "farmer-reported pest"; the farmer web page lets the farmer pick
+  one.
+- **Only "no food left" in a visit record counts as urgent.** A field record with
+  `food_left` "none", or an open visit request that mentions food, makes the agent
+  flag the group instead of drafting; a record of "little" food left does not.
+- **Officer screens refresh every 30 seconds, not instantly**, and pause while the
+  browser tab is hidden. A group added after a page was opened appears on Home after
+  a reload.
+- **"Seen by the farmer" is a log entry, not a status.** Reading approved advice (web
+  or USSD) writes a `farmer_viewed_advice` log row; the advice status stays
+  `approved` / `edited_and_approved` - see `docs/API_CONTRACT.md`.
 - **Made-up data only** - 10 households, 2 villages, 3 groups; see `backend/db/seed.py`.
+- **No registration screen yet.** Households, farmer contacts and groups come from the
+  synthetic seed data (`backend/db/seed.py`), so no real farmer's data is used without
+  consent. Next step: an officer form to register a household and farmer that records
+  the farmer's consent before saving.
 - **Docker was not run in this build environment** (no Docker available here); the
   app was verified directly with `uvicorn` plus the automated test suite instead.
   The Dockerfile and compose file follow the same `pip install -r requirements.txt`
@@ -248,7 +291,7 @@ tokens and $0.60 per million output tokens (Groq's published price for this mode
 
 ## Tests
 
-70 automated tests in `tests/` (`pytest`). Tests always use the rule-based mode, so
+Automated tests in `tests/` (`pytest`). Tests always use the rule-based mode, so
 they never call Groq even if `.env` has a key. `scripts/run_evals.py` runs the 14
 EVALS.md tasks three times each against the real stack, including the real model
 when a key is set. See [EVALS.md](EVALS.md) for the real results.

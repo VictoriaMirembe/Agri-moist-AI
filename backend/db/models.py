@@ -136,6 +136,16 @@ class VisitFlag(SQLModel, table=True):
     created_at: datetime = Field(default_factory=utcnow)
 
 
+class VisitFlagVisit(SQLModel, table=True):
+    """Who marked a visit flag as visited, and when. A new table so the existing
+    visit_flag columns stay exactly as they were."""
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    flag_id: int = Field(foreign_key="visitflag.id", index=True)
+    officer_id: Optional[int] = Field(default=None, foreign_key="officer.id")  # None: not sent
+    visited_at: datetime = Field(default_factory=utcnow)
+
+
 class Followup(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     advice_id: int = Field(foreign_key="advice.id")
@@ -143,6 +153,21 @@ class Followup(SQLModel, table=True):
     followed: Optional[str] = None  # yes, no, partly
     helped: Optional[str] = None  # yes, no
     answered_via: Optional[str] = None  # officer_visit, farmer_ussd, farmer_web
+
+
+class FollowupAnswer(SQLModel, table=True):
+    """One household's answer to "did the advice help?". Followup above keeps the
+    latest answer for the advice (unchanged behaviour); this table keeps every
+    household's own answer, so answers from one group never overwrite each other.
+    A household answering again updates its own row."""
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    advice_id: int = Field(foreign_key="advice.id", index=True)
+    household_id: int = Field(foreign_key="household.id")
+    followed: str  # yes, no, partly
+    helped: Optional[str] = None  # yes, no, too_early
+    answered_via: str  # farmer_ussd, farmer_web
+    answered_at: datetime = Field(default_factory=utcnow)
 
 
 class Run(SQLModel, table=True):

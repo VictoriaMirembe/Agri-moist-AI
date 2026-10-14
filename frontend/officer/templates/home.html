@@ -1,7 +1,12 @@
+<<<<<<< HEAD
 {# Officer Dashboard: Real-time Open-Meteo weather, pending advice approval queue, visit flags, and household groups. #}
+=======
+{# Home: today's work as three task cards (advice to approve, farmer messages, visits needed), "This week at a glance" numbers from the last 7 days, and one row per household group. Rendered by backend/officer/pages.py home(); counts refresh every 30 seconds from /api/pending-summary and /api/groups. #}
+>>>>>>> 992333983fe6595b29f0dd27276f6ee44df2668d
 {% extends "base.html" %}
 {% block title %}Dashboard{% endblock %}
 {% block content %}
+<<<<<<< HEAD
 
 <!-- Header & Real-Time Sync Bar -->
 <div class="officer-dashboard-header">
@@ -143,10 +148,130 @@
         <td>Group {{ a.group_id }}</td>
         <td style="max-width:440px; font-size:0.9rem; line-height:1.35;">{{ a.draft_text[:140] }}{% if a.draft_text|length > 140 %}...{% endif %}</td>
         <td style="text-align:right;"><a class="btn" style="min-height:36px; padding:0.35rem 0.85rem; font-size:0.85rem;" href="/approvals">Review</a></td>
+=======
+{%- set waiting = drafts_total + unchecked_reports + open_flags_total -%}
+<section class="o-hero" aria-labelledby="home-heading">
+  <div>
+    <p class="o-eyebrow">Today's work</p>
+    <h1 id="home-heading">Home</h1>
+    <p class="o-hero-line"><span id="home-total">{{ waiting }}</span> <span id="home-total-words">{{ "thing needs" if waiting == 1 else "things need" }}</span> your attention.</p>
+  </div>
+  <a class="o-button o-button-light" href="/visits/new">+ Record a visit</a>
+</section>
+
+<div class="o-task-grid">
+  <a class="o-task {% if not drafts_total %}is-done{% endif %}" href="/approvals" data-task="drafts">
+    <span class="o-task-top">
+      <span class="o-task-name">Approve advice</span>
+      <span class="o-kpi-icon amber" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M9 16.2 4.8 12l-1.4 1.4L9 19 21 7l-1.4-1.4z"/></svg></span>
+    </span>
+    <strong class="o-task-count" id="home-drafts">{{ drafts_total }}</strong>
+    <span class="o-task-text">AI drafts waiting for you. No farmer sees advice until you approve it.</span>
+    <span class="o-task-go"><span class="o-task-done">All done</span><span class="o-task-open">Open Approve advice</span> →</span>
+  </a>
+  <a class="o-task {% if not unchecked_reports %}is-done{% endif %}" href="/farmer-reports" data-task="reports">
+    <span class="o-task-top">
+      <span class="o-task-name">Farmer messages</span>
+      <span class="o-kpi-icon blue" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 4h16a1 1 0 0 1 1 1v11a1 1 0 0 1-1 1H8l-4 4V5a1 1 0 0 1 1-1z"/></svg></span>
+    </span>
+    <strong class="o-task-count" id="home-reports">{{ unchecked_reports }}</strong>
+    <span class="o-task-text">New reports from farmers by phone or web, not checked yet.</span>
+    <span class="o-task-go"><span class="o-task-done">All done</span><span class="o-task-open">Open Farmer messages</span> →</span>
+  </a>
+  <a class="o-task {% if not open_flags_total %}is-done{% endif %}" href="/flags" data-task="flags">
+    <span class="o-task-top">
+      <span class="o-task-name">Visits needed</span>
+      <span class="o-kpi-icon red" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 2a7 7 0 0 0-7 7c0 5.2 7 13 7 13s7-7.8 7-13a7 7 0 0 0-7-7zm0 9.5A2.5 2.5 0 1 1 12 6.5a2.5 2.5 0 0 1 0 5z"/></svg></span>
+    </span>
+    <strong class="o-task-count" id="home-flags">{{ open_flags_total }}</strong>
+    <span class="o-task-text">Groups asking for, or needing, an officer visit.</span>
+    <span class="o-task-go"><span class="o-task-done">All done</span><span class="o-task-open">Open Visits needed</span> →</span>
+  </a>
+</div>
+
+<section class="o-panel" aria-labelledby="week-heading">
+  <div class="o-panel-heading">
+    <div>
+      <p class="o-eyebrow">Last 7 days</p>
+      <h2 id="week-heading">This week at a glance</h2>
+    </div>
+    {% if demo %}<span class="pill amber" title="These numbers come from made-up demo households, not real farms.">Demo data</span>{% endif %}
+  </div>
+  {%- set d = week.drafts -%}
+  {%- macro bar(parts, total) -%}
+  <span class="o-bar" aria-hidden="true">
+    {%- for value, tone in parts %}{% if value %}<span class="o-bar-{{ tone }}" style="width: {{ (100 * value / total) | round(1) }}%"></span>{% endif %}{% endfor -%}
+  </span>
+  {%- endmacro -%}
+  <div class="o-stats">
+    <div class="o-stat">
+      <div class="o-stat-head"><p class="o-stat-label">Field visits recorded</p><span class="o-kpi-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 18h16v2H4zM6 4h5v7l5 2a3 3 0 0 1 2 3v1H6z"/></svg></span></div>
+      <p class="o-stat-value" data-stat="field_visits">{{ week.field_visits }}</p>
+      <p class="o-stat-note">by officers this week</p>
+    </div>
+    <div class="o-stat">
+      <div class="o-stat-head"><p class="o-stat-label">AI drafts made</p><span class="o-kpi-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M6 2h8l5 5v13a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2zm7 1.5V8h4.5zM8 12h8v1.6H8zm0 4h8v1.6H8z"/></svg></span></div>
+      <p class="o-stat-value" data-stat="drafts_total">{{ week.drafts_total }}</p>
+      {% if week.drafts_total %}{{ bar([(d.approved, "green"), (d.edited_and_approved, "green2"), (d.rejected, "red"), (d.pending_review, "amber"), (d.blocked, "grey")], week.drafts_total) }}{% endif %}
+      <p class="o-stat-note">Officer decided: <span data-stat="drafts_approved">{{ d.approved }}</span> approved, <span data-stat="drafts_edited">{{ d.edited_and_approved }}</span> edited then approved, <span data-stat="drafts_rejected">{{ d.rejected }}</span> rejected. <span data-stat="drafts_waiting">{{ d.pending_review }}</span> waiting{% if d.blocked %}, {{ d.blocked }} blocked (no source){% endif %}.</p>
+    </div>
+    <div class="o-stat">
+      <div class="o-stat-head"><p class="o-stat-label">Farmer messages</p><span class="o-kpi-icon blue" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 4h16a1 1 0 0 1 1 1v11a1 1 0 0 1-1 1H8l-4 4V5a1 1 0 0 1 1-1z"/></svg></span></div>
+      <p class="o-stat-value" data-stat="messages_total">{{ week.messages_total }}</p>
+      <p class="o-stat-note"><span data-stat="messages_unchecked">{{ week.messages_unchecked }}</span> of these still new</p>
+    </div>
+    <div class="o-stat">
+      <div class="o-stat-head"><p class="o-stat-label">Visit requests from farmers</p><span class="o-kpi-icon red" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M5 3h2v18H5zm3 1h10l-2 4 2 4H8z"/></svg></span></div>
+      <p class="o-stat-value" data-stat="visit_requests_total">{{ week.visit_requests_total }}</p>
+      {% if week.visit_requests_total %}{{ bar([(week.visit_requests_visited, "green"), (week.visit_requests_open, "red")], week.visit_requests_total) }}{% endif %}
+      <p class="o-stat-note"><span data-stat="visit_requests_open">{{ week.visit_requests_open }}</span> still need a visit, <span data-stat="visit_requests_visited">{{ week.visit_requests_visited }}</span> visited</p>
+    </div>
+    <div class="o-stat">
+      <div class="o-stat-head"><p class="o-stat-label">Did the advice help?</p><span class="o-kpi-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M2 10h4v11H2zm6 11V10l5-8 1.2.9c.5.4.7 1 .6 1.6L14 9h6a2 2 0 0 1 2 2.3l-1.4 8A2 2 0 0 1 18.6 21z"/></svg></span></div>
+      <p class="o-stat-value" data-stat="answers_total">{{ week.answers_total }}</p>
+      {% if week.answers_total %}{{ bar([(week.helped.yes, "green"), (week.helped.no, "red"), (week.helped.too_early, "amber")], week.answers_total) }}{% endif %}
+      <p class="o-stat-note">farmer answers: {{ week.helped.yes }} yes, {{ week.helped.no }} no, {{ week.helped.too_early }} too early to say</p>
+    </div>
+    <div class="o-stat">
+      <div class="o-stat-head"><p class="o-stat-label">Farmers read approved advice</p><span class="o-kpi-icon blue" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 5C6.5 5 2.5 9.4 1.5 12c1 2.6 5 7 10.5 7s9.5-4.4 10.5-7C21.5 9.4 17.5 5 12 5zm0 11a4 4 0 1 1 0-8 4 4 0 0 1 0 8zm0-6a2 2 0 1 0 0 4 2 2 0 0 0 0-4z"/></svg></span></div>
+      <p class="o-stat-value" data-stat="reads_total">{{ week.reads_total }}</p>
+      <p class="o-stat-note">times: {{ week.reads_web }} on the web page, {{ week.reads_ussd }} by phone (USSD)</p>
+    </div>
+    <div class="o-stat">
+      <div class="o-stat-head"><p class="o-stat-label">AI cost this week</p><span class="o-kpi-icon amber" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm1 15.9V19h-2v-1.1c-1.7-.3-3-1.4-3-3h2c0 .6.8 1.1 2 1.1s2-.5 2-1.1c0-.6-.6-.9-2.2-1.3-2-.5-3.6-1.1-3.6-3 0-1.4 1.1-2.5 2.8-2.8V6.6h2v1.2c1.6.3 2.7 1.4 2.8 2.9h-2c-.1-.6-.8-1-1.8-1s-1.8.4-1.8 1c0 .5.6.8 2.2 1.2 2 .5 3.6 1.2 3.6 3.1 0 1.5-1.2 2.6-3 2.9z"/></svg></span></div>
+      <p class="o-stat-value" data-stat="ai_cost">${{ "%.4f" | format(week.ai_cost) }}</p>
+      <p class="o-stat-note">about ${{ "%.5f" | format(week.ai_cost_per_draft) }} per advice draft</p>
+    </div>
+    <div class="o-stat">
+      <div class="o-stat-head"><p class="o-stat-label">Groups not visited in 30+ days</p><span class="o-kpi-icon red" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm0 18a8 8 0 1 1 0-16 8 8 0 0 1 0 16zm1-13h-2v6l5 3 1-1.7-4-2.4z"/></svg></span></div>
+      <p class="o-stat-value" data-stat="overdue_groups">{{ week.overdue_groups }}</p>
+      <p class="o-stat-note">of {{ week.groups_total }} groups. The AI sends these for a visit instead of drafting advice.</p>
+    </div>
+  </div>
+  {% if demo %}<p class="o-note">Demo data: these numbers come from the made-up demo households, not real farms.</p>{% endif %}
+</section>
+
+<section class="o-panel" aria-labelledby="groups-heading">
+  <p class="o-eyebrow">Your groups</p>
+  <h2 id="groups-heading">Household groups</h2>
+  <div class="table-wrap"><table class="o-table">
+    <thead>
+      <tr><th>Group</th><th>Households</th><th>Visits needed</th><th>Advice waiting</th><th><span class="o-sr">Open</span></th></tr>
+    </thead>
+    <tbody>
+      {% for g in groups %}
+      <tr data-group-id="{{ g.group_id }}">
+        <td><strong>Group {{ g.group_id }}</strong><br><span class="muted">{{ g.village }}</span></td>
+        <td>{{ g.household_count }}</td>
+        <td class="group-flags">{% if g.open_flags %}<span class="pill red">{{ g.open_flags }}</span>{% else %}0{% endif %}</td>
+        <td class="group-drafts">{% if g.drafts_waiting %}<span class="pill amber">{{ g.drafts_waiting }}</span>{% else %}0{% endif %}</td>
+        <td><a class="o-button o-button-small" href="/groups/{{ g.group_id }}">Open</a></td>
+>>>>>>> 992333983fe6595b29f0dd27276f6ee44df2668d
       </tr>
       {% endfor %}
     </tbody>
   </table></div>
+<<<<<<< HEAD
 </div>
 {% endif %}
 
@@ -266,5 +391,45 @@ document.addEventListener("DOMContentLoaded", () => {
   refreshDashboardLive();
   setInterval(refreshDashboardLive, 30000);
 });
+=======
+</section>
+
+<script>
+// The counts above are rendered by the server; refresh them every 30 seconds from
+// the existing JSON routes so new farmer reports, flags and drafts show up.
+function setCountCell(cell, count, pillClass) {
+  if (count > 0) {
+    const pill = document.createElement("span");
+    pill.className = "pill " + pillClass;
+    pill.textContent = count;
+    cell.replaceChildren(pill);
+  } else {
+    cell.textContent = "0";
+  }
+}
+
+function setTaskCount(id, count) {
+  const el = document.getElementById(id);
+  el.textContent = count;
+  el.closest(".o-task").classList.toggle("is-done", count === 0);
+}
+
+async function refreshHome() {
+  const [summary, groups] = await Promise.all([getJSON("/api/pending-summary"), getJSON("/api/groups")]);
+  setTaskCount("home-drafts", summary.pending_advice);
+  setTaskCount("home-flags", summary.open_flags);
+  setTaskCount("home-reports", summary.unchecked_reports);
+  document.getElementById("home-total").textContent = summary.total_pending;
+  document.getElementById("home-total-words").textContent = summary.total_pending === 1 ? "thing needs" : "things need";
+  for (const g of groups) {
+    const row = document.querySelector(`tr[data-group-id="${Number(g.group_id)}"]`);
+    if (!row) continue;  // a group added since the page loaded shows after a reload
+    setCountCell(row.querySelector(".group-flags"), g.open_flags, "red");
+    setCountCell(row.querySelector(".group-drafts"), g.drafts_waiting, "amber");
+  }
+}
+
+autoRefresh(refreshHome);
+>>>>>>> 992333983fe6595b29f0dd27276f6ee44df2668d
 </script>
 {% endblock %}

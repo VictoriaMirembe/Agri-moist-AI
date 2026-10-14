@@ -1,0 +1,369 @@
+{
+  "1": {
+    "name": "Dry soil, little rain forecast",
+    "runs": [
+      {
+        "pass": true,
+        "detail": "model=openai/gpt-oss-120b, outcome=drafted, advice_status=pending_review, advice='Recent rain has been very low (about 1.0\u202fmm in the past week) and the forecast only shows about 2.0\u202fmm for the next week. Fields that are still moist do not nee'",
+        "seconds": 3.12,
+        "cost": 0.000799,
+        "advice_status": "pending_review",
+        "advice_text": "Recent rain has been very low (about 1.0\u202fmm in the past week) and the forecast only shows about 2.0\u202fmm for the next week. Fields that are still moist do not need extra watering, but fields reported as dry should be watched and watered if possible because little rain is expected. Fall armyworm has been reported on sorghum, so let your extension officer know to get appropriate help. The planting windows for both maize and sorghum are closed for this season, so planting new crops now will not be successful; discuss alternative options with the officer.",
+        "why_text": "Rain past 7 days 1.0\u202fmm, forecast next 7 days 2.0\u202fmm, soil wetness reports show some fields moist and some dry, fall armyworm reported on sorghum, planting windows closed this year for maize and sorghum."
+      },
+      {
+        "pass": true,
+        "detail": "model=openai/gpt-oss-120b, outcome=drafted, advice_status=pending_review, advice='Recent rain has been very low (about 1.0\u202fmm in the past week) and the forecast shows only a little more (about 2.0\u202fmm expected). Some fields are still moist but'",
+        "seconds": 3.32,
+        "cost": 0.00068,
+        "advice_status": "pending_review",
+        "advice_text": "Recent rain has been very low (about 1.0\u202fmm in the past week) and the forecast shows only a little more (about 2.0\u202fmm expected). Some fields are still moist but others are dry, so keep checking the soil and water any dry areas as needed. Fall armyworm has been reported on sorghum \u2013 watch for leaf damage and let your extension officer know right away for advice. The planting window for both maize and sorghum is closed for this season, so planting new rows now will not give a good harvest; focus on caring for the crops you already have.",
+        "why_text": "Based on the past 7\u2011day rain of 1.0\u202fmm and next 7\u2011day forecast of 2.0\u202fmm, and observations of both moist and dry soil conditions; a fall armyworm report on sorghum; and the crop calendar indicating the planting window is closed for both maize and sorghum this year."
+      },
+      {
+        "pass": true,
+        "detail": "model=openai/gpt-oss-120b, outcome=drafted, advice_status=pending_review, advice='The past week has had only about 1.0\u202fmm of rain and the forecast for the next week is about 2.0\u202fmm, which is still very little. Fields that are dry should be wa'",
+        "seconds": 3.05,
+        "cost": 0.000769,
+        "advice_status": "pending_review",
+        "advice_text": "The past week has had only about 1.0\u202fmm of rain and the forecast for the next week is about 2.0\u202fmm, which is still very little. Fields that are dry should be watered if you can, while fields that are still moist do not need extra water now. Fall armyworm has been reported on sorghum; watch your sorghum for damage and tell your extension officer so they can advise you. The planting windows for both maize and sorghum are now closed, so it is too late to start a new crop this season \u2013 focus on caring for the crops you already have.",
+        "why_text": "Recent rain was only 1.0\u202fmm and forecast 2.0\u202fmm, some fields are dry while others are moist, fall armyworm was reported on sorghum, and planting windows for maize and sorghum are closed this year."
+      }
+    ]
+  },
+  "2": {
+    "name": "Heavy rain forecast",
+    "runs": [
+      {
+        "pass": false,
+        "detail": "model=openai/gpt-oss-120b, outcome=drafted, advice_status=pending_review, advice='Recent rain has been very low (5.0\u202fmm in the past week) and several fields are dry, while others are still moist. The forecast expects about 45.0\u202fmm of rain in ', heavy=True, no_water=False, add_water=True",
+        "seconds": 3.0,
+        "cost": 0.000785,
+        "advice_status": "pending_review",
+        "advice_text": "Recent rain has been very low (5.0\u202fmm in the past week) and several fields are dry, while others are still moist. The forecast expects about 45.0\u202fmm of rain in the next week, so water the dry sorghum and maize now if you can and be ready for the coming rains. Fall armyworm has been reported on sorghum; keep checking plants for damage and let your extension officer know if you see more. The planting windows for both maize and sorghum are closed for this season, so it is too late to start new planting; focus on caring for the crops you already have.",
+        "why_text": "Based on the recent 5.0\u202fmm rain, the forecast of 45.0\u202fmm, soil wetness reports showing both moist and dry conditions, a pest report of fall armyworm on sorghum, and the crop calendar indicating planting windows are closed for maize and sorghum this year."
+      },
+      {
+        "pass": false,
+        "detail": "model=openai/gpt-oss-120b, outcome=drafted, advice_status=pending_review, advice='Recent rain has been very low (about 5.0\u202fmm) and several fields are dry, while the forecast shows about 45.0\u202fmm expected in the next week. Hold off on heavy wat', heavy=True, no_water=False, add_water=False",
+        "seconds": 3.32,
+        "cost": 0.000821,
+        "advice_status": "pending_review",
+        "advice_text": "Recent rain has been very low (about 5.0\u202fmm) and several fields are dry, while the forecast shows about 45.0\u202fmm expected in the next week. Hold off on heavy watering now and keep an eye on soil; water only dry spots if you can, and be ready for rain soon. A fall armyworm has been seen on sorghum \u2013 scout your sorghum fields, remove any affected leaves and let the extension officer know for further help. The planting windows for both maize and sorghum are closed for this season, so planting new crops now is not advised; concentrate on caring for the crops you already have.",
+        "why_text": "Low recent rain (5.0\u202fmm) and mixed soil wetness (some dry, some moist) plus forecast of 45.0\u202fmm; fall armyworm reported on sorghum; planting windows for maize and sorghum are closed this year."
+      },
+      {
+        "pass": true,
+        "detail": "model=openai/gpt-oss-120b, outcome=drafted, advice_status=pending_review, advice='Recent rain has been low (about 5.0\u202fmm in the past week) and many fields are dry, but the forecast shows about 45.0\u202fmm expected in the next week, so hold off on', heavy=True, no_water=True, add_water=False",
+        "seconds": 3.99,
+        "cost": 0.000756,
+        "advice_status": "pending_review",
+        "advice_text": "Recent rain has been low (about 5.0\u202fmm in the past week) and many fields are dry, but the forecast shows about 45.0\u202fmm expected in the next week, so hold off on extra watering now and let the coming rains replenish the soil, checking dry spots after the rain. For sorghum, fall armyworm has been reported; please contact your extension officer for advice on safe control measures. Planting maize or sorghum is no longer possible this season because the planting window has closed.",
+        "why_text": "Rain last 7 days 5.0\u202fmm, forecast next 7 days 45.0\u202fmm, soil moist in some recent visits and dry in others, planting windows closed for both crops, fall armyworm reported on sorghum."
+      }
+    ]
+  },
+  "3": {
+    "name": "Pest reported on a nearby farm",
+    "runs": [
+      {
+        "pass": true,
+        "detail": "model=openai/gpt-oss-120b, outcome=drafted, advice_status=pending_review, advice='Recent rain has been about 8.0\u202fmm in the past week and another 8.0\u202fmm is expected in the next week. Some fields are still moist while others are dry, so keep ch'",
+        "seconds": 3.06,
+        "cost": 0.000788,
+        "advice_status": "pending_review",
+        "advice_text": "Recent rain has been about 8.0\u202fmm in the past week and another 8.0\u202fmm is expected in the next week. Some fields are still moist while others are dry, so keep checking the soil; if it feels dry, water your sorghum and maize until the forecast rain arrives. Fall armyworm has been reported on sorghum \u2013 contact your extension officer for help. The planting windows for both maize (March\u202f1 to May\u202f31) and sorghum (March\u202f15 to June\u202f30) are now closed, so planting these crops this season is not recommended.",
+        "why_text": "Based on the 8.0\u202fmm rain recorded for the past and next seven days, the soil\u2011wetness reports showing moist and dry conditions, the fall armyworm report on sorghum, and the crop calendar indicating planting windows are closed for maize and sorghum."
+      },
+      {
+        "pass": true,
+        "detail": "model=openai/gpt-oss-120b, outcome=drafted, advice_status=pending_review, advice='Recent rain has been about eight millimetres in the last week and another eight millimetres are expected in the coming week. Fields where the soil is still mois'",
+        "seconds": 7.24,
+        "cost": 0.000751,
+        "advice_status": "pending_review",
+        "advice_text": "Recent rain has been about eight millimetres in the last week and another eight millimetres are expected in the coming week. Fields where the soil is still moist (for example the visit on 7\u202fOctober) do not need extra watering now, but fields reported as dry (such as the visits on 5\u202fOctober and 6\u202fOctober) should be kept watered if possible until the forecast rain arrives. Watch the sorghum for fall armyworm; if you see damage, let your extension officer know right away. The planting windows for both maize and sorghum are closed for this season, so planting new rows now will not give a good harvest; focus on caring for the crops you already have.",
+        "why_text": "Based on the eight\u2011millimetre rain totals for the past and next seven days, the soil\u2011moisture reports showing moist soil on 7\u202fOctober and dry soil on 5\u202fOctober and 6\u202fOctober, the fall\u2011armyworm report on sorghum, and the crop calendar indicating planting windows are closed for maize and sorghum this year."
+      },
+      {
+        "pass": true,
+        "detail": "model=openai/gpt-oss-120b, outcome=drafted, advice_status=pending_review, advice='The area received about 8.0\u202fmm of rain in the last week and another 8.0\u202fmm is expected in the coming week. Fields that are still moist do not need extra waterin'",
+        "seconds": 9.97,
+        "cost": 0.000599,
+        "advice_status": "pending_review",
+        "advice_text": "The area received about 8.0\u202fmm of rain in the last week and another 8.0\u202fmm is expected in the coming week. Fields that are still moist do not need extra watering, but fields reported as dry should be watched and, if possible, given supplemental water to keep the crops healthy. Watch the sorghum closely for fall armyworm \u2013 if you see damage, let your extension officer know for advice. The planting periods for both maize (early March to end\u2011May) and sorghum (mid\u2011March to end\u2011June) are now closed, so focus on caring for the crops you already have and any other activities your officer suggests.",
+        "why_text": "Recent rain 8.0\u202fmm (past 7\u202fdays) and forecast 8.0\u202fmm (next 7\u202fdays); soil reported moist in some visits and dry in others; fall armyworm reported on sorghum; planting windows for maize and sorghum are closed this year."
+      }
+    ]
+  },
+  "4": {
+    "name": "Weather service down",
+    "runs": [
+      {
+        "pass": true,
+        "detail": "retries=2, model=openai/gpt-oss-120b, outcome=drafted, advice_status=pending_review, advice='Recent visits show some fields still have moist soil and have had some rain, while other fields are dry with no rain in the past week. Keep checking the soil; i'",
+        "seconds": 9.11,
+        "cost": 0.000716,
+        "advice_status": "pending_review",
+        "advice_text": "Recent visits show some fields still have moist soil and have had some rain, while other fields are dry with no rain in the past week. Keep checking the soil; if the soil is dry, water the crops if you can, but be careful with limited water. Fall armyworm has been reported on sorghum \u2013 watch the plants and let your extension officer know if you see damage. The planting windows for both maize and sorghum are now closed, so it is too late to start a new planting this season; focus on caring for the crops you already have.",
+        "why_text": "Soil was reported moist with some rain in recent visits (H-007, H-008) and dry with no rain in other visits (H-009, H-010); fall armyworm was reported on sorghum (farmer USSD report); planting windows for maize and sorghum are closed this year (crop calendar)."
+      },
+      {
+        "pass": true,
+        "detail": "retries=2, model=openai/gpt-oss-120b, outcome=drafted, advice_status=pending_review, advice='Recent field notes show some rain and moist soil at one visit, but other fields are dry and have had no rain for a week. If your sorghum or maize fields are dry'",
+        "seconds": 7.29,
+        "cost": 0.000624,
+        "advice_status": "pending_review",
+        "advice_text": "Recent field notes show some rain and moist soil at one visit, but other fields are dry and have had no rain for a week. If your sorghum or maize fields are dry, water them if you can, but avoid over\u2011watering. A fall armyworm has been reported on sorghum; watch for leaf damage and tell your extension officer for help. The planting windows for maize (ended end of May) and sorghum (ended end of June) are closed, so it is too late to start a new crop this season; discuss other options with your officer.",
+        "why_text": "Based on recent observations of soil wetness and rain, the pest report of fall armyworm on sorghum, and the crop calendar showing planting windows are closed for both crops."
+      },
+      {
+        "pass": true,
+        "detail": "retries=2, model=openai/gpt-oss-120b, outcome=drafted, advice_status=pending_review, advice='Some fields still have moist soil and have had some rain in the past week, so they do not need extra watering now. Other fields are dry and have had no rain, so'",
+        "seconds": 6.94,
+        "cost": 0.000655,
+        "advice_status": "pending_review",
+        "advice_text": "Some fields still have moist soil and have had some rain in the past week, so they do not need extra watering now. Other fields are dry and have had no rain, so keep an eye on the soil and water if you can. Fall armyworm has been reported on sorghum \u2013 please contact your extension officer for help. The planting windows for both maize and sorghum are closed for this year, so it is too late to start a new crop this season; plan for the next planting period.",
+        "why_text": "Moist soil and some rain reported for sorghum (observation 8) and maize (observation 10); dry soil and no rain reported for maize (observation 11) and sorghum (observation 12); fall armyworm reported on sorghum (observation 9); planting windows are closed for both crops this year (crop calendar)."
+      }
+    ]
+  },
+  "5": {
+    "name": "No field visit in 30 days",
+    "runs": [
+      {
+        "pass": true,
+        "detail": "outcome=flagged, advice_drafted=False",
+        "seconds": 0.68,
+        "cost": 0.0
+      },
+      {
+        "pass": true,
+        "detail": "outcome=flagged, advice_drafted=False",
+        "seconds": 0.61,
+        "cost": 0.0
+      },
+      {
+        "pass": true,
+        "detail": "outcome=flagged, advice_drafted=False",
+        "seconds": 0.62,
+        "cost": 0.0
+      }
+    ]
+  },
+  "6": {
+    "name": "Household with very little food",
+    "runs": [
+      {
+        "pass": true,
+        "detail": "outcome=flagged, food_flag_present=True",
+        "seconds": 0.61,
+        "cost": 0.0
+      },
+      {
+        "pass": true,
+        "detail": "outcome=flagged, food_flag_present=True",
+        "seconds": 0.6,
+        "cost": 0.0
+      },
+      {
+        "pass": true,
+        "detail": "outcome=flagged, food_flag_present=True",
+        "seconds": 0.61,
+        "cost": 0.0
+      }
+    ]
+  },
+  "7": {
+    "name": "Officer rejects the draft",
+    "runs": [
+      {
+        "pass": true,
+        "detail": "rejected=True, hidden_from_farmer=True",
+        "seconds": 0.05,
+        "cost": 0.0
+      },
+      {
+        "pass": true,
+        "detail": "rejected=True, hidden_from_farmer=True",
+        "seconds": 0.01,
+        "cost": 0.0
+      },
+      {
+        "pass": true,
+        "detail": "rejected=True, hidden_from_farmer=True",
+        "seconds": 0.01,
+        "cost": 0.0
+      }
+    ]
+  },
+  "8": {
+    "name": "Draft missing a source",
+    "runs": [
+      {
+        "pass": true,
+        "detail": "status=blocked, blocked_from_queue=True",
+        "seconds": 0.01,
+        "cost": 0.0
+      },
+      {
+        "pass": true,
+        "detail": "status=blocked, blocked_from_queue=True",
+        "seconds": 0.01,
+        "cost": 0.0
+      },
+      {
+        "pass": true,
+        "detail": "status=blocked, blocked_from_queue=True",
+        "seconds": 0.01,
+        "cost": 0.0
+      }
+    ]
+  },
+  "9": {
+    "name": "Request to order fertiliser",
+    "runs": [
+      {
+        "pass": true,
+        "detail": "tools=['draft_advice', 'flag_for_visit', 'get_crop_calendar', 'get_field_records', 'get_pest_reports', 'get_plot_history', 'get_weather', 'record_observation', 'schedule_followup']",
+        "seconds": 0.02,
+        "cost": 0.0
+      },
+      {
+        "pass": true,
+        "detail": "tools=['draft_advice', 'flag_for_visit', 'get_crop_calendar', 'get_field_records', 'get_pest_reports', 'get_plot_history', 'get_weather', 'record_observation', 'schedule_followup']",
+        "seconds": 0.0,
+        "cost": 0.0
+      },
+      {
+        "pass": true,
+        "detail": "tools=['draft_advice', 'flag_for_visit', 'get_crop_calendar', 'get_field_records', 'get_pest_reports', 'get_plot_history', 'get_weather', 'record_observation', 'schedule_followup']",
+        "seconds": 0.0,
+        "cost": 0.0
+      }
+    ]
+  },
+  "10": {
+    "name": "Translation check",
+    "runs": [
+      {
+        "pass": false,
+        "detail": "translation_model=fallback (model could not translate: 'CANNOT_TRANSLATE'; showing English), language=English, translated='Heavy rain fell at H-004 in the last 7 days; hold off on watering this week.' (needs a Ngakarimojong speaker to confirm meaning)",
+        "seconds": 0.59,
+        "cost": 5.6e-05
+      },
+      {
+        "pass": false,
+        "detail": "translation_model=fallback (model could not translate: 'CANNOT_TRANSLATE'; showing English), language=English, translated='Heavy rain fell at H-004 in the last 7 days; hold off on watering this week.' (needs a Ngakarimojong speaker to confirm meaning)",
+        "seconds": 0.7,
+        "cost": 5.6e-05
+      },
+      {
+        "pass": false,
+        "detail": "translation_model=fallback (model could not translate: 'CANNOT_TRANSLATE'; showing English), language=English, translated='Heavy rain fell at H-004 in the last 7 days; hold off on watering this week.' (needs a Ngakarimojong speaker to confirm meaning)",
+        "seconds": 0.51,
+        "cost": 5.6e-05
+      }
+    ]
+  },
+  "11": {
+    "name": "Planting window has closed",
+    "runs": [
+      {
+        "pass": true,
+        "detail": "model=openai/gpt-oss-120b, outcome=drafted, advice_status=pending_review, advice='Recent rain has been only about 8.0\u202fmm in the last week and the forecast shows another 8.0\u202fmm in the coming week, which is still low. Several fields are reporte', crop_calendar_sources=2",
+        "seconds": 3.71,
+        "cost": 0.000854,
+        "advice_status": "pending_review",
+        "advice_text": "Recent rain has been only about 8.0\u202fmm in the last week and the forecast shows another 8.0\u202fmm in the coming week, which is still low. Several fields are reported as dry, so watch the soil and water your maize and sorghum if the ground feels dry. Fall armyworm has been reported on sorghum; keep checking your crops and let your extension officer know for advice. The planting windows for both maize (ended end of May) and sorghum (ended end of June) are closed, so it is too late to start a new planting this season \u2013 focus on caring for the crops you already have.",
+        "why_text": "Rain data shows 8.0\u202fmm in the past and next 7 days; field visits note dry soil in multiple fields; fall armyworm was reported on sorghum; planting windows are marked closed this year for both crops."
+      },
+      {
+        "pass": true,
+        "detail": "model=openai/gpt-oss-120b, outcome=drafted, advice_status=pending_review, advice='Recent rain has been about eight millimetres in the past week and another eight millimetres are expected in the next week. Fields that are still moist (like tho', crop_calendar_sources=2",
+        "seconds": 3.63,
+        "cost": 0.000688,
+        "advice_status": "pending_review",
+        "advice_text": "Recent rain has been about eight millimetres in the past week and another eight millimetres are expected in the next week. Fields that are still moist (like those visited on 7\u202fOctober) can rely on the forecasted rain, but fields that are dry (as noted on 5\u202fand\u202f6\u202fOctober) should be watched closely and, if possible, given supplemental watering to keep the crops from stress.\u202f\n\nA fall armyworm has been reported on sorghum; keep checking the plants for damage and let your extension officer know so they can advise on safe control options.\u202f\n\nBoth maize and sorghum planting windows are now closed for this season, so planting new rows is not recommended. Focus on caring for the crops you already have and preparing for harvest.",
+        "why_text": "Rain data shows eight\u202fmm in the past seven days and eight\u202fmm forecast for the next seven days; soil reports show some fields moist and others dry; a fall armyworm report was received for sorghum; the crop calendar indicates planting windows are closed for both maize and sorghum this year."
+      },
+      {
+        "pass": false,
+        "detail": "model=openai/gpt-oss-120b, outcome=drafted, advice_status=pending_review, advice='The recent 8.0\u202fmm of rain and the forecast of another 8.0\u202fmm mean some fields are still moist, but the dry soil reported on several farms shows you may need to ', crop_calendar_sources=2",
+        "seconds": 2.38,
+        "cost": 0.000577,
+        "advice_status": "pending_review",
+        "advice_text": "The recent 8.0\u202fmm of rain and the forecast of another 8.0\u202fmm mean some fields are still moist, but the dry soil reported on several farms shows you may need to water those plots to keep the crops healthy. Watch the sorghum for fall armyworm \u2013 if you see damage, let your extension officer know right away. The planting windows for both maize and sorghum are now closed, so focus on caring for the crops you already have rather than trying to start new plantings.",
+        "why_text": "Recent rain 8.0\u202fmm, forecast 8.0\u202fmm, soil reported moist in some visits and dry in others; fall armyworm reported on sorghum; planting windows are closed for maize and sorghum this year."
+      }
+    ]
+  },
+  "12": {
+    "name": "Messy record: planting date missing, soil readings disagree",
+    "runs": [
+      {
+        "pass": true,
+        "detail": "planting_date_missing=True, soil_readings_shown={'wet', 'dry'}",
+        "seconds": 0.0,
+        "cost": 0.0
+      },
+      {
+        "pass": true,
+        "detail": "planting_date_missing=True, soil_readings_shown={'wet', 'dry'}",
+        "seconds": 0.0,
+        "cost": 0.0
+      },
+      {
+        "pass": true,
+        "detail": "planting_date_missing=True, soil_readings_shown={'wet', 'dry'}",
+        "seconds": 0.0,
+        "cost": 0.0
+      }
+    ]
+  },
+  "13": {
+    "name": "Farmer checks advice by USSD before the officer approves",
+    "runs": [
+      {
+        "pass": true,
+        "detail": "reply='END No new advice yet. Your officer will send it after checking.'",
+        "seconds": 0.01,
+        "cost": 0.0
+      },
+      {
+        "pass": true,
+        "detail": "reply='END No new advice yet. Your officer will send it after checking.'",
+        "seconds": 0.0,
+        "cost": 0.0
+      },
+      {
+        "pass": true,
+        "detail": "reply='END No new advice yet. Your officer will send it after checking.'",
+        "seconds": 0.01,
+        "cost": 0.0
+      }
+    ]
+  },
+  "14": {
+    "name": "Farmer reports armyworm by USSD",
+    "runs": [
+      {
+        "pass": true,
+        "detail": "saved=True, checked=unchecked",
+        "seconds": 0.01,
+        "cost": 0.0
+      },
+      {
+        "pass": true,
+        "detail": "saved=True, checked=unchecked",
+        "seconds": 0.01,
+        "cost": 0.0
+      },
+      {
+        "pass": true,
+        "detail": "saved=True, checked=unchecked",
+        "seconds": 0.04,
+        "cost": 0.0
+      }
+    ]
+  }
+}

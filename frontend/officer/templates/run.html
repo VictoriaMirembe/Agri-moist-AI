@@ -1,24 +1,55 @@
-{# Agent run screen: streams each tool call of one run live from GET /api/runs/{id}/events (server-sent events). #}
+{# AI draft in progress: streams each step of one agent run live from GET /api/runs/{id}/events (server-sent events), in plain words. The raw tool calls stay under "Technical details". #}
 {% extends "base.html" %}
-{% block title %}Agent run {{ run_id }}{% endblock %}
+{% block title %}AI draft #{{ run_id }}{% endblock %}
 {% block content %}
-<h1>Agent run #{{ run_id }}</h1>
-<p class="muted">Watching tool calls live. Each line is a real call, with its source. Gaps are marked, never guessed.</p>
-<p><a class="btn secondary" id="back-link" href="#">Back to group</a></p>
-<div id="status" class="pill amber">running</div>
-<div class="event-log" id="log" style="margin-top:0.8rem;">connecting...</div>
+<div class="o-page-head">
+  <div>
+    <p class="o-eyebrow">AI assistant at work</p>
+    <h1>AI draft #{{ run_id }}</h1>
+    <p class="o-lead">Each step is a real check, with its source. Missing data is marked, never guessed.</p>
+  </div>
+  <a class="btn secondary" id="back-link" href="#">Back to group</a>
+</div>
+
+<section class="card o-panel">
+  <p>Status: <span id="status" class="pill amber">Working…</span></p>
+  <ol class="o-steps" id="log" aria-live="polite"><li>Connecting…</li></ol>
+  <p id="next-step" class="o-next" hidden></p>
+  <details class="o-fold"><summary>Technical details</summary><div class="event-log" id="raw-log"></div></details>
+</section>
 
 <script>
 const runId = {{ run_id }};
 const logEl = document.getElementById("log");
+const rawEl = document.getElementById("raw-log");
 logEl.textContent = "";
 
+const STEP_WORDS = {
+  get_field_records: "recent visits and farmer messages",
+  get_plot_history: "plot history",
+  get_pest_reports: "pest reports nearby",
+  get_weather: "the weather forecast",
+  get_current_time: "today's date",
+  get_crop_calendar: "the crop calendar",
+  draft_advice: "saving the draft for approval",
+  flag_for_visit: "asking for an officer visit",
+  schedule_followup: "booking a follow-up date",
+};
+const stepWords = (tool) => STEP_WORDS[tool] || String(tool || "").replace(/_/g, " ");
+
+// Plain line for the officer (text only), and the raw line under Technical details.
 function line(text, cls) {
-  const span = document.createElement("div");
-  if (cls) span.className = cls;
-  span.textContent = text;
-  logEl.appendChild(span);
-  logEl.scrollTop = logEl.scrollHeight;
+  const item = document.createElement("li");
+  if (cls) item.className = cls;
+  item.textContent = text;
+  logEl.appendChild(item);
+}
+function raw(text, cls) {
+  const div = document.createElement("div");
+  if (cls) div.className = cls;
+  div.textContent = text;
+  rawEl.appendChild(div);
+  rawEl.scrollTop = rawEl.scrollHeight;
 }
 
 const source = new EventSource(`/api/runs/${runId}/events`);
@@ -26,43 +57,59 @@ let groupIdSeen = null;
 
 source.addEventListener("plan", (e) => {
   const d = JSON.parse(e.data);
-  line(`plan: zone=${d.zone} village=${d.village}`);
+  line(`Planning for ${d.village} (${d.zone} zone)`);
+  raw(`plan: zone=${d.zone} village=${d.village}`);
 });
 source.addEventListener("tool_call", (e) => {
   const d = JSON.parse(e.data);
-  line(`-> calling ${d.tool} (attempt ${d.attempt || 1}) ${JSON.stringify(d.inputs || {})}`);
+  raw(`-> calling ${d.tool} (attempt ${d.attempt || 1}) ${JSON.stringify(d.inputs || {})}`);
 });
 source.addEventListener("tool_result", (e) => {
   const d = JSON.parse(e.data);
-  line(`   ok ${d.tool}: ${JSON.stringify(d.outputs).slice(0, 220)}`, "ok");
+  line(`✓ Checked ${stepWords(d.tool)}`, "ok");
+  raw(`   ok ${d.tool}: ${JSON.stringify(d.outputs).slice(0, 220)}`, "ok");
 });
 source.addEventListener("tool_error", (e) => {
   const d = JSON.parse(e.data);
-  line(`   FAILED ${d.tool}: ${d.error}${d.final ? " (giving up after retry; gap will be marked)" : " (retrying once)"}`, "err");
+  line(d.final ? `✗ Could not get ${stepWords(d.tool)} after a retry - marked as missing, not guessed` : `✗ Could not get ${stepWords(d.tool)} - trying once more`, "err");
+  raw(`   FAILED ${d.tool}: ${d.error}${d.final ? " (giving up after retry; gap will be marked)" : " (retrying once)"}`, "err");
 });
-source.addEventListener("check_sources", (e) => {
+source.addEventListener("check_urgent", (e) => {
   const d = JSON.parse(e.data);
-  line(`check_sources: ${d.flag_reason ? "needs a visit - " + d.flag_reason : "no urgent flag; drafting advice"}`);
+  line(d.flag_reason ? `Urgent: needs a visit - ${plainFact(d.flag_reason)}` : "No urgent problem - writing the advice draft");
+  raw(`check_urgent: ${d.flag_reason ? "needs a visit - " + d.flag_reason : "no urgent flag; drafting advice"}`);
 });
-source.addEventListener("model_call", () => line("-> drafting with the model"));
+source.addEventListener("model_call", () => { line("Writing the advice draft"); raw("-> drafting with the model"); });
 source.addEventListener("model_result", (e) => {
   const d = JSON.parse(e.data);
-  line(`   model (${d.model}): ${d.advice_preview}...`, "ok");
+  line("✓ Draft written", "ok");
+  raw(`   model (${d.model}): ${d.advice_preview}...`, "ok");
 });
 source.addEventListener("run_error", (e) => {
   const d = JSON.parse(e.data);
-  line(`RUN ERROR: ${d.error}`, "err");
+  line("✗ The run stopped with a problem - see Technical details", "err");
+  raw(`RUN ERROR: ${d.error}`, "err");
 });
 source.addEventListener("run_finished", (e) => {
   const d = JSON.parse(e.data);
-  line(`run finished: outcome=${d.outcome}`);
-  document.getElementById("status").textContent = d.outcome;
-  document.getElementById("status").className = "pill " + (d.outcome === "drafted" ? "green" : d.outcome === "flagged" ? "amber" : "red");
+  raw(`run finished: outcome=${d.outcome}`);
+  const status = document.getElementById("status");
+  status.textContent = plainStatus(d.outcome);
+  status.className = "pill " + (d.outcome === "drafted" ? "green" : d.outcome === "flagged" ? "amber" : "red");
+  const next = document.getElementById("next-step");
+  if (d.outcome === "drafted") {
+    next.innerHTML = 'The draft is waiting for you. <a class="btn" href="/approvals">Go to Approve advice</a>';
+  } else if (d.outcome === "flagged") {
+    next.innerHTML = 'No advice was drafted: this group needs a visit first. <a class="btn" href="/flags">Go to Visits needed</a>';
+  } else {
+    next.textContent = "The run did not finish. Try Draft advice again.";
+  }
+  next.hidden = false;
   source.close();
   fetchGroupAndSetLink();
 });
 source.onerror = () => {
-  line("(connection closed)");
+  raw("(connection closed)");
   source.close();
 };
 

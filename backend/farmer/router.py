@@ -6,12 +6,12 @@
 from __future__ import annotations
 
 import re
-from datetime import date
+from datetime import date, datetime, timezone
 from typing import Literal
 
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import PlainTextResponse
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import text
 from sqlmodel import select
 
@@ -24,6 +24,7 @@ from backend.db.models import (
     CropCalendar,
     District,
     Followup,
+    FollowupAnswer,
     Household,
     Observation,
     Officer,
@@ -63,6 +64,14 @@ def _normalize_phone(phone: str) -> str:
     elif cleaned.startswith("256") and not cleaned.startswith("+"):
         cleaned = "+" + cleaned
     return cleaned
+
+
+def _contact_for_phone(session, household: Household, phone: str) -> Contact | None:
+    """The household's contact whose number matches `phone` in any accepted form
+    (07..., +256..., 256..., with spaces or dashes)."""
+    normalised = _normalize_phone(phone)
+    contacts = session.exec(select(Contact).where(Contact.household_id == household.id)).all()
+    return next((c for c in contacts if _normalize_phone(c.phone) == normalised), None)
 
 
 def _household_for_phone(session, phone: str) -> Household | None:
@@ -110,7 +119,26 @@ def _advice_for_group(session, group_id: int) -> dict:
     }
 
 
-def _save_followup(session, advice_id: int, followed: str, helped: str | None, channel: str) -> None:
+def _log_advice_viewed(session, household: Household, info: dict, channel: str) -> None:
+    """Record that a farmer was shown approved advice. Only a log entry: the advice
+    status never changes here (only backend/approvals may change it)."""
+    if not info.get("has_advice"):
+        return
+    run_logged(
+        session,
+        tool="farmer_viewed_advice",
+        inputs={"household_code": household.code, "advice_id": info["advice_id"]},
+        actor="farmer",
+        source=channel,
+        run_id=None,
+        func=lambda: {"household_code": household.code, "advice_id": info["advice_id"], "status": info["status"]},
+    )
+
+
+def _save_followup(
+    session, advice_id: int, household: Household, followed: str, helped: str | None, channel: str
+) -> None:
+    # The advice's Followup row keeps the latest answer, as before.
     followup = session.exec(select(Followup).where(Followup.advice_id == advice_id)).first()
     if followup is None:
         followup = Followup(advice_id=advice_id, due_on=date.today())
@@ -118,6 +146,19 @@ def _save_followup(session, advice_id: int, followed: str, helped: str | None, c
     followup.helped = helped
     followup.answered_via = channel
     session.add(followup)
+    # Each household's own answer, so households in one group never overwrite each other.
+    answer = session.exec(
+        select(FollowupAnswer).where(
+            FollowupAnswer.advice_id == advice_id, FollowupAnswer.household_id == household.id
+        )
+    ).first()
+    if answer is None:
+        answer = FollowupAnswer(advice_id=advice_id, household_id=household.id, followed=followed, answered_via=channel)
+    answer.followed = followed
+    answer.helped = helped
+    answer.answered_via = channel
+    answer.answered_at = datetime.now(timezone.utc)
+    session.add(answer)
     session.commit()
 
 
@@ -138,7 +179,27 @@ def _touch_ussd_session(session, session_id: str, phone: str, screen: str) -> No
 class FarmerReportRequest(BaseModel):
     phone: str
     problem: str  # pests, no_rain, heavy_rain, crop_sick
-    crop: str | None = None
+    crop: str | None = None  # sorghum, maize, or a crop name the farmer typed under "Other"
+    pest: str | None = None  # optional: the pest the farmer picked or named (problem "pests" only)
+
+    @field_validator("crop")
+    @classmethod
+    def _tidy_crop(cls, value: str | None) -> str | None:
+        # A typed crop name is saved trimmed, lowercase and at most 40 characters;
+        # an empty one means no crop, as before. "sorghum" and "maize" are unchanged.
+        if value is None:
+            return None
+        return " ".join(value.split())[:40].strip().lower() or None
+
+
+def _report_fields(problem: str, pest: str | None) -> dict:
+    """Observation fields for a farmer report. A pest the farmer named replaces the
+    generic "farmer-reported pest"; a channel that cannot name one keeps it."""
+    fields = dict(PROBLEM_FIELD_MAP[problem])
+    name = " ".join((pest or "").split())[:60]
+    if problem == "pests" and name:
+        fields["pest_seen"] = name.lower()
+    return fields
 
 
 @router.post("/api/farmer-reports")
@@ -149,7 +210,7 @@ def create_farmer_report(body: FarmerReportRequest):
         household = _household_for_phone(session, body.phone)
         if household is None:
             raise HTTPException(404, "This number is not registered. Please ask your extension officer.")
-        fields = PROBLEM_FIELD_MAP[body.problem]
+        fields = _report_fields(body.problem, body.pest)
         try:
             return run_logged(
                 session,
@@ -187,7 +248,7 @@ def create_visit_request(body: VisitRequestBody):
             func=lambda: impl.flag_for_visit(
                 session,
                 group_id=household.group_id,
-                reason=f"Farmer asked for a visit: {body.reason}",
+                reason=f"{household.code} asked for a visit: {body.reason.strip().lower()}",
                 raised_by="farmer_web",
             ),
         )
@@ -199,7 +260,9 @@ def farmer_advice(phone: str):
         household = _household_for_phone(session, phone)
         if household is None:
             raise HTTPException(404, "This number is not registered. Please ask your extension officer.")
-        return _advice_for_group(session, household.group_id)
+        info = _advice_for_group(session, household.group_id)
+        _log_advice_viewed(session, household, info, "farmer_web")
+        return info
 
 
 @router.get("/api/farmer/profile")
@@ -208,9 +271,7 @@ def farmer_profile(phone: str):
         household = _household_for_phone(session, phone)
         if household is None:
             raise HTTPException(404, "This number is not registered. Please ask your extension officer.")
-        contact = session.exec(
-            select(Contact).where(Contact.household_id == household.id, Contact.phone == phone)
-        ).first()
+        contact = _contact_for_phone(session, household, phone)
         if contact is None:
             raise HTTPException(404, "No registered farmer contact was found for this household.")
         return {
@@ -227,9 +288,7 @@ def farmer_dashboard(phone: str):
         if household is None:
             raise HTTPException(404, "This number is not registered. Please ask your extension officer.")
 
-        contact = session.exec(
-            select(Contact).where(Contact.household_id == household.id, Contact.phone == phone)
-        ).first()
+        contact = _contact_for_phone(session, household, phone)
         if contact is None:
             raise HTTPException(404, "No registered farmer contact was found for this household.")
 
@@ -322,7 +381,7 @@ def farmer_followup(body: FollowupBody):
             or advice.status not in ("approved", "edited_and_approved")
         ):
             raise HTTPException(404, "No approved advice found for this household.")
-        _save_followup(session, body.advice_id, body.followed, body.helped, "farmer_web")
+        _save_followup(session, body.advice_id, household, body.followed, body.helped, "farmer_web")
         run_logged(
             session,
             tool="record_followup",
@@ -353,6 +412,7 @@ FOLLOWED_MAP = {"1": "yes", "2": "partly", "3": "no"}
 HELPED_MAP = {"1": "yes", "2": "no", "3": "too_early"}
 
 NOT_UNDERSTOOD = "END Sorry, that was not understood. Please dial again."
+NO_ADVICE_TO_ANSWER = "END No advice to answer yet. Your officer will send advice after checking."
 
 
 @router.post("/ussd", response_class=PlainTextResponse)
@@ -379,6 +439,7 @@ def _handle_ussd(session, household: Household, phone: str, raw_text: str) -> st
         info = _advice_for_group(session, household.group_id)
         if not info.get("has_advice"):
             return "END No new advice yet. Your officer will send it after checking."
+        _log_advice_viewed(session, household, info, "farmer_ussd")
         officer_bit = f" Approved by {info['officer_name']}," if info.get("officer_name") else ""
         return f"END {info['text'][:140]}.{officer_bit} {info['date'][:10]}."
 
@@ -426,7 +487,7 @@ def _handle_ussd(session, household: Household, phone: str, raw_text: str) -> st
                 func=lambda: impl.flag_for_visit(
                     session,
                     group_id=household.group_id,
-                    reason=f"Farmer asked for a visit: {reason}",
+                    reason=f"{household.code} asked for a visit: {reason.lower()}",
                     raised_by="farmer_ussd",
                 ),
             )
@@ -434,6 +495,10 @@ def _handle_ussd(session, household: Household, phone: str, raw_text: str) -> st
         return NOT_UNDERSTOOD
 
     if top == "4":
+        info = _advice_for_group(session, household.group_id)
+        if not info.get("has_advice"):
+            # Nothing approved to answer about: say so, and save nothing.
+            return NO_ADVICE_TO_ANSWER
         if len(steps) == 1:
             return "CON Did you follow the last advice?\n1. Yes  2. Partly  3. No"
         if len(steps) == 2:
@@ -445,9 +510,16 @@ def _handle_ussd(session, household: Household, phone: str, raw_text: str) -> st
             helped = HELPED_MAP.get(steps[2])
             if followed is None or helped is None:
                 return NOT_UNDERSTOOD
-            info = _advice_for_group(session, household.group_id)
-            if info.get("has_advice"):
-                _save_followup(session, info["advice_id"], followed, helped, "farmer_ussd")
+            _save_followup(session, info["advice_id"], household, followed, helped, "farmer_ussd")
+            run_logged(
+                session,
+                tool="record_followup",
+                inputs={"phone": phone, "advice_id": info["advice_id"], "followed": followed, "helped": helped},
+                actor="farmer",
+                source="farmer_ussd",
+                run_id=None,
+                func=lambda: {"advice_id": info["advice_id"], "followed": followed, "helped": helped},
+            )
             return "END Thank you. This helps improve advice."
         return NOT_UNDERSTOOD
 

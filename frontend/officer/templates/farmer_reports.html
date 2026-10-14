@@ -1,62 +1,55 @@
-{# Farmer reports: reports sent by USSD or the farmer web page (GET /api/farmer-reports); an officer can mark each one checked. #}
+{# Farmer messages - Reports tab: reports farmers sent by phone (USSD) or the farmer web page (GET /api/farmer-reports); an officer marks each one as checked. The "Did advice help?" tab is followups.html. #}
 {% extends "base.html" %}
-{% block title %}Farmer reports{% endblock %}
+{% block title %}Farmer messages{% endblock %}
 {% block content %}
-<h1>Farmer reports</h1>
-<p class="muted">Reports from USSD and the farmer web page. Unchecked until an officer confirms them.</p>
+<div class="o-page-head">
+  <div>
+    <p class="o-eyebrow">From farmers</p>
+    <h1>Farmer messages</h1>
+    <p class="o-lead">What farmers told you by phone (USSD) or on the farmer web page.</p>
+  </div>
+  <div class="o-acting">
+    <label for="officer">Acting as</label>
+    <select id="officer">
+      {% for o in officers %}
+      <option value="{{ o.id }}">{{ o.name }}</option>
+      {% endfor %}
+    </select>
+  </div>
+</div>
 
-<label for="officer">Acting as</label>
-<select id="officer" style="max-width:320px;">
-  {% for o in officers %}
-  <option value="{{ o.id }}">{{ o.name }}</option>
-  {% endfor %}
-</select>
+<nav class="o-subtabs" aria-label="Farmer messages">
+  <a href="/farmer-reports" aria-current="page">Reports</a>
+  <a href="/followups">Did advice help?</a>
+</nav>
 
-<div id="list" class="muted" style="margin-top:1rem;">Loading...</div>
+<div id="list" class="muted">Loading...</div>
 
 <script>
 const officerSelect = document.getElementById("officer");
+window.GROUP_VILLAGES = {{ group_villages | tojson }};
 
 function renderReport(r) {
-  const notes = r.notes ? escapeHTML(r.notes) : "<em class='muted'>No additional notes</em>";
-  const details = [
-    r.crop ? "Crop: " + escapeHTML(r.crop) : null,
-    r.pest_seen ? "Pest seen: " + escapeHTML(r.pest_seen) : null,
-    r.rain_last_7_days ? "Rain (7 days): " + escapeHTML(r.rain_last_7_days) : null,
-    r.crop_condition ? "Crop condition: " + escapeHTML(r.crop_condition) : null,
-  ].filter(Boolean).join(" &bull; ");
-  const sourceLabel = r.source === "farmer_ussd" ? "USSD" : r.source === "farmer_web" ? "Web portal" : escapeHTML(r.source);
-  const groupId = r.group_id ? escapeHTML(String(r.group_id)) : null;
-  return `
-  <div class="card" data-id="${r.id}">
-    <p><strong>${escapeHTML(r.household_code)}</strong> via ${sourceLabel} &nbsp;<span class="pill ${r.checked === 'checked' ? 'green' : 'amber'}">${escapeHTML(r.checked)}</span> <span class="muted">${escapeHTML(r.observed_on)}</span></p>
-    ${groupId ? `<p><a href="/groups/${groupId}">Open household group G-${groupId}</a></p>` : ""}
-    ${details ? `<p>${details}</p>` : ""}
-    <p>${notes}</p>
-    <div class="row actions" style="margin-top:0.6rem;gap:0.5rem;">
-      ${r.checked === 'unchecked' ? `<button class="btn secondary" onclick="markChecked(${r.id})">Mark checked</button>` : ""}
-      ${groupId ? `<a class="btn secondary" href="/approvals">View approval queue</a>` : ""}
-    </div>
-  </div>`;
+  return reportCard(r, "data-id");
 }
 
 async function load() {
   const listEl = document.getElementById("list");
   try {
     const items = await getJSON("/api/farmer-reports");
-    listEl.innerHTML = items.length ? items.map(renderReport).join("") : "<p class='muted'>No farmer reports yet.</p>";
+    replaceCards(listEl, items.length ? items.map(renderReport).join("") : "<p class='o-empty'>No farmer messages yet.</p>", "data-id");
+    listEl.dataset.loaded = "1";
   } catch (err) {
-    listEl.textContent = "Could not load: " + err.message;
+    showLoadError(listEl, err);
   }
 }
 
-async function markChecked(id) {
-  try {
-    await postJSON(`/api/farmer-reports/${id}/check`, { officer_id: parseInt(officerSelect.value, 10) });
-    load();
-  } catch (err) { alert(err.message); }
+function markChecked(id) {
+  const card = document.querySelector(`[data-id="${id}"]`);
+  return cardAction(card, () => postJSON(`/api/farmer-reports/${id}/check`, { officer_id: parseInt(officerSelect.value, 10) }), load);
 }
 
 load();
+autoRefresh(load);
 </script>
 {% endblock %}

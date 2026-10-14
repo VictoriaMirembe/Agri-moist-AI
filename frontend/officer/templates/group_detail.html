@@ -1,53 +1,72 @@
-{# Household group screen: flags, advice history, recent field records, plot history and crop calendar (from GET /api/groups/{id}), and the Draft advice button (POST /api/groups/{id}/draft). #}
+{# Household group screen: visits needed, advice history, recent field records and farmer messages, plot history and crop calendar (from GET /api/groups/{id}), and the Draft advice button (POST /api/groups/{id}/draft). #}
 {% extends "base.html" %}
-{% block title %}Group G-{{ group_id }}{% endblock %}
+{% block title %}Group {{ group_id }}{% endblock %}
 {% block content %}
-<h1>Household group G-{{ group_id }}{% if village %} - {{ village.name }}{% endif %}</h1>
-<p class="muted">Zone: {{ zone or "unknown" }} | Households: {% for h in households %}{{ h.code }}{% if not loop.last %}, {% endif %}{% endfor %}</p>
-
-<div class="card">
-  <button class="btn" id="draft-btn">Draft advice</button>
-  <p id="draft-error" class="pill red" style="display:none;margin-top:0.8rem;"></p>
+<div class="o-page-head">
+  <div>
+    <p class="o-eyebrow">Household group</p>
+    <h1>Group {{ group_id }}{% if village %} · {{ village.name }}{% endif %}</h1>
+    <p class="o-lead">Zone: {{ zone or "unknown" }} · Households: {% for h in households %}<span class="o-nowrap">{{ h.code }}</span>{% if not loop.last %}, {% endif %}{% endfor %}</p>
+  </div>
 </div>
 
+<section class="card o-panel o-draft-box">
+  <div>
+    <h2>Draft advice for this group</h2>
+    <p class="muted">The AI assistant checks the weather, visits, pests and the crop calendar, then writes a draft for you to approve. Urgent cases are sent for a visit instead.</p>
+  </div>
+  <button class="btn" id="draft-btn">Draft advice</button>
+  <p id="draft-error" class="pill red" style="display:none;margin-top:0.8rem;"></p>
+</section>
+
 {% if flags %}
-<h2>Visit flags</h2>
-<div class="table-wrap"><table>
-  <thead><tr><th>Reason</th><th>Raised by</th><th>Status</th></tr></thead>
-  <tbody>
-    {% for f in flags %}
-    <tr><td>{{ f.reason }}</td><td>{{ f.raised_by }}</td><td><span class="pill {{ 'amber' if f.status == 'open' else 'green' }}">{{ f.status }}</span></td></tr>
-    {% endfor %}
-  </tbody>
-</table></div>
+<section class="o-panel">
+  <h2>Visits needed</h2>
+  <div class="table-wrap"><table class="o-table">
+    <thead><tr><th>Reason</th><th>Asked by</th><th>Status</th></tr></thead>
+    <tbody>
+      {% for f in flags %}
+      <tr><td>{{ f.reason }}</td><td>{{ f.raised_by | plain_channel }}</td><td><span class="pill {{ 'red' if f.status == 'open' else 'green' }}">{{ f.status | plain_status }}</span></td></tr>
+      {% endfor %}
+    </tbody>
+  </table></div>
+</section>
 {% endif %}
 
-<h2>Advice history</h2>
-{% if advices %}
-<div class="table-wrap"><table>
-  <thead><tr><th>Date</th><th>Status</th><th></th></tr></thead>
-  <tbody>
-    {% for a in advices %}
-    <tr>
-      <td>{{ a.created_at.strftime("%Y-%m-%d %H:%M") }}</td>
-      <td><span class="pill {% if a.status in ['approved','edited_and_approved'] %}green{% elif a.status in ['blocked','rejected'] %}red{% else %}amber{% endif %}">{{ a.status }}</span></td>
-      <td><a class="btn secondary" href="/approvals">Review</a></td>
-    </tr>
-    {% endfor %}
-  </tbody>
-</table></div>
-{% else %}
-<p class="muted">No advice drafted for this group yet.</p>
-{% endif %}
+<section class="o-panel">
+  <h2>Advice history</h2>
+  {% if advices %}
+  <div class="table-wrap"><table class="o-table">
+    <thead><tr><th>Drafted</th><th>Status</th><th><span class="o-sr">Open</span></th></tr></thead>
+    <tbody>
+      {% for a in advices %}
+      <tr>
+        <td>{{ a.created_at | when }}</td>
+        <td><span class="pill {{ a.status | tone }}">{{ a.status | plain_status }}</span></td>
+        <td>{% if a.status == "pending_review" %}<a class="o-button o-button-small" href="/approvals">Approve advice</a>{% endif %}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table></div>
+  {% else %}
+  <p class="muted">No advice drafted for this group yet.</p>
+  {% endif %}
+</section>
 
-<h2>Recent field records and farmer reports</h2>
-<div id="field-records" class="muted">Loading...</div>
+<section class="o-panel">
+  <h2>Recent visits and farmer messages</h2>
+  <div id="field-records" class="muted">Loading...</div>
+</section>
 
-<h2>Plot history</h2>
-<div id="plot-history" class="muted">Loading...</div>
+<section class="o-panel">
+  <h2>Plot history</h2>
+  <div id="plot-history" class="muted">Loading...</div>
+</section>
 
-<h2>Crop calendar</h2>
-<div id="crop-calendar" class="muted">Loading...</div>
+<section class="o-panel">
+  <h2>Crop calendar</h2>
+  <div id="crop-calendar" class="muted">Loading...</div>
+</section>
 
 <script>
 const groupId = {{ group_id }};
@@ -57,15 +76,15 @@ async function loadDetail() {
     const data = await getJSON(`/api/groups/${groupId}`);
     const fr = data.field_records.records;
     document.getElementById("field-records").innerHTML = fr.length ? (
-      "<div class='table-wrap'><table><thead><tr><th>Household</th><th>Source</th><th>Soil</th><th>Rain</th><th>Pest</th><th>Condition</th><th>Food</th><th>Checked</th></tr></thead><tbody>" +
-      fr.map(r => `<tr><td>${escapeHTML(r.household_code)}</td><td>${escapeHTML(r.source)}</td><td>${escapeHTML(r.soil_wetness||'-')}</td><td>${escapeHTML(r.rain_last_7_days||'-')}</td><td>${escapeHTML(r.pest_seen||'-')}</td><td>${escapeHTML(r.crop_condition||'-')}</td><td>${escapeHTML(r.food_left||'-')}</td><td>${escapeHTML(r.checked)}</td></tr>`).join("") +
+      "<div class='table-wrap'><table class='o-table'><thead><tr><th>Household</th><th>From</th><th>When</th><th>Soil</th><th>Rain</th><th>Pest</th><th>Crop condition</th><th>Food left</th><th>Status</th></tr></thead><tbody>" +
+      fr.map(r => `<tr><td>${escapeHTML(r.household_code)}</td><td>${escapeHTML(plainChannel(r.source))}</td><td>${escapeHTML(formatWhen(r.observed_on))}</td><td>${escapeHTML(r.soil_wetness||'-')}</td><td>${escapeHTML(r.rain_last_7_days||'-')}</td><td>${escapeHTML(r.pest_seen||'-')}</td><td>${escapeHTML(r.crop_condition||'-')}</td><td>${escapeHTML(r.food_left||'-')}</td><td>${statusPill(r.checked)}</td></tr>`).join("") +
       "</tbody></table></div>"
     ) : "<p class='muted'>No recent records.</p>";
 
     const ph = data.plot_history.history;
     document.getElementById("plot-history").innerHTML = ph.length ? (
-      "<div class='table-wrap'><table><thead><tr><th>Household</th><th>Season</th><th>Crop</th><th>Planted</th><th>Harvested</th></tr></thead><tbody>" +
-      ph.map(r => `<tr><td>${escapeHTML(r.household_code)}</td><td>${escapeHTML(r.season)}</td><td>${escapeHTML(r.crop)}</td><td>${r.planted_on ? escapeHTML(r.planted_on) : '<span class=\"gap\">missing</span>'}</td><td>${escapeHTML(r.harvested_on || '-')}</td></tr>`).join("") +
+      "<div class='table-wrap'><table class='o-table'><thead><tr><th>Household</th><th>Season</th><th>Crop</th><th>Planted</th><th>Harvested</th></tr></thead><tbody>" +
+      ph.map(r => `<tr><td>${escapeHTML(r.household_code)}</td><td>${escapeHTML(r.season)}</td><td>${escapeHTML(r.crop)}</td><td>${r.planted_on ? escapeHTML(formatWhen(r.planted_on)) : '<span class=\"gap\">Planting date missing</span>'}</td><td>${escapeHTML(r.harvested_on ? formatWhen(r.harvested_on) : '-')}</td></tr>`).join("") +
       "</tbody></table></div>"
     ) : "<p class='muted'>No plot history.</p>";
 
@@ -73,10 +92,10 @@ async function loadDetail() {
     const crops = Object.keys(cal);
     document.getElementById("crop-calendar").innerHTML = crops.length ? crops.map(c => {
       const row = cal[c];
-      if (!row) return `<p>${escapeHTML(c)}: <span class="gap">no crop calendar entry - no source, cannot advise planting</span></p>`;
-      const status = row.planting_window_closed_this_year ? '<span class="pill red">closed this year</span>' : (row.planting_window_open_today ? '<span class="pill green">open now</span>' : '<span class="pill amber">not open yet</span>');
-      const link = safeURL(row.source_ref) ? `<a href="${safeURL(row.source_ref)}" target="_blank" rel="noopener">source</a>` : escapeHTML(row.source_ref);
-      return `<p><strong>${escapeHTML(c)}</strong>: ${escapeHTML(row.plant_from)} to ${escapeHTML(row.plant_to)} ${status} - ${link}</p>`;
+      if (!row) return `<p>${escapeHTML(c)}: <span class="gap">No crop calendar entry - no source, cannot advise planting</span></p>`;
+      const status = row.planting_window_closed_this_year ? '<span class="pill red">Planting closed this year</span>' : (row.planting_window_open_today ? '<span class="pill green">Planting open now</span>' : '<span class="pill amber">Planting not open yet</span>');
+      const link = safeURL(row.source_ref) ? `<a href="${safeURL(row.source_ref)}" target="_blank" rel="noopener">source: FEWS NET</a>` : escapeHTML(row.source_ref);
+      return `<p class="o-calendar-row"><strong>${escapeHTML(c)}</strong>: plant ${escapeHTML(formatMonthDay(row.plant_from))} to ${escapeHTML(formatMonthDay(row.plant_to))} ${status} · ${link}</p>`;
     }).join("") : "<p class='muted'>No crops recorded yet for this group.</p>";
   } catch (err) {
     document.getElementById("field-records").textContent = "Could not load: " + err.message;

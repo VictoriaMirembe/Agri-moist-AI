@@ -1,9 +1,10 @@
-# The AgriMoist AI agent: plan, gather, check sources, draft or flag - with one retry
+# The AgriMoist AI agent: plan, gather, check urgent, draft or flag - with one retry
 # per tool before a gap is marked (never guessed). Built with LangGraph. Tools are
 # called over the real MCP protocol through backend.agent.mcp_client.ToolClient, which
 # talks to our own MCP server and the borrowed mcp-server-time server as subprocesses.
 from __future__ import annotations
 
+import re
 from datetime import date, datetime, timedelta, timezone
 from typing import Any, Awaitable, Callable, TypedDict
 
@@ -14,7 +15,8 @@ from backend.agent import events
 from backend.agent.mcp_client import ToolClient
 from backend.agent.model_client import draft_advice_text
 from backend.core.database import session_scope
-from backend.db.models import District, Household, Run, Village
+from backend.db.models import District, Household, Run, Village, VisitFlag
+from backend.logging.tool_log import run_logged
 from backend.tools.errors import ToolError
 
 EmitFn = Callable[[int, dict[str, Any]], Awaitable[None]]
@@ -73,6 +75,40 @@ async def _call_with_retry(
             return None, str(exc2)
 
 
+async def _logged_now(client: ToolClient, run_id: int, timezone_name: str = "Africa/Kampala") -> dict:
+    """Ask the borrowed mcp-server-time server for the time and write the call to the
+    log with run_logged, exactly like our own tools (which their server logs itself).
+    A failure is logged too, then raised unchanged, so the caller's handling is the same."""
+    inputs = {"timezone": timezone_name}
+    try:
+        result, error = await client.now(timezone_name), None
+    except Exception as exc:  # noqa: BLE001 - logged below, then re-raised as it was
+        result, error = None, exc
+
+    def outcome() -> dict:
+        if error is not None:
+            raise error
+        return result
+
+    with session_scope() as session:
+        try:
+            run_logged(
+                session,
+                tool="get_current_time",
+                inputs=inputs,
+                actor="assistant",
+                source="mcp-server-time",
+                run_id=run_id,
+                func=outcome,
+            )
+        except Exception as raised:  # noqa: BLE001
+            if raised is not error:  # a real logging failure, not the clock error run_logged re-raised
+                raise
+    if error is not None:
+        raise error
+    return result
+
+
 async def plan_node(state: AgentState) -> dict:
     group_id = state["group_id"]
     with session_scope() as session:
@@ -108,7 +144,7 @@ async def gather_node(state: AgentState) -> dict:
 
     await emit_fn(run_id, {"type": "tool_call", "tool": "get_current_time", "inputs": {"timezone": "Africa/Kampala"}})
     try:
-        now_info = await client.now()
+        now_info = await _logged_now(client, run_id)
         await emit_fn(run_id, {"type": "tool_result", "tool": "get_current_time", "outputs": now_info})
         now_err = None
     except ToolError as exc:
@@ -147,9 +183,23 @@ async def gather_node(state: AgentState) -> dict:
     }
 
 
-async def check_sources_node(state: AgentState) -> dict:
+_FOOD_WORDS = re.compile(r"\bfood\b", re.IGNORECASE)
+
+
+def _open_food_visit_requests(group_id: int) -> list[str]:
+    """Reasons of this group's open visit flags that mention food - for example a
+    farmer's "H-003 asked for a visit: little food left" sent by USSD or the web."""
+    with session_scope() as session:
+        flags = session.exec(
+            select(VisitFlag).where(VisitFlag.group_id == group_id, VisitFlag.status == "open")
+        ).all()
+        return [f.reason for f in flags if _FOOD_WORDS.search(f.reason or "")]
+
+
+async def check_urgent_node(state: AgentState) -> dict:
     """Decide whether this group needs an urgent visit instead of advice. Never
-    invents a visit date or a food reading - only acts on what gather_node found."""
+    invents a visit date or a food reading - only acts on what gather_node found and
+    on open visit requests that are already recorded."""
     field_records = state.get("field_records") or {"records": [], "households_in_group": 0}
     days_since = field_records.get("days_since_last_visit_by_household", {}) or {}
     no_recent_visit = sorted(code for code, days in days_since.items() if days is None or days > 30)
@@ -157,13 +207,17 @@ async def check_sources_node(state: AgentState) -> dict:
     records = field_records.get("records", [])
     very_little_food = sorted({r["household_code"] for r in records if r.get("food_left") == "none"})
 
+    food_requests = _open_food_visit_requests(state["group_id"])
+
     flag_reason = None
     if very_little_food:
         flag_reason = f"Very little food left at: {', '.join(very_little_food)}"
+    elif food_requests:
+        flag_reason = f"Open visit request mentions food: {'; '.join(food_requests)}"
     elif no_recent_visit and field_records.get("households_in_group", 0) > 0:
         flag_reason = f"No field visit in over 30 days for: {', '.join(no_recent_visit)}"
 
-    await state["_emit"](state["run_id"], {"type": "check_sources", "flag_reason": flag_reason})
+    await state["_emit"](state["run_id"], {"type": "check_urgent", "flag_reason": flag_reason})
     return {"flag_reason": flag_reason}
 
 
@@ -286,12 +340,12 @@ def build_graph():
     graph = StateGraph(AgentState)
     graph.add_node("plan", plan_node)
     graph.add_node("gather", gather_node)
-    graph.add_node("check_sources", check_sources_node)
+    graph.add_node("check_urgent", check_urgent_node)
     graph.add_node("draft_or_flag", draft_or_flag_node)
     graph.set_entry_point("plan")
     graph.add_edge("plan", "gather")
-    graph.add_edge("gather", "check_sources")
-    graph.add_edge("check_sources", "draft_or_flag")
+    graph.add_edge("gather", "check_urgent")
+    graph.add_edge("check_urgent", "draft_or_flag")
     graph.add_edge("draft_or_flag", END)
     return graph.compile()
 

@@ -241,15 +241,17 @@ def test_home_counts_match_the_queues_they_summarise(client):
 
     page = client.get("/").text
 
-    def count(label):
-        return int(re.search(r"<strong>(\d+)</strong><div class=\"muted\">" + label, page).group(1))
+    def count(element_id):
+        return int(re.search(rf'id="{element_id}">(\d+)<', page).group(1))
 
     drafts = client.get("/api/approvals", params={"status": "pending_review"}).json()
     flags = client.get("/api/flags", params={"status": "open"}).json()
     reports = client.get("/api/farmer-reports", params={"checked": "unchecked"}).json()
-    assert count("drafts waiting for approval") == len(drafts)
-    assert count("open visit flags") == len(flags)
-    assert count("unchecked farmer reports") == len(reports)
+    # The Home task cards: Approve advice, Visits needed, Farmer messages.
+    assert count("home-drafts") == len(drafts)
+    assert count("home-flags") == len(flags)
+    assert count("home-reports") == len(reports)
+    assert count("home-total") == len(drafts) + len(flags) + len(reports)
 
 
 def test_every_officer_file_starts_with_a_comment():
@@ -261,3 +263,164 @@ def test_every_officer_file_starts_with_a_comment():
     for folder in ("backend/officer", "backend/approvals"):
         for path in (root / folder).glob("*.py"):
             assert path.read_text().startswith("#"), f"{path} has no header comment"
+
+
+def test_officer_screens_auto_refresh_from_existing_json_routes(client):
+    # Each screen that shows farmer activity re-fetches its data on a timer.
+    for path in ("/", "/approvals", "/farmer-reports", "/flags", "/followups"):
+        assert "autoRefresh(" in client.get(path).text, f"{path} does not auto-refresh"
+    home = client.get("/").text
+    for element_id in ("home-drafts", "home-flags", "home-reports"):
+        assert f'id="{element_id}"' in home
+    assert 'data-group-id="1"' in home
+    approvals = client.get("/approvals").text
+    assert "replaceCards(listEl" in approvals  # cards being edited are kept
+
+
+def test_auto_refresh_pauses_while_hidden_and_refreshes_when_visible():
+    import json
+    import shutil
+    import subprocess
+    from pathlib import Path
+
+    import pytest
+
+    node = shutil.which("node")
+    if node is None:
+        pytest.skip("node is not installed")
+    app_js = Path(__file__).resolve().parent.parent / "frontend" / "static" / "app.js"
+    script = """
+const listeners = {};
+const timers = new Map();
+let nextId = 1;
+global.document = {
+  visibilityState: "visible",
+  addEventListener: (name, fn) => { listeners[name] = fn; },
+};
+global.setInterval = (fn, ms) => { const id = nextId++; timers.set(id, { fn, ms }); return id; };
+global.clearInterval = (id) => { timers.delete(id); };
+""" + app_js.read_text() + """
+(async () => {
+  const log = [];
+  let calls = 0;
+  autoRefresh(async () => { calls += 1; }, 30000);
+  const flush = () => new Promise((r) => setImmediate(r));
+
+  log.push(["started", timers.size, [...timers.values()][0].ms]);
+  for (const t of timers.values()) await t.fn();
+  await flush();
+  log.push(["after one tick", calls]);
+
+  document.visibilityState = "hidden";
+  listeners.visibilitychange();
+  log.push(["hidden: timers", timers.size]);
+
+  document.visibilityState = "visible";
+  listeners.visibilitychange();
+  await flush();
+  log.push(["visible again", calls, timers.size]);
+  console.log(JSON.stringify(log));
+})();
+"""
+    out = subprocess.run([node, "-e", script], capture_output=True, text=True, check=True).stdout
+    assert json.loads(out) == [
+        ["started", 1, 30000],       # one 30-second timer while visible
+        ["after one tick", 1],
+        ["hidden: timers", 0],       # polling stops while the tab is hidden
+        ["visible again", 2, 1],     # refreshes at once and restarts the timer
+    ]
+
+
+def test_mark_visited_records_and_logs_the_officer(client):
+    flag = client.get("/api/flags", params={"status": "open"}).json()[0]
+    r = client.post(f"/api/flags/{flag['id']}/visited", json={"officer_id": 2})
+    assert r.status_code == 200
+    assert r.json() == {"id": flag["id"], "status": "visited", "visited_by": "Lomuria Peter"}
+
+    listed = next(f for f in client.get("/api/flags").json() if f["id"] == flag["id"])
+    assert listed["visited_by"] == "Lomuria Peter" and listed["visited_at"]
+    log = next(row for row in client.get("/api/logs").json() if row["tool"] == "mark_flag_visited")
+    assert log["actor"] == "2" and log["source"] == "officer"
+
+
+def test_mark_visited_still_accepts_the_original_empty_body(client):
+    flag = client.get("/api/flags", params={"status": "open"}).json()[0]
+    assert client.post(f"/api/flags/{flag['id']}/visited", json={}).status_code == 200
+    listed = next(f for f in client.get("/api/flags").json() if f["id"] == flag["id"])
+    assert listed["status"] == "visited" and listed["visited_by"] is None
+    log = next(row for row in client.get("/api/logs").json() if row["tool"] == "mark_flag_visited")
+    assert log["actor"] == "officer (not named)"
+
+
+def test_mark_visited_rejects_an_unknown_officer(client):
+    flag = client.get("/api/flags", params={"status": "open"}).json()[0]
+    assert client.post(f"/api/flags/{flag['id']}/visited", json={"officer_id": 999}).status_code == 400
+    assert next(f for f in client.get("/api/flags").json() if f["id"] == flag["id"])["status"] == "open"
+
+
+def test_report_and_flag_actions_use_whilebusy_and_card_errors_not_alerts(client):
+    from pathlib import Path
+
+    templates = Path(__file__).resolve().parent.parent / "frontend" / "officer" / "templates"
+    for name in ("approvals.html", "farmer_reports.html", "flags.html"):
+        source = (templates / name).read_text()
+        assert "alert(" not in source, name
+    approvals = (templates / "approvals.html").read_text()
+    assert "cardAction(card, () => postJSON(`/api/farmer-reports/${id}/check`" in approvals
+    assert "cardAction(card, () => postJSON(`/api/flags/${id}/visited`, { officer_id:" in approvals
+    app_js = (templates.parent.parent / "static" / "app.js").read_text()
+    assert "await whileBusy(buttons, request);" in app_js
+    assert 'id="officer"' in client.get("/flags").text  # the Visit flags page now has "Acting as"
+
+
+def test_week_at_a_glance_numbers_match_the_api_lists(client):
+    """Each "This week at a glance" number on Home equals what the other screens'
+    API lists give for the last 7 days."""
+    import re
+    from datetime import datetime, timedelta, timezone
+
+    since = datetime.now(timezone.utc) - timedelta(days=7)
+
+    def recent(value):
+        moment = datetime.fromisoformat(value)
+        return (moment if moment.tzinfo else moment.replace(tzinfo=timezone.utc)) >= since
+
+    # Some activity first, so the numbers are not all zero.
+    client.post("/api/farmer-reports", json={"phone": "+256700000003", "problem": "pests", "crop": "maize"})
+    client.post("/api/visit-requests", json={"phone": "+256700000003", "reason": "Pests"})
+    client.get("/api/farmer/advice", params={"phone": "+256700000001"})
+
+    page = client.get("/").text
+
+    def stat(name):
+        return re.search(rf'data-stat="{name}">\$?([\d.]+)<', page).group(1)
+
+    reports = [r for r in client.get("/api/farmer-reports").json() if recent(r["observed_on"])]
+    assert int(stat("messages_total")) == len(reports)
+    assert int(stat("messages_unchecked")) == sum(1 for r in reports if r["checked"] == "unchecked")
+
+    farmer_flags = [
+        f for f in client.get("/api/flags").json()
+        if f["raised_by"] in ("farmer_ussd", "farmer_web") and recent(f["created_at"])
+    ]
+    assert int(stat("visit_requests_total")) == len(farmer_flags)
+    assert int(stat("visit_requests_open")) == sum(1 for f in farmer_flags if f["status"] == "open")
+
+    drafts = [a for a in client.get("/api/approvals").json() if recent(a["created_at"])]
+    assert int(stat("drafts_total")) == len(drafts)
+    assert int(stat("drafts_approved")) == sum(1 for a in drafts if a["status"] == "approved")
+    assert int(stat("drafts_waiting")) == sum(1 for a in drafts if a["status"] == "pending_review")
+
+    reads = [
+        r for r in client.get("/api/logs").json()
+        if r["tool"] == "farmer_viewed_advice" and r["error"] is None and recent(r["at"])
+    ]
+    assert int(stat("reads_total")) == len(reads) >= 1
+
+    overdue = 0
+    for group in client.get("/api/groups").json():
+        days = client.get(f"/api/groups/{group['group_id']}").json()["field_records"]["days_since_last_visit_by_household"]
+        overdue += any(d is None or d > 30 for d in days.values())
+    assert int(stat("overdue_groups")) == overdue
+
+    assert "Demo data" in page  # seeded households are labelled as demo data

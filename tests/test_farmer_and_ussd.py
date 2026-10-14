@@ -68,7 +68,7 @@ def test_visit_request_via_ussd_creates_an_open_flag(client):
     assert r2 == "END Request sent. Your officer will plan a visit."
 
     flags = client.get("/api/flags", params={"status": "open"}).json()
-    assert any("Little food left" in f["reason"] and f["raised_by"] == "farmer_ussd" for f in flags)
+    assert any(f["reason"] == "H-009 asked for a visit: little food left" and f["raised_by"] == "farmer_ussd" for f in flags)
 
 
 def test_followup_flow_via_ussd(client):
@@ -190,3 +190,141 @@ def test_no_tool_exists_to_order_inputs_or_request_credit(client):
         "flag_for_visit",
         "schedule_followup",
     }
+
+
+def test_sign_in_and_dashboard_accept_local_and_international_number_forms(client, monkeypatch):
+    from backend.farmer import router as farmer_router
+
+    monkeypatch.setattr(
+        farmer_router.impl, "get_weather",
+        lambda **kwargs: {"past_7_days_rain_mm": 1.0, "next_7_days_rain_mm": 2.0, "source_ref": "demo-override"},
+    )
+    for phone in ("+256700000003", "256700000003", "0700000003", "0700 000 003"):
+        profile = client.get("/api/farmer/profile", params={"phone": phone})
+        assert profile.status_code == 200, phone
+        assert profile.json()["household_code"] == "H-003"
+        dashboard = client.get("/api/farmer/dashboard", params={"phone": phone})
+        assert dashboard.status_code == 200, phone
+        assert dashboard.json()["profile"]["household_code"] == "H-003"
+
+
+def test_visit_requests_name_the_household_on_both_channels(client):
+    assert client.post("/api/visit-requests", json={"phone": "+256700000003", "reason": "Little food left"}).status_code == 200
+    _ussd(client, "visit-h5", "+256700000005", "3*2")
+    reasons = [f["reason"] for f in client.get("/api/flags").json()]
+    assert "H-003 asked for a visit: little food left" in reasons
+    assert "H-005 asked for a visit: little food left" in reasons
+
+
+def test_ussd_followup_without_approved_advice_saves_nothing(client):
+    # Group 2 (H-004) has only an unapproved draft.
+    before_logs = len(client.get("/api/logs").json())
+    for text in ("4", "4*1", "4*1*1"):
+        assert _ussd(client, "no-advice", "+256700000004", text).startswith("END No advice to answer yet")
+    assert not [f for f in client.get("/api/followups").json() if f["group_id"] == 2]
+    assert len(client.get("/api/logs").json()) == before_logs
+
+
+def test_ussd_followup_answer_is_logged(client):
+    _ussd(client, "log-fu", "+256700000001", "4*2*3")
+    rows = [r for r in client.get("/api/logs").json() if r["tool"] == "record_followup"]
+    assert rows and rows[0]["source"] == "farmer_ussd" and rows[0]["actor"] == "farmer"
+    assert '"followed": "partly"' in rows[0]["outputs"] and '"helped": "too_early"' in rows[0]["outputs"]
+
+
+def test_followup_answers_from_two_households_are_both_kept(client):
+    advice_id = client.get("/api/farmer/advice", params={"phone": "+256700000001"}).json()["advice_id"]
+    web = client.post(
+        "/api/farmer/followup",
+        json={"phone": "+256700000001", "advice_id": advice_id, "followed": "yes", "helped": "yes"},
+    )
+    assert web.status_code == 200
+    _ussd(client, "fu-h2", "+256700000002", "4*3*2")  # H-002, same group: no / no
+
+    row = next(f for f in client.get("/api/followups").json() if f["advice_id"] == advice_id)
+    answers = {a["household_code"]: (a["followed"], a["helped"], a["answered_via"]) for a in row["answers"]}
+    assert answers == {"H-001": ("yes", "yes", "farmer_web"), "H-002": ("no", "no", "farmer_ussd")}
+    # The existing Followup fields still hold the latest answer, as before.
+    assert (row["followed"], row["helped"], row["answered_via"]) == ("no", "no", "farmer_ussd")
+
+    # Answering again updates that household's own answer instead of adding a second one.
+    _ussd(client, "fu-h2b", "+256700000002", "4*1*1")
+    row = next(f for f in client.get("/api/followups").json() if f["advice_id"] == advice_id)
+    assert len(row["answers"]) == 2
+    assert {a["household_code"]: a["followed"] for a in row["answers"]}["H-002"] == "yes"
+
+
+def test_web_pest_report_saves_the_pest_the_farmer_picked(client):
+    for pest, expected in (("Fall armyworm", "fall armyworm"), (None, "farmer-reported pest"), ("   ", "farmer-reported pest")):
+        body = {"phone": "+256700000006", "problem": "pests", "crop": "sorghum"}
+        if pest is not None:
+            body["pest"] = pest
+        assert client.post("/api/farmer-reports", json=body).status_code == 200
+        latest = client.get("/api/farmer-reports").json()[0]
+        assert latest["household_code"] == "H-006" and latest["pest_seen"] == expected
+    # A pest name is ignored for other problems.
+    client.post("/api/farmer-reports", json={"phone": "+256700000006", "problem": "no_rain", "pest": "aphids"})
+    assert client.get("/api/farmer-reports").json()[0]["pest_seen"] is None
+    # USSD cannot name a pest, so it keeps the generic text.
+    _ussd(client, "pest-u", "+256700000006", "2*1*1")
+    assert client.get("/api/farmer-reports").json()[0]["pest_seen"] == "farmer-reported pest"
+
+
+def test_reading_approved_advice_is_logged_without_changing_its_status(client):
+    def viewed():
+        return [r for r in client.get("/api/logs").json() if r["tool"] == "farmer_viewed_advice"]
+
+    advice = client.get("/api/farmer/advice", params={"phone": "+256700000001"}).json()
+    _ussd(client, "view-1", "+256700000001", "1")
+    rows = viewed()
+    assert {r["source"] for r in rows} == {"farmer_web", "farmer_ussd"}
+    assert all(r["actor"] == "farmer" and '"household_code": "H-001"' in r["inputs"] for r in rows)
+    assert all(f'"advice_id": {advice["advice_id"]}' in r["inputs"] for r in rows)
+    # Status unchanged.
+    assert client.get("/api/farmer/advice", params={"phone": "+256700000001"}).json()["status"] == advice["status"]
+    # No approved advice: nothing to log.
+    before = len(viewed())
+    client.get("/api/farmer/advice", params={"phone": "+256700000004"})
+    _ussd(client, "view-4", "+256700000004", "1")
+    assert len(viewed()) == before
+
+
+def test_crop_calendar_source_link_only_allows_http(client):
+    page = client.get("/farmer/home", params={"phone": "+256700000001"}).text
+    assert "if (safeURL(entry.source_url))" in page
+    assert "source.href = entry.source_url;" in page.split("if (safeURL(entry.source_url))", 1)[1]
+
+
+def _latest_report(client):
+    return client.get("/api/farmer-reports").json()[0]
+
+
+def test_typed_other_crop_is_saved_trimmed_and_lowercase(client):
+    r = client.post("/api/farmer-reports", json={"phone": "+256700000006", "problem": "crop_sick", "crop": "  GroundNuts  "})
+    assert r.status_code == 200
+    assert _latest_report(client)["crop"] == "groundnuts"
+    # Limited to 40 characters.
+    client.post("/api/farmer-reports", json={"phone": "+256700000006", "problem": "crop_sick", "crop": "x" * 60})
+    assert _latest_report(client)["crop"] == "x" * 40
+
+
+def test_other_crop_with_an_empty_box_saves_no_crop(client):
+    for crop in (None, "", "   "):
+        body = {"phone": "+256700000006", "problem": "no_rain"}
+        if crop is not None:
+            body["crop"] = crop
+        assert client.post("/api/farmer-reports", json=body).status_code == 200
+        assert _latest_report(client)["crop"] is None
+
+
+def test_sorghum_and_maize_are_saved_as_before(client):
+    for crop in ("sorghum", "maize"):
+        client.post("/api/farmer-reports", json={"phone": "+256700000006", "problem": "pests", "crop": crop})
+        assert _latest_report(client)["crop"] == crop
+
+
+def test_report_form_shows_a_crop_box_only_for_other(client):
+    page = client.get("/farmer/report", params={"phone": "+256700000006"}).text
+    assert '<div id="crop-other-field" hidden>' in page
+    assert 'id="crop-other" type="text" maxlength="40"' in page
+    assert "otherField.hidden = crop.value !== \"\";" in page

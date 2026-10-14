@@ -161,12 +161,27 @@
             <option value="heavy_rain">Too much rain</option>
             <option value="crop_sick">Crop looks sick</option>
           </select>
+          <div id="pest-field">
+            <label for="pest">Which pest? (if you know)</label>
+            <select id="pest">
+              <option value="">Not sure</option>
+              <option value="fall armyworm">Fall armyworm</option>
+              <option value="stalk borer">Stalk borer</option>
+              <option value="aphids">Aphids</option>
+              <option value="locusts">Locusts</option>
+              <option value="birds">Birds</option>
+            </select>
+          </div>
           <label for="crop">Which crop?</label>
           <select id="crop">
             <option value="sorghum">Sorghum</option>
             <option value="maize">Maize</option>
             <option value="">Other</option>
           </select>
+          <div id="crop-other-field" hidden>
+            <label for="crop-other">Which crop? Type its name</label>
+            <input id="crop-other" type="text" maxlength="40" autocomplete="off" autocapitalize="none" placeholder="For example: groundnuts">
+          </div>
           <p id="report-error" class="farmer-form-error" role="alert" hidden></p>
           <button class="farmer-button farmer-button-primary" type="submit">Send report</button>
         </form>
@@ -414,13 +429,17 @@ async function loadDashboard() {
         const window = document.createElement("p");
         window.className = "farmer-crop-window";
         window.textContent = formatCalendarDate(entry.plant_from) + " – " + formatCalendarDate(entry.plant_to);
-        const source = document.createElement("a");
-        source.className = "farmer-source-link";
-        source.href = entry.source_url;
-        source.target = "_blank";
-        source.rel = "noopener noreferrer";
-        source.textContent = "View source";
-        card.append(heading, status, window, source);
+        card.append(heading, status, window);
+        // Same check as safeURL in app.js: only an http(s) address becomes a link.
+        if (safeURL(entry.source_url)) {
+          const source = document.createElement("a");
+          source.className = "farmer-source-link";
+          source.href = entry.source_url;
+          source.target = "_blank";
+          source.rel = "noopener noreferrer";
+          source.textContent = "View source";
+          card.append(source);
+        }
         calendar.append(card);
       });
     } else {
@@ -469,8 +488,34 @@ function connectSubmit(formId, errorId, doneId, url, makeBody) {
 connectSubmit("report-form", "report-error", "report-done", "/api/farmer-reports", () => ({
   phone: farmerPhone,
   problem: document.getElementById("problem").value,
-  crop: document.getElementById("crop").value || null,
+  crop: chosenCrop(),
+  pest: document.getElementById("problem").value === "pests" ? (document.getElementById("pest").value || null) : null,
 }));
+// "Other" crop: the farmer types the name. Sent trimmed (the server also trims,
+// lowercases and limits it to 40 characters); an empty box sends no crop, as before.
+function chosenCrop() {
+  const picked = document.getElementById("crop").value;
+  if (picked) return picked;
+  const typed = document.getElementById("crop-other").value.trim().slice(0, 40);
+  return typed || null;
+}
+(function linkOtherCrop() {
+  const crop = document.getElementById("crop");
+  const otherField = document.getElementById("crop-other-field");
+  if (!crop || !otherField) return;
+  const sync = () => { otherField.hidden = crop.value !== ""; };
+  crop.addEventListener("change", sync);
+  sync();
+})();
+// The pest question only applies when the farmer reports pests.
+(function linkPestQuestion() {
+  const problem = document.getElementById("problem");
+  const pestField = document.getElementById("pest-field");
+  if (!problem || !pestField) return;
+  const sync = () => { pestField.hidden = problem.value !== "pests"; };
+  problem.addEventListener("change", sync);
+  sync();
+})();
 connectSubmit("visit-form", "visit-error", "visit-done", "/api/visit-requests", () => ({
   phone: farmerPhone,
   reason: document.getElementById("reason").value,

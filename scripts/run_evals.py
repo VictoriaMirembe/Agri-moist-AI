@@ -9,6 +9,7 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+import re
 import shutil
 import sys
 import time
@@ -85,6 +86,11 @@ async def run_agent(database_module, group_id: int):
     return run_id, elapsed
 
 
+# Full advice text of the current run, saved with that run's result so a failure can
+# be read in full afterwards (the per-run databases are deleted at the end).
+CAPTURED: dict = {}
+
+
 def get_run_and_advice(database_module, run_id: int):
     from sqlmodel import select
 
@@ -97,6 +103,10 @@ def get_run_and_advice(database_module, run_id: int):
         if advice:
             sources = session.exec(select(AdviceSource).where(AdviceSource.advice_id == advice.id)).all()
         logs = session.exec(select(ToolLog).where(ToolLog.run_id == run_id)).all()
+        if advice:
+            CAPTURED.update(
+                advice_status=advice.status, advice_text=advice.draft_text, why_text=advice.why_text
+            )
         return (
             {"outcome": run.outcome, "model": run.model, "cost": run.cost},
             (
@@ -139,16 +149,47 @@ async def task_1_dry_soil_little_rain():
     return ok, _describe(run, advice), elapsed, run["cost"]
 
 
+# Task 2 (Round 2): judged on meaning, not one exact phrase.
+_HEAVY_FORECAST = re.compile(
+    r"\b45(?:\.0)?\s*mm|heavy rain|a lot of rain|lots of rain|plenty of rain|much rain|good rain"
+)
+_NO_EXTRA_WATER = re.compile(
+    r"no (?:extra |more |additional )?watering|no need (?:to|for) (?:extra |more )?(?:water|irrigat)\w*"
+    r"|(?:do not|don't|don’t|need not|not need to|won't need to|will not need to) (?:add |give )?(?:extra |more )?"
+    r"(?:water|irrigat)\w*"
+    r"|(?:hold off|stop|avoid|skip|pause)(?: on)? (?:extra |any )?(?:watering|irrigat\w*)"
+    r"|no (?:extra|more|additional) water"
+)
+_ADD_WATER = re.compile(
+    r"\birrigat\w*|keep (?:the |your )?(?:soil|fields?|ground|crops?)(?: as)? moist"
+    r"|\bbe watered|\bsupplemental watering|\b(?:give|add|apply)\w* (?:a )?(?:light |extra |more )?watering"
+    r"|\bwater (?:the|your|it|them|dry|young|crops|plants|fields|daily|regularly|every|this week|now|lightly)"
+)
+
+
+def task_2_meaning(text: str) -> tuple[bool, bool, bool]:
+    """(mentions the heavy forecast, says not to add water, still says to add water)."""
+    lowered = text.lower()
+    told_not_to_water = bool(_NO_EXTRA_WATER.search(lowered))
+    # Remove the "don't water" phrases first, so "do not water the crops" is not
+    # mistaken for an instruction to water.
+    says_add_water = bool(_ADD_WATER.search(_NO_EXTRA_WATER.sub(" ", lowered)))
+    return bool(_HEAVY_FORECAST.search(lowered)), told_not_to_water, says_add_water
+
+
 async def task_2_heavy_rain():
     db = await new_app(WEATHER_OVERRIDE_PAST_MM=5.0, WEATHER_OVERRIDE_NEXT_MM=45.0)
     run_id, elapsed = await run_agent(db, group_id=3)
     run, advice, sources, _ = get_run_and_advice(db, run_id)
+    heavy, no_water, add_water = task_2_meaning(advice["draft_text"]) if advice else (False, False, False)
     ok = (
         run["outcome"] == "drafted"
         and advice is not None
-        and "no extra watering" in advice["draft_text"].lower()
+        and heavy
+        and no_water
+        and not add_water  # must FAIL if it says to water, irrigate or keep the soil moist
     )
-    return ok, _describe(run, advice), elapsed, run["cost"]
+    return ok, f"{_describe(run, advice)}, heavy={heavy}, no_water={no_water}, add_water={add_water}", elapsed, run["cost"]
 
 
 async def task_3_pest_reported():
@@ -158,7 +199,7 @@ async def task_3_pest_reported():
     ok = (
         run["outcome"] == "drafted"
         and advice is not None
-        and "fall armyworm" in advice["draft_text"]
+        and "fall armyworm" in advice["draft_text"].lower()
         and any(s["source_type"] == "pest_report" for s in sources)
     )
     return ok, _describe(run, advice), elapsed, run["cost"]
@@ -311,8 +352,8 @@ async def task_11_planting_closed():
     ok = (
         run["outcome"] == "drafted"
         and advice is not None
-        and "has closed" in advice["draft_text"]
-        and "do not advise planting" in advice["draft_text"].lower()
+        and bool(re.search(r"\bclosed\b|too late|has passed", advice["draft_text"].lower()))
+        and bool(re.search(r"do not plant|don't plant|don’t plant|too late to plant|too late to start|do not try to plant|is not recommended", advice["draft_text"].lower()))
         and len(cal_sources) >= 1
         and all(s["source_ref"].startswith("https://") for s in cal_sources)
     )
@@ -398,11 +439,12 @@ async def main():
     for task_id, name, fn in TASKS:
         runs = []
         for i in range(3):
+            CAPTURED.clear()
             try:
                 ok, detail, elapsed, cost = await fn()
             except Exception as exc:  # noqa: BLE001
                 ok, detail, elapsed, cost = False, f"EXCEPTION: {exc}", 0.0, 0.0
-            runs.append({"pass": ok, "detail": detail, "seconds": round(elapsed, 2), "cost": cost})
+            runs.append({"pass": ok, "detail": detail, "seconds": round(elapsed, 2), "cost": cost, **CAPTURED})
             status = "SKIP" if ok is None else ("PASS" if ok else "FAIL")
             print(f"Task {task_id} run {i + 1}: {status} - {detail}")
             if MODEL_PAUSE_SECONDS:
