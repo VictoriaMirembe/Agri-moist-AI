@@ -2,17 +2,6 @@
 {% extends "base.html" %}
 {% block title %}Basic phone (USSD) | AgriMoist AI{% endblock %}
 {% block content %}
-<<<<<<< Updated upstream
-<nav class="ussd-bar" aria-label="Leave the simulator">
-  <div class="ussd-bar-links">
-    <a href="/">&larr; Officer screens</a>
-    <a href="/farmer">Farmer page</a>
-  </div>
-  <p>This simulates a basic phone. Press Dial *123#, then tap the menu number, as a farmer would on *123#.</p>
-</nav>
-<h1>USSD simulator</h1>
-<p class="muted">Simulates a basic-phone USSD session. Uses the same request and reply shape as a real USSD gateway - this page is the only part that is pretend.</p>
-=======
 <a class="farmer-link-button" id="back-link" href="/farmer">Back to my farm</a>
 <h1>Use a basic phone</h1>
 <p>No smartphone or data? Dial <strong>{{ service_code }}</strong> on any phone to read your advice, report a
@@ -20,7 +9,6 @@ problem, ask for a visit or say whether advice helped. Reports sent this way sho
 <p class="muted">Try it below. This page sends each keypress as form data (<code>sessionId</code>,
 <code>serviceCode</code>, <code>phoneNumber</code>, <code>networkCode</code>, <code>text</code>), the same way
 Africa's Talking calls <code>/ussd/africastalking</code>, so it runs the real menu. Only the phone screen is pretend.</p>
->>>>>>> Stashed changes
 
 <label for="phone">Phone number</label>
 <input id="phone" type="tel" value="{{ phone or '+256700000001' }}">

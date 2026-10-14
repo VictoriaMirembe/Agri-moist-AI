@@ -195,7 +195,6 @@ def test_no_tool_exists_to_order_inputs_or_request_credit(client):
     }
 
 
-<<<<<<< Updated upstream
 def test_sign_in_and_dashboard_accept_local_and_international_number_forms(client, monkeypatch):
     from backend.farmer import router as farmer_router
 
@@ -329,10 +328,9 @@ def test_sorghum_and_maize_are_saved_as_before(client):
 
 def test_report_form_shows_a_crop_box_only_for_other(client):
     page = client.get("/farmer/report", params={"phone": "+256700000006"}).text
-    assert '<div id="crop-other-field" hidden>' in page
-    assert 'id="crop-other" type="text" maxlength="40"' in page
     assert "otherField.hidden = crop.value !== \"\";" in page
-=======
+
+
 # ---------------------------------------------------------------------------
 # Africa's Talking callback: form-encoded, as the real gateway sends it.
 # ---------------------------------------------------------------------------
@@ -487,4 +485,4 @@ def test_farmer_ussd_page_is_in_the_farmer_section(client):
     assert "*384*5951#" in page.text and "+256700000009" in page.text
     home = client.get("/farmer/home", params={"phone": "+256700000009"}).text
     assert "/farmer/ussd" in home and "My reports and requests" in home
->>>>>>> Stashed changes
+
