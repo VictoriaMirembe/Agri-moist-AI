@@ -1,4 +1,4 @@
-{# Shared officer layout: page head, the top bar with the five main screens and a "More" menu, and on phones a bottom tab bar. Every officer screen fills in the content block. Loads app.js and styles.css; all officer styles are scoped to body.officer so the farmer pages are not affected. #}
+{# Shared officer layout: on wide screens a left sidebar with the five main screens and a "More" group, a slim top bar with a Kampala-time greeting and today's date, and on phones the bottom tab bar. Every officer screen fills in the content block. Loads app.js and styles.css; all officer styles are scoped to body.officer so the farmer pages are not affected. #}
 {%- set path = request.url.path -%}
 {%- set section = "home" if path == "/" else "approve" if path.startswith("/approvals") else "messages" if (path.startswith("/farmer-reports") or path.startswith("/followups")) else "visits" if path.startswith("/flags") else "record" if path.startswith("/visits/new") else "log" if path.startswith("/log") else "" -%}
 <!DOCTYPE html>
@@ -12,33 +12,65 @@
 </head>
 <body class="officer">
   <a class="o-skip" href="#main">Skip to content</a>
-  <header class="o-topbar">
+
+  <aside class="o-sidebar" aria-label="Sidebar">
     <a href="/" class="o-brand" aria-label="AgriMoist AI officer home">
       <span class="o-brand-mark" aria-hidden="true">A</span>
       <span>AgriMoist <strong>AI</strong></span>
     </a>
-    <span class="o-topbar-place">Napak District · Extension office</span>
-  </header>
+    <nav class="o-side-nav" aria-label="Officer screens">
+      <a href="/" {% if section == "home" %}aria-current="page"{% endif %}>
+        <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M3 11.5 12 4l9 7.5V20a1 1 0 0 1-1 1h-5v-6h-6v6H4a1 1 0 0 1-1-1z"/></svg>
+        <span class="o-side-label">Home</span>
+      </a>
+      <a href="/approvals" {% if section == "approve" %}aria-current="page"{% endif %}>
+        <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M9 16.2 4.8 12l-1.4 1.4L9 19 21 7l-1.4-1.4z"/></svg>
+        <span class="o-side-label">Approve advice</span><span class="nav-badge amber" id="nav-badge-approvals" style="display:none;"></span>
+      </a>
+      <a href="/farmer-reports" {% if section == "messages" %}aria-current="page"{% endif %}>
+        <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M4 4h16a1 1 0 0 1 1 1v11a1 1 0 0 1-1 1H8l-4 4V5a1 1 0 0 1 1-1z"/></svg>
+        <span class="o-side-label">Farmer messages</span><span class="nav-badge" id="nav-badge-reports" style="display:none;"></span>
+      </a>
+      <a href="/flags" {% if section == "visits" %}aria-current="page"{% endif %}>
+        <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M12 2a7 7 0 0 0-7 7c0 5.2 7 13 7 13s7-7.8 7-13a7 7 0 0 0-7-7zm0 9.5A2.5 2.5 0 1 1 12 6.5a2.5 2.5 0 0 1 0 5z"/></svg>
+        <span class="o-side-label">Visits needed</span><span class="nav-badge" id="nav-badge-flags" style="display:none;"></span>
+      </a>
+      <a href="/visits/new" {% if section == "record" %}aria-current="page"{% endif %}>
+        <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M11 5h2v6h6v2h-6v6h-2v-6H5v-2h6z"/></svg>
+        <span class="o-side-label">Record a visit</span>
+      </a>
+      <p class="o-side-group">More</p>
+      <a href="/log" {% if section == "log" %}aria-current="page"{% endif %}>
+        <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M5 5h14v2H5zm0 6h14v2H5zm0 6h10v2H5z"/></svg>
+        <span class="o-side-label">Activity log</span>
+      </a>
+      <a href="/ussd">
+        <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M8 2h8a2 2 0 0 1 2 2v16a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2zm0 3v12h8V5zm4 13.5a1 1 0 1 0 0 2 1 1 0 0 0 0-2z"/></svg>
+        <span class="o-side-label">USSD simulator</span>
+      </a>
+      <a href="/farmer">
+        <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M17 3c-6 0-11 3-11 10 0 2 .6 3.6 1.5 4.8L5 20.3 6.4 21.7l2.5-2.5C10 20 11.4 20.5 13 20.5 19 20.5 21 14 21 3zm-4 15.5c-1 0-2-.3-2.8-.8l6.5-6.5-1.4-1.4-6.5 6.5c-.5-.8-.8-1.8-.8-2.8C8 8 11.5 5.3 18.9 5 18.6 13 16.6 18.5 13 18.5z"/></svg>
+        <span class="o-side-label">Farmer page</span>
+      </a>
+    </nav>
+  </aside>
 
-  <nav class="o-nav" aria-label="Officer screens">
-    <a href="/" {% if section == "home" %}aria-current="page"{% endif %}>Home</a>
-    <a href="/approvals" {% if section == "approve" %}aria-current="page"{% endif %}>Approve advice<span class="nav-badge amber" id="nav-badge-approvals" style="display:none;"></span></a>
-    <a href="/farmer-reports" {% if section == "messages" %}aria-current="page"{% endif %}>Farmer messages<span class="nav-badge" id="nav-badge-reports" style="display:none;"></span></a>
-    <a href="/flags" {% if section == "visits" %}aria-current="page"{% endif %}>Visits needed<span class="nav-badge" id="nav-badge-flags" style="display:none;"></span></a>
-    <a href="/visits/new" {% if section == "record" %}aria-current="page"{% endif %}>Record a visit</a>
-    <details class="o-more">
-      <summary {% if section == "log" %}aria-current="page"{% endif %}>More</summary>
-      <div class="o-more-menu">
-        <a href="/log">Activity log</a>
-        <a href="/ussd">USSD simulator</a>
-        <a href="/farmer">Farmer page</a>
+  <div class="o-shell">
+    <header class="o-topbar">
+      <a href="/" class="o-brand o-brand-phone" aria-label="AgriMoist AI officer home">
+        <span class="o-brand-mark" aria-hidden="true">A</span>
+      </a>
+      <div class="o-greeting">
+        <p class="o-greeting-hello" id="o-greeting">Welcome</p>
+        <p class="o-greeting-date" id="o-today"></p>
       </div>
-    </details>
-  </nav>
+      <span class="o-topbar-place">Napak District · Extension office</span>
+    </header>
 
-  <main class="o-main" id="main">
-    {% block content %}{% endblock %}
-  </main>
+    <main class="o-main" id="main">
+      {% block content %}{% endblock %}
+    </main>
+  </div>
 
   <nav class="o-tabbar" aria-label="Officer screens (phone)">
     <a href="/" {% if section == "home" %}aria-current="page"{% endif %}>
@@ -99,6 +131,17 @@
 
   loadNavBadges();
   autoRefresh(loadNavBadges);
+
+  // Greeting and today's date in Kampala time (text only). If the browser cannot
+  // format Kampala time, "Welcome" stays and the date is left out.
+  (function greet() {
+    try {
+      const now = new Date();
+      const hour = Number(new Intl.DateTimeFormat("en-GB", { hour: "numeric", hour12: false, timeZone: "Africa/Kampala" }).format(now));
+      document.getElementById("o-greeting").textContent = hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
+      document.getElementById("o-today").textContent = new Intl.DateTimeFormat("en-GB", { weekday: "long", day: "numeric", month: "long", year: "numeric", timeZone: "Africa/Kampala" }).format(now);
+    } catch (_) { /* keep "Welcome" */ }
+  })();
   </script>
 </body>
 </html>
