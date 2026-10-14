@@ -11,6 +11,7 @@ or on a simple farmer web page on a smartphone.
 - **Theme:** Climate-smart advisory
 - **Office served (demo data):** Napak District Production Office, Karamoja, Uganda
 - **Team:** Ashelycole (core/agent), Victoria (officer app/approval gate), Evans (farmer channels/data)
+- **How it is built:** see [ARCHITECTURE.md](ARCHITECTURE.md) (one page: agent flow, MCP servers, model, data)
 
 > **Status:** All nine tools, the LangGraph agent, the approval gate, officer
 > screens, the USSD simulator and the farmer web page work end to end against real
@@ -73,19 +74,25 @@ Open-Meteo needs no key.
 
 ## Run the demo
 
-1. Open the Home screen and click a household group, or open **Record visit** to add
-   a new one.
-2. Open a household group and click **Draft advice**. You land on the Agent run
-   screen and watch each tool call (and its source) arrive live over
-   server-sent events.
-3. Open **Approvals**, read the draft and its sources (gaps show in red), then
-   approve, edit-and-approve, or reject it as the officer.
-4. Open the farmer page at `/farmer`, sign in with a demo number (`+256700000001`
-   to `+256700000010`), and read **My advice** - only what was just approved shows.
-5. Open the USSD simulator at `/ussd`, dial, and choose **1. My advice**. Same rule:
-   nothing unapproved ever appears.
-6. Open **Log** to see every tool call for every run, with its source, actor and
-   cost.
+On a desktop the officer screens are in the left sidebar: **Home**, **Approve
+advice**, **Farmer messages**, **Visits needed**, **Record a visit**, and under
+**More**: **Activity log**, **USSD simulator** and **Farmer page**. On a phone they are
+in the bottom tabs: **Home**, **Approve**, **Messages**, **Visits** and **More**.
+
+1. On **Home**, press **Open** next to a household group, or choose **Record a visit**
+   to add a new one.
+2. On the group's screen, press **Draft advice**. You land on the **AI draft** screen
+   and watch each step arrive live over server-sent events (the raw tool calls and
+   their sources are under **Technical details**).
+3. Open **Approve advice**, read the draft and its sources (gaps show in red), then
+   press **Approve**, **Save edit & approve**, or **Reject** as the officer.
+4. Open **Farmer page** (under **More**, or go to `/farmer`), sign in with a demo
+   number (`+256700000001` to `+256700000010`), and read **My advice** - only what was
+   just approved shows.
+5. Open **USSD simulator** (under **More**, or go to `/ussd`), press **Dial \*123#**,
+   and tap **1** (My advice). Same rule: nothing unapproved ever appears.
+6. Open **Activity log** (under **More**) to see every tool call for every run, with
+   its source and actor, and each run's cost.
 
 To see a deliberate failure: set `WEATHER_FAIL=1` in `.env`, restart, and draft
 advice again. The agent retries once, then marks "weather missing, check before
@@ -114,15 +121,17 @@ whose status is `approved` or `edited_and_approved`.
 | Farmer web page (`/farmer`) | Smartphones, weak signal | The same four actions |
 
 Farmer reports are saved as "farmer-reported, not yet checked" and appear on the
-officer's **Farmer reports** screen. The assistant may use them as signals, and each
-sourced fact built from one says so (`farmer_ussd` or `farmer_web`, `unchecked`).
+officer's **Farmer messages** screen (**Reports** tab). The assistant may use them as
+signals, and each sourced fact built from one says so (`farmer_ussd` or `farmer_web`,
+`unchecked`).
 
 The web portal and the extension-officer portal share the same backend records:
 farmer sign-in resolves the registered household, reports appear in **Farmer
-reports**, visit requests appear in **Visit flags**, and officers can open the
+messages**, visit requests appear in **Visits needed**, and officers can open the
 affected group directly from those queues. After an officer approves advice, the
 farmer can read it and submit a follow-up; officers see scheduled and answered
-follow-ups in **Farmer follow-ups**, with each household's own answer listed.
+follow-ups in **Farmer messages** (**Did advice help?** tab), with each household's
+own answer listed.
 Follow-up answers are accepted only for approved advice belonging to that farmer's
 household group; visit requests name the household that asked.
 

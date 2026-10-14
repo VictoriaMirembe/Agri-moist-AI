@@ -66,6 +66,7 @@ CHANNEL_WORDS = {
     "assistant-flag": "AI assistant",
     "assistant-followup": "AI assistant",
     "officer": "Officer",
+    "mcp-server-time": "Time server (borrowed MCP)",
     "seed-data": "Demo data",
 }
 TOOL_WORDS = {
@@ -74,6 +75,7 @@ TOOL_WORDS = {
     "get_plot_history": "Read plot history",
     "get_crop_calendar": "Read the crop calendar",
     "get_weather": "Read the weather forecast",
+    "get_current_time": "Read today's date",
     "get_pest_reports": "Read pest reports",
     "draft_advice": "Wrote an advice draft",
     "flag_for_visit": "Asked for an officer visit",

@@ -155,3 +155,50 @@ async def test_check_urgent_step_reasons(seeded_session):
     reason = (await check_urgent_node({**base, "group_id": 3}))["flag_reason"]
     assert reason == "Open visit request mentions food: H-008 asked for a visit: little food left"
     assert emitted[-1] == {"type": "check_urgent", "flag_reason": reason}
+
+
+async def test_borrowed_clock_call_is_logged_with_the_run(test_db):
+    test_db.init_db()
+    with test_db.session_scope() as session:
+        from backend.db.seed import seed
+
+        seed(session)
+
+    run_id = await _run(test_db, group_id=3)
+
+    with test_db.session_scope() as session:
+        rows = session.exec(
+            select(ToolLog).where(ToolLog.run_id == run_id, ToolLog.tool == "get_current_time")
+        ).all()
+        assert len(rows) == 1
+        row = rows[0]
+        assert row.source == "mcp-server-time"
+        assert row.actor == "assistant"
+        assert '"timezone": "Africa/Kampala"' in row.inputs
+        assert row.error is None and "Africa/Kampala" in row.outputs
+
+
+async def test_a_failed_clock_call_is_logged_and_still_raised(test_db):
+    from backend.agent.graph import _logged_now
+    from backend.tools.errors import ToolError
+
+    test_db.init_db()
+
+    class BrokenClock:
+        async def now(self, timezone="Africa/Kampala"):
+            raise ToolError("get_current_time failed: time server down")
+
+    with test_db.session_scope() as session:
+        run = Run(group_id=1, model="rule-based-stub")
+        session.add(run)
+        session.commit()
+        session.refresh(run)
+        run_id = run.id
+
+    with pytest.raises(ToolError, match="time server down"):
+        await _logged_now(BrokenClock(), run_id)
+
+    with test_db.session_scope() as session:
+        row = session.exec(select(ToolLog).where(ToolLog.run_id == run_id)).one()
+        assert row.tool == "get_current_time" and row.source == "mcp-server-time"
+        assert "time server down" in row.error

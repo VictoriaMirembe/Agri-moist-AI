@@ -16,6 +16,7 @@ from backend.agent.mcp_client import ToolClient
 from backend.agent.model_client import draft_advice_text
 from backend.core.database import session_scope
 from backend.db.models import District, Household, Run, Village, VisitFlag
+from backend.logging.tool_log import run_logged
 from backend.tools.errors import ToolError
 
 EmitFn = Callable[[int, dict[str, Any]], Awaitable[None]]
@@ -74,6 +75,40 @@ async def _call_with_retry(
             return None, str(exc2)
 
 
+async def _logged_now(client: ToolClient, run_id: int, timezone_name: str = "Africa/Kampala") -> dict:
+    """Ask the borrowed mcp-server-time server for the time and write the call to the
+    log with run_logged, exactly like our own tools (which their server logs itself).
+    A failure is logged too, then raised unchanged, so the caller's handling is the same."""
+    inputs = {"timezone": timezone_name}
+    try:
+        result, error = await client.now(timezone_name), None
+    except Exception as exc:  # noqa: BLE001 - logged below, then re-raised as it was
+        result, error = None, exc
+
+    def outcome() -> dict:
+        if error is not None:
+            raise error
+        return result
+
+    with session_scope() as session:
+        try:
+            run_logged(
+                session,
+                tool="get_current_time",
+                inputs=inputs,
+                actor="assistant",
+                source="mcp-server-time",
+                run_id=run_id,
+                func=outcome,
+            )
+        except Exception as raised:  # noqa: BLE001
+            if raised is not error:  # a real logging failure, not the clock error run_logged re-raised
+                raise
+    if error is not None:
+        raise error
+    return result
+
+
 async def plan_node(state: AgentState) -> dict:
     group_id = state["group_id"]
     with session_scope() as session:
@@ -109,7 +144,7 @@ async def gather_node(state: AgentState) -> dict:
 
     await emit_fn(run_id, {"type": "tool_call", "tool": "get_current_time", "inputs": {"timezone": "Africa/Kampala"}})
     try:
-        now_info = await client.now()
+        now_info = await _logged_now(client, run_id)
         await emit_fn(run_id, {"type": "tool_result", "tool": "get_current_time", "outputs": now_info})
         now_err = None
     except ToolError as exc:
