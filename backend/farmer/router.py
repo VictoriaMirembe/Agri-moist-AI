@@ -8,6 +8,7 @@ from __future__ import annotations
 import hmac
 import logging
 import re
+import threading
 import time
 from datetime import date, datetime, timezone
 from typing import Literal
@@ -986,26 +987,40 @@ class VoiceAudioRequest(BaseModel):
 
 
 # (lang, text) -> (stored_at, result). Sunbird's signed audio URLs last 30 minutes,
-# so a cached one is reused for 25; replaying a page is then instant and free.
+# so a cached one is reused for 25. After that the stored audio is re-signed (~2s)
+# instead of generated again (10-30s), so a sentence is only ever generated once.
 _VOICE_AUDIO_CACHE: dict[tuple[str, str], tuple[float, dict]] = {}
 _VOICE_AUDIO_TTL_SECONDS = 25 * 60
+# One lock per sentence: a page-load warm-up and a Listen press asking for the same
+# sentence at once share one Sunbird call instead of paying for two.
+_VOICE_AUDIO_LOCKS: dict[tuple[str, str], threading.Lock] = {}
+_VOICE_AUDIO_LOCKS_GUARD = threading.Lock()
 
 
 @router.post("/api/farmer/voice-audio")
 def get_farmer_voice_audio(body: VoiceAudioRequest):
-    """Speech for one sentence of the voice script, from Sunbird AI's Ugandan TTS
+    """Speech for one short piece of the voice script, from Sunbird AI's Ugandan TTS
     voices. 503 when Sunbird is not configured or fails; the page then uses the
     browser's own voice instead."""
     lang = _canonical_voice_lang(body.lang)
     key = (lang, body.text.strip())
-    now = time.monotonic()
-    cached = _VOICE_AUDIO_CACHE.get(key)
-    if cached and now - cached[0] < _VOICE_AUDIO_TTL_SECONDS:
-        return cached[1]
-    result = model_client.synthesize_speech(key[1], lang)
-    if result is None:
-        raise HTTPException(503, "Voice audio is unavailable; use the browser voice.")
-    if len(_VOICE_AUDIO_CACHE) > 500:
-        _VOICE_AUDIO_CACHE.clear()
-    _VOICE_AUDIO_CACHE[key] = (now, result)
-    return result
+    with _VOICE_AUDIO_LOCKS_GUARD:
+        lock = _VOICE_AUDIO_LOCKS.setdefault(key, threading.Lock())
+    with lock:
+        now = time.monotonic()
+        cached = _VOICE_AUDIO_CACHE.get(key)
+        if cached and now - cached[0] < _VOICE_AUDIO_TTL_SECONDS:
+            return cached[1]
+        result = None
+        if cached and cached[1].get("gcs_object"):
+            url = model_client.refresh_speech_url(cached[1]["gcs_object"])
+            if url:
+                result = {**cached[1], "audio_url": url}
+        if result is None:
+            result = model_client.synthesize_speech(key[1], lang)
+        if result is None:
+            raise HTTPException(503, "Voice audio is unavailable; use the browser voice.")
+        if len(_VOICE_AUDIO_CACHE) > 2000:
+            _VOICE_AUDIO_CACHE.clear()
+        _VOICE_AUDIO_CACHE[key] = (now, result)
+        return result

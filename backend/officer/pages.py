@@ -507,6 +507,12 @@ async def _mcp_status() -> dict:
             "linked": settings.translator_configured,
             "without": "Groq tries instead; if that fails the farmer sees English",
         },
+        {
+            "name": "Sunbird AI (text-to-speech)",
+            "job": "Reads the farmer page aloud in English, Swahili and Karamojong",
+            "linked": settings.translator_configured,
+            "without": "The farmer's browser reads it in its own voice",
+        },
         {"name": "Open-Meteo", "job": "Rain in the last 7 days and the next 7", "linked": True, "without": "No key needed"},
     ]
     return {

@@ -38,6 +38,16 @@ app = FastAPI(
 )
 
 @app.middleware("http")
+async def revalidate_static_files(request: Request, call_next):
+    """Make browsers check for a newer styles.css / app.js on every page load (a cheap
+    304 when unchanged), so a redeploy never leaves anyone on stale styles."""
+    response = await call_next(request)
+    if request.url.path.startswith("/static/"):
+        response.headers["Cache-Control"] = "no-cache"
+    return response
+
+
+@app.middleware("http")
 async def sync_auth_session_middleware(request: Request, call_next):
     """Ensure cookie or header role is synchronized into request.session."""
     if "session" in request.scope:

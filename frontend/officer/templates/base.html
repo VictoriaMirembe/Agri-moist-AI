@@ -105,13 +105,14 @@
       <span class="nav-badge" data-badge-for="nav-badge-flags" style="display:none;"></span>
     </a>
     <details class="o-tab-more">
-      <summary {% if section in ("record", "log") %}aria-current="page"{% endif %}>
+      <summary {% if section in ("record", "log", "mcp") %}aria-current="page"{% endif %}>
         <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M5 10a2 2 0 1 0 0 4 2 2 0 0 0 0-4zm7 0a2 2 0 1 0 0 4 2 2 0 0 0 0-4zm7 0a2 2 0 1 0 0 4 2 2 0 0 0 0-4z"/></svg>
         <span>More</span>
       </summary>
       <div class="o-tab-sheet">
         <a href="/visits/new">Record a visit</a>
         <a href="/log">Activity log</a>
+        <a href="/mcp">AI tools (MCP)</a>
         <a href="/ussd">USSD simulator</a>
         <a href="/farmer">Farmer page</a>
       </div>

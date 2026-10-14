@@ -251,8 +251,31 @@ def synthesize_speech(text: str, lang: str) -> dict[str, Any] | None:
         body = response.json()
         if not body.get("audio_url"):
             return None
-        return {"audio_url": body["audio_url"], "voice": body.get("voice", voice), "duration_seconds": body.get("duration_seconds")}
+        return {
+            "audio_url": body["audio_url"],
+            "voice": body.get("voice", voice),
+            "duration_seconds": body.get("duration_seconds"),
+            "gcs_object": body.get("gcs_object"),
+        }
     except Exception:  # noqa: BLE001 - any failure falls back to the browser voice
+        return None
+
+
+def refresh_speech_url(gcs_object: str) -> str | None:
+    """A fresh signed URL for audio Sunbird already generated (~2s, against 10-30s to
+    generate it again). None on any failure; the caller then generates it anew."""
+    if not settings.translator_configured or not gcs_object:
+        return None
+    try:
+        response = httpx.get(
+            settings.sunbird_api_url.rstrip("/") + "/tasks/audio/speech/url",
+            headers={"Authorization": f"Bearer {settings.sunbird_api_key}"},
+            params={"gcs_object": gcs_object},
+            timeout=30,
+        )
+        response.raise_for_status()
+        return response.json().get("audio_url") or None
+    except Exception:  # noqa: BLE001
         return None
 
 

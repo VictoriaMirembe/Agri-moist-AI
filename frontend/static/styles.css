@@ -1742,6 +1742,22 @@ body.farmer {
 .farmer-brand span { color: var(--am-ink); }
 .farmer-brand .farmer-brand-mark { border: 0; border-radius: 6px; background: var(--am-cobalt); color: #fff; font-family: var(--am-display); font-stretch: 125%; }
 .farmer-topbar-location { color: var(--am-muted); }
+/* Language selector and voice controls: built for the old dark header, restyled
+   for the white one so they no longer vanish into it. */
+.farmer-lang-wrap { background: var(--am-surface); border: 1.5px solid #7d8794; border-radius: 6px; box-shadow: none; }
+.farmer-lang-wrap:hover, .farmer-lang-wrap:focus-within { background: var(--am-cobalt-wash); border-color: var(--am-cobalt); box-shadow: none; }
+.farmer-lang-icon, .farmer-lang-arrow { color: var(--am-cobalt); }
+.farmer-lang-select { color: var(--am-ink); font-weight: 700; min-height: 0; height: auto; margin: 0; padding: 0 1.15rem 0 0; border: 0; border-radius: 0; background: transparent; }
+/* Selector and Listen button share one 44px touch height. */
+.farmer-lang-wrap, .farmer-voice-btn { min-height: 44px; box-sizing: border-box; }
+.farmer-lang-wrap { padding-top: 0; padding-bottom: 0; }
+.farmer-lang-select option { background: var(--am-surface); color: var(--am-ink); }
+.farmer-voice-btn { background: var(--am-cobalt); border-color: var(--am-cobalt); border-radius: 6px; box-shadow: none; }
+.farmer-voice-btn:hover { background: var(--am-cobalt-dark); transform: none; box-shadow: none; }
+.farmer-voice-btn.is-speaking { background: var(--am-cobalt-wash); color: var(--am-cobalt-dark); border-color: var(--am-cobalt); }
+.farmer-section-voice-btn { border-color: #b8c8e6; background: var(--am-cobalt-wash); color: var(--am-cobalt-dark); }
+.farmer-section-voice-btn:hover { border-color: var(--am-cobalt); background: #d8e3f5; color: var(--am-cobalt-dark); }
+.farmer-audio-player-bar { background: var(--am-cobalt-dark); border-color: var(--am-cobalt-dark); }
 .farmer-nav { background: #f7f8f4; }
 .farmer-nav a { border-radius: 6px; color: var(--am-ink); font-weight: 700; }
 .farmer-nav a:hover { background: var(--am-surface); color: var(--am-cobalt); }
@@ -1785,16 +1801,16 @@ body.farmer {
 .ussd-bar a:hover { background: none; text-decoration: underline; }
 .ussd-layout { display: grid; grid-template-columns: minmax(0, 300px) minmax(0, 1fr); align-items: start; gap: clamp(1.5rem, 5vw, 3.5rem); }
 .ussd-phone {
-  padding: 1.1rem 1rem 1.4rem;
-  border-radius: 34px 34px 26px 26px;
+  padding: 0.8rem 0.85rem 1rem;
+  border-radius: 28px 28px 22px 22px;
   background: #24272c;
   color: #e9edf1;
   box-shadow: inset 0 1px 0 rgb(255 255 255 / 8%), 0 18px 40px rgb(26 34 48 / 22%);
 }
-.ussd-phone-brand { margin: 0 0 0.7rem; text-align: center; color: #8d96a2; font-family: var(--am-display); font-stretch: 118%; font-weight: 700; font-size: 0.85rem; }
+.ussd-phone-brand { margin: 0 0 0.45rem; text-align: center; color: #8d96a2; font-family: var(--am-display); font-stretch: 118%; font-weight: 700; font-size: 0.85rem; }
 .ussd-phone .ussd-screen {
-  min-height: 210px;
-  margin: 0 0 0.8rem;
+  min-height: 150px;
+  margin: 0 0 0.6rem;
   padding: 0.8rem 0.85rem;
   border: 4px solid #121417;
   border-radius: 8px;
@@ -1806,12 +1822,12 @@ body.farmer {
 }
 .ussd-reply label { margin: 0 0 0.3rem; color: #c3cad3; font-size: 0.85rem; font-weight: 700; }
 .ussd-reply input { min-height: 44px; border: 1px solid #454b53; border-radius: 6px; background: #15171a; color: #f1f3f5; font-family: ui-monospace, Consolas, monospace; font-size: 1.15rem; }
-.ussd-calls { margin: 0.8rem 0; }
-.ussd-call { width: 100%; min-height: 48px; border: 0; border-radius: 999px; background: #2f8f4e; color: #fff; font: 700 1rem var(--am-text); cursor: pointer; }
+.ussd-calls { margin: 0.55rem 0; }
+.ussd-call { width: 100%; min-height: 44px; border: 0; border-radius: 999px; background: #2f8f4e; color: #fff; font: 700 1rem var(--am-text); cursor: pointer; }
 .ussd-call:hover { background: #267a42; }
-.ussd-phone .keypad { gap: 0.45rem; }
+.ussd-phone .keypad { gap: 0.4rem; }
 .ussd-phone .keypad button {
-  min-height: 50px; padding: 0.5rem; border: 0; border-radius: 12px;
+  min-height: 44px; padding: 0.35rem; border: 0; border-radius: 10px;
   background: #3a3f46; color: #f1f3f5;
   font-family: var(--am-display); font-stretch: 112%; font-weight: 700; font-size: 1.3rem; cursor: pointer;
 }
@@ -1832,5 +1848,8 @@ body.farmer {
 .ussd-fold pre { margin: 0.4rem 0 0; padding: 0.8rem; overflow-x: auto; border: 1px solid var(--am-line); border-radius: 6px; background: var(--am-surface); color: var(--am-ink); font-size: 0.85rem; line-height: 1.5; }
 @media (max-width: 760px) {
   .ussd-layout { grid-template-columns: minmax(0, 1fr); }
-  .ussd-phone { width: min(100%, 320px); margin: 0 auto; }
+  .ussd-phone { width: min(100%, 300px); margin: 0 auto; }
+  /* Phones: a shorter handset so the number field and Send stay close to the screen. */
+  .ussd-phone .ussd-screen { min-height: 132px; font-size: 0.92rem; }
+  .ussd-phone .keypad button { min-height: 42px; font-size: 1.15rem; }
 }

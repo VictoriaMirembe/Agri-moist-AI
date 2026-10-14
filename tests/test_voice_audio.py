@@ -52,3 +52,21 @@ def test_voice_audio_failure_is_503(client, monkeypatch):
     monkeypatch.setattr(model_client.httpx, "post", broken_post)
     res = client.post("/api/farmer/voice-audio", json={"text": "Karibu", "lang": "sw"})
     assert res.status_code == 503
+
+
+def test_expired_voice_audio_is_re_signed_not_generated_again(client, monkeypatch):
+    monkeypatch.setattr(settings, "sunbird_api_key", "test-key")
+    farmer_router._VOICE_AUDIO_CACHE.clear()
+    key = ("en", "Welcome")
+    old = {"audio_url": "https://storage.example/old.wav", "voice": "salt_eng_0001", "gcs_object": "orpheus_tts/x.wav"}
+    farmer_router._VOICE_AUDIO_CACHE[key] = (-10_000.0, old)  # long past the 25-minute reuse window
+
+    def no_generation(*args, **kwargs):
+        raise AssertionError("audio was generated again instead of re-signed")
+
+    monkeypatch.setattr(model_client, "synthesize_speech", no_generation)
+    monkeypatch.setattr(model_client, "refresh_speech_url", lambda gcs_object: "https://storage.example/fresh.wav")
+
+    res = client.post("/api/farmer/voice-audio", json={"text": "Welcome", "lang": "en"})
+    assert res.status_code == 200, res.text
+    assert res.json()["audio_url"] == "https://storage.example/fresh.wav"

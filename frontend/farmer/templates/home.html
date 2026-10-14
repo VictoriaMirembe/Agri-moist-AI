@@ -963,6 +963,63 @@ let sentenceAudio = {};  // sentence index -> Promise of a Sunbird audio URL (or
 let playToken = 0;  // bumped on every new sentence/stop, so stale callbacks do nothing
 let voiceEngine = "none";  // "loading" | "sunbird" | "browser" | "none"
 
+// Sunbird's time grows with text length (~10s for a sentence, ~30s for a paragraph),
+// so the script is read in short pieces: the first is ready quickly and the next
+// ones are fetched in parallel while it plays.
+const SPEECH_PIECE_MAX = 140;
+function splitForSpeech(sentences) {
+  const pieces = [];
+  for (const item of sentences || []) {
+    // Split only at ". " / "! " / "? " so decimals like 39.3 stay whole, and without
+    // regex lookbehind, which older iPhone browsers reject.
+    const raw = String(item.text || "").split(/([.!?])\s+/);
+    const parts = [];
+    for (let i = 0; i < raw.length; i += 2) {
+      const part = (raw[i] + (raw[i + 1] || "")).trim();
+      if (part) parts.push(part);
+    }
+    let current = "";
+    for (const part of parts) {
+      // The very first piece stays a single sentence so the reader starts fast.
+      const firstPiece = pieces.length === 0 && current === "";
+      if (current && (current + " " + part).length > SPEECH_PIECE_MAX) {
+        pieces.push({ label: item.label, text: current });
+        current = part;
+      } else {
+        current = current ? current + " " + part : part;
+      }
+      if (firstPiece && pieces.length === 0) {
+        pieces.push({ label: item.label, text: current });
+        current = "";
+      }
+    }
+    if (current) pieces.push({ label: item.label, text: current });
+  }
+  return pieces;
+}
+
+function prefetchAhead(index) {
+  for (let i = index; i < index + 3; i++) fetchSentenceAudio(i);
+}
+
+// Warm-up: when the page opens, quietly prepare the first three pieces (nothing
+// plays), so pressing Listen usually starts at once and keeps going.
+async function warmVoice() {
+  if (isFilePreview || !sunbirdAvailable) return;
+  try {
+    const data = await getJSON(
+      "/api/farmer/voice-script?phone=" + encodeURIComponent(farmerPhone) +
+      "&lang=" + encodeURIComponent(currentVoiceLang) +
+      "&view=" + encodeURIComponent(activeView)
+    );
+    for (const piece of splitForSpeech(data.sentences).slice(0, 3)) {
+      postJSON("/api/farmer/voice-audio", { text: piece.text, lang: currentVoiceLang }).catch(() => {});
+    }
+  } catch (_) {
+    // warm-up is best effort only
+  }
+}
+
 function fetchSentenceAudio(index) {
   if (!sunbirdAvailable || index >= voiceSentences.length) return Promise.resolve(null);
   if (!(index in sentenceAudio)) {
@@ -1006,7 +1063,7 @@ async function speakNextSentence() {
     if (token !== playToken || !isReading) return;
     if (playerStatus && !isPaused) playerStatus.textContent = (LANG_CONFIG[currentVoiceLang] || LANG_CONFIG.en).playingStatus;
     if (url) {
-      fetchSentenceAudio(index + 1);
+      prefetchAhead(index + 1);
       voiceEngine = "sunbird";
       voiceAudio.src = url;
       voiceAudio.playbackRate = speeds[speedIndex];
@@ -1082,12 +1139,13 @@ async function startVoiceReading(section = null) {
   if (pauseIcon) pauseIcon.hidden = false;
   if (playIcon) playIcon.hidden = true;
 
-  voiceSentences = await fetchVoiceScript(currentVoiceLang, activeView, section);
+  voiceSentences = splitForSpeech(await fetchVoiceScript(currentVoiceLang, activeView, section));
 
   if (!voiceSentences || !voiceSentences.length) {
     stopVoice();
     return;
   }
+  prefetchAhead(0);
 
   speakNextSentence();
 }
@@ -1213,6 +1271,7 @@ document.querySelectorAll("[data-voice-section]").forEach((btn) => {
 });
 
 updateVoiceUI();
+setTimeout(warmVoice, 1500);  // after the page's own data has loaded
 
 </script>
 </body>
