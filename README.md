@@ -20,6 +20,30 @@ or on a simple farmer web page on a smartphone.
 > drafting mode. Translation into Ngakarimojong does **not** work yet: the model
 > declines, so farmers are shown the approved English text - see "Known gaps".
 
+## The problem
+
+In district extension offices like the Napak District Production Office in Karamoja, Uganda (our demo uses synthetic data for this office), one or two officers must turn rainfall, pest and visit information into advice for many smallholder households they cannot all visit in a season. Doing it by hand means cross-checking each household's plot history against the weather and the crop calendar, so most households never get timely advice specific to their plot. Karamoja has one unreliable rainy season, so late or wrong advice is costly.
+
+## Who it is for
+
+- **Extension officers:** draft, review and approve sourced advice for household groups, and see urgent cases flagged for a visit.
+- **Farming households:** read approved advice on a simple web page or a USSD menu, report pests, request visits and say whether advice helped.
+
+## Agent architecture
+
+One LangGraph agent (`backend/agent/graph.py`) runs a fixed, auditable sequence: **plan** (locate the group) → **gather** (the four read tools, the borrowed clock, then the crop calendar for each crop found) → **check_urgent** → **draft_or_flag**. Urgent cases go to `flag_for_visit`; everything else is drafted by the model and saved with `draft_advice` for officer approval. Each call to our own tools is retried once, and a second failure is recorded as a gap, never guessed. Full details: [ARCHITECTURE.md](ARCHITECTURE.md).
+
+## Technology stack
+
+- **Language:** Python 3.12
+- **Frameworks:** FastAPI, uvicorn, LangGraph, the `mcp` Python SDK (FastMCP), SQLModel, Jinja2 with plain JavaScript
+- **Model:** openai/gpt-oss-120b (open weights) via Groq; a rule-based stub runs when no key is set
+- **MCP servers:** our own AgriMoist server (9 tools) and the borrowed mcp-server-time, both over stdio
+- **Database:** SQLite
+- **External data:** Open-Meteo weather API; FEWS NET crop calendar (stored in `data/crop_calendar.json`)
+- **Testing:** pytest and `scripts/run_evals.py`
+- **Deployment:** Docker (Dockerfile + docker-compose). Live demo hosted on Render's free plan, set up through the Render dashboard (no config file in the repo): https://agri-moist-ai.onrender.com
+
 ## Run it (one command)
 
 Requirements: Docker and Docker Compose.
@@ -176,8 +200,9 @@ exactly the kind of small, well-solved problem borrowing is for. Connected over
 stdio exactly like our own server (`backend/agent/mcp_client.py`).
 
 **Agent:** LangGraph (`backend/agent/graph.py`), four nodes - plan, gather, check urgent
-(urgent food or overdue visits get flagged instead of drafted), draft or flag - with one retry per failing tool call before the gap is
-marked in the advice, never guessed.
+(urgent food or overdue visits get flagged instead of drafted), draft or flag - with one retry per failing call to our own MCP tools before the gap is
+marked in the advice, never guessed. A failed call to the borrowed clock is not retried;
+it is recorded as a gap.
 
 **Model:** [gpt-oss-120b](https://huggingface.co/openai/gpt-oss-120b) (open weights,
 Apache 2.0), served through [Groq](https://groq.com) using the `openai` client with
