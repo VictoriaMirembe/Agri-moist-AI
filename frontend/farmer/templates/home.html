@@ -15,11 +15,44 @@
   <main class="farmer-container farmer-dashboard-shell">
     <div class="farmer-dashboard">
       <header class="farmer-topbar">
-        <a class="farmer-brand" href="#" data-view-link="dashboard" aria-label="AgriMoist AI home">
-          <span class="farmer-brand-mark" aria-hidden="true">A</span>
-          <span>AgriMoist <strong>AI</strong></span>
-        </a>
-        <span class="farmer-topbar-location">Karamoja farmer services</span>
+        <div class="farmer-topbar-left">
+          <a class="farmer-brand" href="#" data-view-link="dashboard" aria-label="AgriMoist AI home">
+            <span class="farmer-brand-mark" aria-hidden="true">A</span>
+            <span>AgriMoist <strong>AI</strong></span>
+          </a>
+          <span class="farmer-topbar-location">Karamoja farmer services</span>
+        </div>
+
+        <div class="farmer-voice-toolbar" role="region" aria-label="Language selection and voice reader">
+          <div class="farmer-lang-wrap" title="Select audio and display language">
+            <span class="farmer-lang-icon" aria-hidden="true">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="10"></circle>
+                <line x1="2" y1="12" x2="22" y2="12"></line>
+                <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path>
+              </svg>
+            </span>
+            <select id="farmer-audio-lang" class="farmer-lang-select" aria-label="Language selection">
+              <option value="en">English (English)</option>
+              <option value="kdj">Karamojong (Ngakarimojong)</option>
+              <option value="sw">Swahili (Kiswahili)</option>
+            </select>
+            <span class="farmer-lang-arrow" aria-hidden="true">▾</span>
+          </div>
+
+          <button type="button" id="farmer-listen-btn" class="farmer-voice-btn" aria-label="Listen to page read aloud">
+            <span class="farmer-voice-icon" aria-hidden="true">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
+                <path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path>
+              </svg>
+            </span>
+            <span id="farmer-voice-btn-label">Listen to page</span>
+            <span class="farmer-audio-waves" id="farmer-voice-waves" hidden aria-hidden="true">
+              <span></span><span></span><span></span><span></span>
+            </span>
+          </button>
+        </div>
       </header>
 
       <nav class="farmer-nav" aria-label="Farmer services">
@@ -30,6 +63,48 @@
         <a href="/farmer/ussd" data-ussd-link>Basic phone (USSD)</a>
         <a class="farmer-signout" href="#" data-view-link="signin">Sign out</a>
       </nav>
+
+      <!-- Sticky / Floating Audio Player Bar -->
+      <aside id="farmer-audio-player-bar" class="farmer-audio-player-bar" role="region" aria-label="Audio reader controls" hidden>
+        <div class="farmer-audio-player-inner">
+          <div class="farmer-audio-player-info">
+            <div class="farmer-audio-badge">
+              <span class="farmer-audio-indicator pulsing" id="farmer-player-indicator"></span>
+              <span id="farmer-audio-status">Reading aloud</span>
+              <span id="farmer-audio-lang-tag" class="farmer-audio-lang-tag">English</span>
+            </div>
+            <p id="farmer-audio-live-text" class="farmer-audio-live-text" aria-live="polite">Preparing speech...</p>
+          </div>
+          <div class="farmer-audio-player-controls">
+            <button type="button" id="farmer-audio-restart" class="farmer-player-ctrl" title="Restart from beginning" aria-label="Restart reading">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="1 4 1 10 7 10"></polyline>
+                <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path>
+              </svg>
+            </button>
+            <button type="button" id="farmer-audio-play-pause" class="farmer-player-ctrl farmer-player-ctrl-main" title="Pause or Resume" aria-label="Pause reading">
+              <span id="player-pause-icon">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                  <rect x="6" y="4" width="4" height="16" rx="1"></rect>
+                  <rect x="14" y="4" width="4" height="16" rx="1"></rect>
+                </svg>
+              </span>
+              <span id="player-play-icon" hidden>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                  <polygon points="6 4 20 12 6 20 6 4"></polygon>
+                </svg>
+              </span>
+            </button>
+            <button type="button" id="farmer-audio-stop" class="farmer-player-ctrl" title="Stop speech" aria-label="Stop reading">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor">
+                <rect x="5" y="5" width="14" height="14" rx="2"></rect>
+              </svg>
+            </button>
+            <button type="button" id="farmer-audio-speed" class="farmer-speed-btn" title="Reading speed: Click to toggle">1.0x</button>
+            <button type="button" id="farmer-audio-close" class="farmer-player-close" title="Close player" aria-label="Close voice player">&times;</button>
+          </div>
+        </div>
+      </aside>
 
       <div id="local-file-notice" class="farmer-data-note" role="status" hidden>
         You are viewing the dashboard file directly. Open the farmer portal through the running AgriMoist AI app to load registered farm data and use its services.
@@ -54,7 +129,13 @@
               <div class="farmer-panel-heading">
                 <div>
                   <p class="farmer-eyebrow">Field conditions</p>
-                  <h2 id="conditions-heading">Rainfall and latest field record</h2>
+                  <h2 id="conditions-heading">
+                    Rainfall and latest field record
+                    <button type="button" class="farmer-section-voice-btn" data-voice-section="conditions" title="Listen to field conditions" aria-label="Listen to field conditions">
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><path d="M15.54 8.46a5 5 0 0 1 0 7.07"></path></svg>
+                      <span>Listen</span>
+                    </button>
+                  </h2>
                 </div>
                 <span class="farmer-status" id="weather-status">Loading</span>
               </div>
@@ -84,7 +165,13 @@
               <div class="farmer-panel-heading">
                 <div>
                   <p class="farmer-eyebrow">Reviewed by your extension officer</p>
-                  <h2 id="advice-heading">My advice</h2>
+                  <h2 id="advice-heading">
+                    My advice
+                    <button type="button" class="farmer-section-voice-btn" data-voice-section="advice" title="Listen to my advice" aria-label="Listen to my advice">
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><path d="M15.54 8.46a5 5 0 0 1 0 7.07"></path></svg>
+                      <span>Listen</span>
+                    </button>
+                  </h2>
                 </div>
                 <span class="farmer-status" id="advice-status">Loading</span>
               </div>
@@ -632,6 +719,440 @@ if (activeView === "dashboard") {
       if (loading) loading.textContent = message;
     });
 }
+
+// ===========================================================================
+// Voice Audio Output Engine (English, Karamojong, Swahili)
+// ===========================================================================
+const voiceLangSelect = document.getElementById("farmer-audio-lang");
+const listenBtn = document.getElementById("farmer-listen-btn");
+const voiceBtnLabel = document.getElementById("farmer-voice-btn-label");
+const voiceWaves = document.getElementById("farmer-voice-waves");
+
+const playerBar = document.getElementById("farmer-audio-player-bar");
+const playerStatus = document.getElementById("farmer-audio-status");
+const playerLangTag = document.getElementById("farmer-audio-lang-tag");
+const playerLiveText = document.getElementById("farmer-audio-live-text");
+const playerIndicator = document.getElementById("farmer-player-indicator");
+const playPauseBtn = document.getElementById("farmer-audio-play-pause");
+const pauseIcon = document.getElementById("player-pause-icon");
+const playIcon = document.getElementById("player-play-icon");
+const restartBtn = document.getElementById("farmer-audio-restart");
+const stopBtn = document.getElementById("farmer-audio-stop");
+const speedBtn = document.getElementById("farmer-audio-speed");
+const closeBtn = document.getElementById("farmer-audio-close");
+
+const LANG_CONFIG = {
+  en: {
+    name: "English",
+    tag: "English",
+    listenBtn: "Listen to page",
+    playingStatus: "Reading aloud in English",
+    pausedStatus: "Paused (English)",
+    speechLang: "en-US",
+    rate: 0.95,
+  },
+  kdj: {
+    name: "Karamojong",
+    tag: "Ngakarimojong",
+    listenBtn: "Iirar amana",
+    playingStatus: "Iirar aloma Ngakarimojong",
+    pausedStatus: "Eyakar apak (Ngakarimojong)",
+    speechLang: "sw",
+    rate: 0.90,
+  },
+  sw: {
+    name: "Swahili",
+    tag: "Kiswahili",
+    listenBtn: "Sikiliza ukurasa",
+    playingStatus: "Inasoma kwa Kiswahili",
+    pausedStatus: "Imesitishwa (Kiswahili)",
+    speechLang: "sw-KE",
+    rate: 0.92,
+  },
+};
+
+let currentVoiceLang = localStorage.getItem("agrimoist_farmer_lang") || "en";
+if (voiceLangSelect) {
+  voiceLangSelect.value = currentVoiceLang;
+}
+
+const speeds = [1.0, 0.85, 1.15];
+let speedIndex = 0;
+
+let isReading = false;
+let isPaused = false;
+let currentSentenceIndex = 0;
+let voiceSentences = [];
+let activeSectionTarget = null;
+
+function updateVoiceUI() {
+  const cfg = LANG_CONFIG[currentVoiceLang] || LANG_CONFIG.en;
+  if (!isReading && voiceBtnLabel) {
+    voiceBtnLabel.textContent = cfg.listenBtn;
+  }
+  if (playerLangTag) {
+    playerLangTag.textContent = cfg.tag;
+  }
+}
+
+if (voiceLangSelect) {
+  voiceLangSelect.addEventListener("change", (e) => {
+    currentVoiceLang = e.target.value;
+    localStorage.setItem("agrimoist_farmer_lang", currentVoiceLang);
+    updateVoiceUI();
+    if (isReading) {
+      stopVoice();
+      startVoiceReading(activeSectionTarget);
+    }
+  });
+}
+
+function getBestVoiceForLang(langCode) {
+  if (!("speechSynthesis" in window)) return null;
+  const voices = window.speechSynthesis.getVoices();
+  if (!voices.length) return null;
+
+  if (langCode === "sw" || langCode === "kdj") {
+    const swVoice = voices.find((v) => v.lang.toLowerCase().startsWith("sw"));
+    if (swVoice) return swVoice;
+    const afVoice = voices.find((v) => /kenya|tanzania|uganda|africa/i.test(v.name));
+    if (afVoice) return afVoice;
+  }
+
+  const direct = voices.find((v) => v.lang.toLowerCase().startsWith(langCode));
+  if (direct) return direct;
+
+  const enVoice = voices.find((v) => v.lang.toLowerCase().startsWith("en"));
+  return enVoice || voices[0] || null;
+}
+
+async function fetchVoiceScript(lang, view, section) {
+  if (!isFilePreview) {
+    try {
+      const data = await getJSON(
+        "/api/farmer/voice-script?phone=" + encodeURIComponent(farmerPhone) +
+        "&lang=" + encodeURIComponent(lang) +
+        "&view=" + encodeURIComponent(view)
+      );
+      if (data && data.sentences && data.sentences.length) {
+        if (section === "conditions") {
+          const match = data.sentences.find(s => /condition|hali|boyer/i.test(s.label));
+          if (match) return [match];
+        } else if (section === "advice") {
+          const match = data.sentences.find(s => /advice|ushauri|akisil/i.test(s.label));
+          if (match) return [match];
+        }
+        return data.sentences;
+      }
+    } catch (_) {
+      // Fall back to client DOM-based sentences
+    }
+  }
+
+  return buildClientVoiceScript(lang, view, section);
+}
+
+function buildClientVoiceScript(lang, view, section) {
+  const sentences = [];
+  const farmerName = (document.getElementById("farmer-name")?.textContent || "farmer").trim();
+  const farmerLoc = (document.getElementById("farmer-location")?.textContent || "").trim();
+  const rainPast = (document.getElementById("rain-past")?.textContent || "").trim();
+  const rainNext = (document.getElementById("rain-next")?.textContent || "").trim();
+  const soilCond = (document.getElementById("soil-condition")?.textContent || "").trim();
+  const adviceText = (document.getElementById("advice-preview")?.textContent || "").trim();
+
+  if (section === "conditions") {
+    if (lang === "sw") {
+      sentences.push({ label: "Hali ya hewa", text: `Hali ya hewa na udongo. Mvua siku saba zilizopita: ${rainPast}. Utabiri wa siku saba zijazo: ${rainNext}. Hali ya unyevu wa udongo ni ${soilCond}.` });
+    } else if (lang === "kdj") {
+      sentences.push({ label: "Eboyer loka amana", text: `Eboyer loka akiru ka alupok. Akiru napaarisyet 7 naka alotung: ${rainPast}. Etebito napaarisyet 7 nukebunit: ${rainNext}. Eboyer loka alupok erai ${soilCond}.` });
+    } else {
+      sentences.push({ label: "Field conditions", text: `Field conditions: Rain in the past 7 days: ${rainPast}. Rain forecast for next 7 days: ${rainNext}. Recorded soil condition: ${soilCond}.` });
+    }
+    return sentences;
+  }
+
+  if (section === "advice") {
+    if (lang === "sw") {
+      sentences.push({ label: "Ushauri", text: `Ushauri kutoka kwa afisa kilimo wako: ${adviceText}` });
+    } else if (lang === "kdj") {
+      sentences.push({ label: "Akisil", text: `Akisil naka ekaunan kon: ${adviceText}` });
+    } else {
+      sentences.push({ label: "My advice", text: `Advice from your extension officer: ${adviceText}` });
+    }
+    return sentences;
+  }
+
+  if (view === "dashboard") {
+    if (lang === "sw") {
+      sentences.push({ label: "Karibu", text: `Karibu kwenye shamba lako, ${farmerName}. ${farmerLoc}` });
+      if (rainPast && rainPast !== "Unavailable") {
+        sentences.push({ label: "Hali ya hewa", text: `Mvua siku saba zilizopita: ${rainPast}. Utabiri wa siku saba zijazo: ${rainNext}. Hali ya udongo: ${soilCond}.` });
+      }
+      if (adviceText) {
+        sentences.push({ label: "Ushauri", text: `Ushauri wa afisa: ${adviceText}` });
+      }
+    } else if (lang === "kdj") {
+      sentences.push({ label: "Ejok nooi", text: `Ejok nooi amana kon, ${farmerName}. ${farmerLoc}` });
+      if (rainPast && rainPast !== "Unavailable") {
+        sentences.push({ label: "Eboyer", text: `Akiru napaarisyet 7 naka alotung: ${rainPast}. Etebito napaarisyet 7 nukebunit: ${rainNext}. Eboyer loka alupok: ${soilCond}.` });
+      }
+      if (adviceText) {
+        sentences.push({ label: "Akisil", text: `Akisil naka ekaunan: ${adviceText}` });
+      }
+    } else {
+      sentences.push({ label: "Welcome", text: `Welcome to your farm dashboard, ${farmerName}. ${farmerLoc}` });
+      if (rainPast && rainPast !== "Unavailable") {
+        sentences.push({ label: "Field conditions", text: `Rain in the past 7 days: ${rainPast}. Rain forecast next 7 days: ${rainNext}. Soil condition: ${soilCond}.` });
+      }
+      if (adviceText) {
+        sentences.push({ label: "Advice", text: `Advice from extension officer: ${adviceText}` });
+      }
+    }
+  } else if (view === "advice") {
+    const detail = (document.getElementById("advice-detail")?.textContent || adviceText).trim();
+    if (lang === "sw") {
+      sentences.push({ label: "Ushauri", text: `Ushauri wa afisa kilimo: ${detail}` });
+    } else if (lang === "kdj") {
+      sentences.push({ label: "Akisil", text: `Akisil naka ekaunan: ${detail}` });
+    } else {
+      sentences.push({ label: "My advice", text: `My advice from extension officer: ${detail}` });
+    }
+  } else if (view === "report") {
+    if (lang === "sw") {
+      sentences.push({ label: "Ripoti", text: "Ripoti tatizo shambani. Taarifa yako itatumwa kwa afisa kilimo kuikagua." });
+    } else if (lang === "kdj") {
+      sentences.push({ label: "Elimo", text: "Elimo ngikaat na aroniar amana. Ekaunan ekoniite ripoot kon." });
+    } else {
+      sentences.push({ label: "Report", text: "Report an issue. Your report will be shared with your extension officer for review." });
+    }
+  } else if (view === "visit") {
+    if (lang === "sw") {
+      sentences.push({ label: "Ziara", text: "Omba afisa akutembelee shambani. Eleza sababu ya kuhitaji ukaguzi." });
+    } else if (lang === "kdj") {
+      sentences.push({ label: "Ziara", text: "Ilipe ekaunan ebu amana kon. Kitatam ekaunan nyo ebunere amana." });
+    } else {
+      sentences.push({ label: "Visit", text: "Request an officer visit. Let your extension officer know why you need a visit." });
+    }
+  } else {
+    sentences.push({ label: "Notice", text: "AgriMoist AI farmer portal." });
+  }
+
+  return sentences;
+}
+
+function highlightSection(section) {
+  document.querySelectorAll(".voice-reading-highlight").forEach(el => el.classList.remove("voice-reading-highlight"));
+  if (!section) return;
+  let target = null;
+  if (/condition|hewa|boyer/i.test(section)) {
+    target = document.querySelector('[aria-labelledby="conditions-heading"]');
+  } else if (/advice|ushauri|akisil/i.test(section)) {
+    target = document.querySelector('.farmer-advice-panel') || document.getElementById('advice-view');
+  }
+  if (target) {
+    target.classList.add("voice-reading-highlight");
+  }
+}
+
+function speakNextSentence() {
+  if (!isReading || currentSentenceIndex >= voiceSentences.length) {
+    stopVoice();
+    return;
+  }
+
+  const currentItem = voiceSentences[currentSentenceIndex];
+  const cfg = LANG_CONFIG[currentVoiceLang] || LANG_CONFIG.en;
+
+  if (playerLiveText) {
+    playerLiveText.textContent = currentItem.text;
+  }
+  highlightSection(currentItem.label);
+
+  if (!("speechSynthesis" in window)) {
+    setTimeout(() => {
+      currentSentenceIndex++;
+      speakNextSentence();
+    }, 4500);
+    return;
+  }
+
+  window.speechSynthesis.cancel();
+
+  const utterance = new SpeechSynthesisUtterance(currentItem.text);
+  utterance.lang = cfg.speechLang;
+  utterance.rate = cfg.rate * speeds[speedIndex];
+  utterance.pitch = currentVoiceLang === "kdj" ? 1.05 : 1.0;
+
+  const matchedVoice = getBestVoiceForLang(currentVoiceLang);
+  if (matchedVoice) {
+    utterance.voice = matchedVoice;
+  }
+
+  utterance.onend = () => {
+    if (isReading && !isPaused) {
+      currentSentenceIndex++;
+      setTimeout(speakNextSentence, 280);
+    }
+  };
+
+  utterance.onerror = () => {
+    if (isReading && !isPaused) {
+      currentSentenceIndex++;
+      setTimeout(speakNextSentence, 280);
+    }
+  };
+
+  window.speechSynthesis.speak(utterance);
+}
+
+async function startVoiceReading(section = null) {
+  activeSectionTarget = section;
+  isReading = true;
+  isPaused = false;
+  currentSentenceIndex = 0;
+
+  const cfg = LANG_CONFIG[currentVoiceLang] || LANG_CONFIG.en;
+
+  if (playerBar) playerBar.hidden = false;
+  if (playerStatus) playerStatus.textContent = cfg.playingStatus;
+  if (playerLangTag) playerLangTag.textContent = cfg.tag;
+  if (playerLiveText) playerLiveText.textContent = "Loading audio...";
+  if (playerIndicator) playerIndicator.className = "farmer-audio-indicator pulsing";
+
+  if (listenBtn) {
+    listenBtn.classList.add("is-speaking");
+    listenBtn.setAttribute("aria-label", "Reading in progress. Click to stop.");
+  }
+  if (voiceBtnLabel) voiceBtnLabel.textContent = "Reading...";
+  if (voiceWaves) voiceWaves.hidden = false;
+
+  if (pauseIcon) pauseIcon.hidden = false;
+  if (playIcon) playIcon.hidden = true;
+
+  voiceSentences = await fetchVoiceScript(currentVoiceLang, activeView, section);
+
+  if (!voiceSentences || !voiceSentences.length) {
+    stopVoice();
+    return;
+  }
+
+  speakNextSentence();
+}
+
+function pauseVoice() {
+  if (!isReading) return;
+  isPaused = true;
+  if ("speechSynthesis" in window) {
+    window.speechSynthesis.pause();
+  }
+  const cfg = LANG_CONFIG[currentVoiceLang] || LANG_CONFIG.en;
+  if (playerStatus) playerStatus.textContent = cfg.pausedStatus;
+  if (playerIndicator) playerIndicator.className = "farmer-audio-indicator";
+  if (pauseIcon) pauseIcon.hidden = true;
+  if (playIcon) playIcon.hidden = false;
+  if (voiceWaves) voiceWaves.hidden = true;
+  if (voiceBtnLabel) voiceBtnLabel.textContent = "Paused";
+}
+
+function resumeVoice() {
+  if (!isReading) return;
+  isPaused = false;
+  const cfg = LANG_CONFIG[currentVoiceLang] || LANG_CONFIG.en;
+  if (playerStatus) playerStatus.textContent = cfg.playingStatus;
+  if (playerIndicator) playerIndicator.className = "farmer-audio-indicator pulsing";
+  if (pauseIcon) pauseIcon.hidden = false;
+  if (playIcon) playIcon.hidden = true;
+  if (voiceWaves) voiceWaves.hidden = false;
+  if (voiceBtnLabel) voiceBtnLabel.textContent = "Reading...";
+
+  if ("speechSynthesis" in window) {
+    if (window.speechSynthesis.paused) {
+      window.speechSynthesis.resume();
+    } else {
+      speakNextSentence();
+    }
+  }
+}
+
+function stopVoice() {
+  isReading = false;
+  isPaused = false;
+  currentSentenceIndex = 0;
+  voiceSentences = [];
+  activeSectionTarget = null;
+
+  if ("speechSynthesis" in window) {
+    window.speechSynthesis.cancel();
+  }
+
+  if (playerBar) playerBar.hidden = true;
+  if (listenBtn) {
+    listenBtn.classList.remove("is-speaking");
+    listenBtn.setAttribute("aria-label", "Listen to this page read aloud");
+  }
+  if (voiceWaves) voiceWaves.hidden = true;
+  highlightSection(null);
+  updateVoiceUI();
+}
+
+if (listenBtn) {
+  listenBtn.addEventListener("click", () => {
+    if (isReading) {
+      stopVoice();
+    } else {
+      startVoiceReading(null);
+    }
+  });
+}
+
+if (playPauseBtn) {
+  playPauseBtn.addEventListener("click", () => {
+    if (!isReading) {
+      startVoiceReading(activeSectionTarget);
+    } else if (isPaused) {
+      resumeVoice();
+    } else {
+      pauseVoice();
+    }
+  });
+}
+
+if (stopBtn) stopBtn.addEventListener("click", stopVoice);
+if (closeBtn) closeBtn.addEventListener("click", stopVoice);
+
+if (restartBtn) {
+  restartBtn.addEventListener("click", () => {
+    if (isReading) {
+      currentSentenceIndex = 0;
+      speakNextSentence();
+    } else {
+      startVoiceReading(activeSectionTarget);
+    }
+  });
+}
+
+if (speedBtn) {
+  speedBtn.addEventListener("click", () => {
+    speedIndex = (speedIndex + 1) % speeds.length;
+    speedBtn.textContent = speeds[speedIndex] + "x";
+    if (isReading && !isPaused) {
+      speakNextSentence();
+    }
+  });
+}
+
+document.querySelectorAll("[data-voice-section]").forEach((btn) => {
+  btn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    const section = btn.dataset.voiceSection;
+    stopVoice();
+    startVoiceReading(section);
+  });
+});
+
+updateVoiceUI();
+
 </script>
 </body>
 </html>

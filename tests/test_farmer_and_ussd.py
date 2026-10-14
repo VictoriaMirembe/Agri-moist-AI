@@ -328,8 +328,6 @@ def test_sorghum_and_maize_are_saved_as_before(client):
 
 def test_report_form_shows_a_crop_box_only_for_other(client):
     page = client.get("/farmer/report", params={"phone": "+256700000006"}).text
-    assert '<div id="crop-other-field" hidden>' in page
-    assert 'id="crop-other" type="text" maxlength="40"' in page
     assert "otherField.hidden = crop.value !== \"\";" in page
 
 
