@@ -39,6 +39,11 @@ calls: `backend/agent/mcp_client.py` starts each one as a subprocess over stdio,
 per agent run. Every call to both servers is written to the log, with its inputs,
 output or error, and the agent run it belongs to.
 
+To see this in the app, the officer screen **AI tools (MCP)** (`/mcp`, JSON at
+`/api/mcp`) starts both servers the same way and lists the tools they report over the
+protocol. Our server also runs on its own for any MCP client
+(`python -m backend.mcp_server.server --demo-data`, registered in `.mcp.json`).
+
 **Why borrow the clock:** the agent needs an authoritative "today" to judge whether a
 planting window has closed, and timezone-safe clock handling is a small, well-solved
 problem where borrowing beats writing.

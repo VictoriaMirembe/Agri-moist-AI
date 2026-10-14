@@ -1,0 +1,72 @@
+{# AI tools (MCP): lists, live over the MCP protocol, the two tool servers the assistant uses - our own AgriMoist server and the borrowed mcp-server-time - and every tool each one reports. Rendered by backend/officer/pages.py mcp_page(); the same data is at GET /api/mcp. #}
+{% extends "base.html" %}
+{% block title %}AI tools (MCP){% endblock %}
+{% block content %}
+<div class="o-page-head">
+  <div>
+    <p class="o-eyebrow">How the assistant works</p>
+    <h1>AI tools (MCP)</h1>
+    <p class="o-lead">The AI assistant can only act through these tools. It reaches them over the Model Context Protocol (MCP), the same way any MCP client would. This list is read live from the servers each time the page opens.</p>
+  </div>
+</div>
+
+{% if error %}
+<section class="o-panel">
+  <p><span class="pill red">Problem</span> Could not start the MCP servers: {{ error }}</p>
+</section>
+{% endif %}
+
+<section class="o-panel">
+  <h2>Tool calls so far</h2>
+  <p>The assistant has made <strong>{{ assistant_calls }}</strong> MCP tool calls in its draft runs
+  ({{ assistant_call_errors }} failed and were retried or marked as missing). Each one is in the
+  <a href="/log">Activity log</a>.</p>
+</section>
+
+<section class="o-panel">
+  <h2>AI services</h2>
+  <p class="muted">Keys are read from <code>.env</code> on the server and never shown here.</p>
+  <div class="table-wrap"><table class="o-table">
+    <thead><tr><th>Service</th><th>Job</th><th>Status</th><th>If it is not linked</th></tr></thead>
+    <tbody>
+      {% for service in ai_services %}
+      <tr>
+        <td>{{ service.name }}</td>
+        <td>{{ service.job }}</td>
+        <td>{% if service.linked %}<span class="pill green">Linked</span>{% else %}<span class="pill amber">No key</span>{% endif %}</td>
+        <td>{{ service.without }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table></div>
+</section>
+
+{% for server in servers %}
+<section class="o-panel">
+  <h2>{{ server.name }} <span class="pill {{ 'green' if server.kind == 'Built by us' else 'amber' }}">{{ server.kind }}</span> <span class="pill green">Connected</span></h2>
+  <p class="muted">{{ server.tools | length }} tools, over stdio.
+    {% if server.kind == "Built by us" %}Source: <code>backend/mcp_server/server.py</code>{% else %}The official <code>mcp-server-time</code> reference server, set to Africa/Kampala.{% endif %}</p>
+  <div class="table-wrap"><table class="o-table">
+    <thead><tr><th>Tool</th><th>What it does</th><th>Inputs</th><th>Type</th></tr></thead>
+    <tbody>
+      {% for tool in server.tools %}
+      <tr>
+        <td><code>{{ tool.name }}</code></td>
+        <td>{{ tool.description }}</td>
+        <td>{% for name in tool.inputs if name != "run_id" %}<code>{{ name }}</code>{% if not loop.last %}, {% endif %}{% endfor %}</td>
+        <td>{% if tool.writes %}<span class="pill amber">Writes</span>{% else %}<span class="pill green">Reads</span>{% endif %}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table></div>
+</section>
+{% endfor %}
+
+<section class="o-panel">
+  <h2>Use these tools from another MCP client</h2>
+  <p>Our server runs on its own, so any MCP client (Claude Desktop, MCP Inspector, another agent) can use it.
+  None of its tools can send anything to a farmer: a named officer still has to approve every draft.</p>
+  <pre><code>python -m backend.mcp_server.server</code></pre>
+  <p class="muted">See "Use the MCP server from any MCP client" in the README, and <code>.mcp.json</code> in the repository.</p>
+</section>
+{% endblock %}

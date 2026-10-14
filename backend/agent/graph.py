@@ -389,5 +389,9 @@ def _finalize_run(run_id: int, state: dict[str, Any], error: str | None) -> None
         run.cost = state.get("model_cost") or 0.0
         if state.get("model_name"):
             run.model = state["model_name"]
+        else:
+            # Flagged or failed before drafting: the model was never called, so do not
+            # show the configured model name next to a $0 cost.
+            run.model = "none (no model call)"
         session.add(run)
         session.commit()

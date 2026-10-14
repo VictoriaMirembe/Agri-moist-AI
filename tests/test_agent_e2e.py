@@ -42,6 +42,7 @@ async def test_group_with_stale_visit_and_low_food_is_flagged_not_drafted(test_d
     with test_db.session_scope() as session:
         run = session.get(Run, run_id)
         assert run.outcome == "flagged"
+        assert run.model == "none (no model call)" and run.cost == 0.0  # not the configured model
         drafted = session.exec(select(Advice).where(Advice.run_id == run_id)).first()
         assert drafted is None  # never drafted advice for a flagged group
 

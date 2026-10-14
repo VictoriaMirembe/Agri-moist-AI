@@ -17,8 +17,9 @@ or on a simple farmer web page on a smartphone.
 > screens, the USSD simulator and the farmer web page work end to end against real
 > data, a real weather API and the open-weights model `openai/gpt-oss-120b` on Groq.
 > Without a `GROQ_API_KEY` the app still runs, using a deterministic rule-based
-> drafting mode. Translation into Ngakarimojong does **not** work yet: the model
-> declines, so farmers are shown the approved English text - see "Known gaps".
+> drafting mode. Approved advice is translated into Ngakarimojong (Karamojong) by
+> Sunbird AI's `sunflower-9b`; any translation that changes a number is thrown away
+> and the farmer sees the approved English text instead - see "Known gaps".
 
 ## The problem
 
@@ -38,6 +39,7 @@ One LangGraph agent (`backend/agent/graph.py`) runs a fixed, auditable sequence:
 - **Language:** Python 3.12
 - **Frameworks:** FastAPI, uvicorn, LangGraph, the `mcp` Python SDK (FastMCP), SQLModel, Jinja2 with plain JavaScript
 - **Model:** openai/gpt-oss-120b (open weights) via Groq; a rule-based stub runs when no key is set
+- **Translator:** Sunbird AI `sunflower-9b` (Ugandan languages, Karamojong included); Groq as backup
 - **MCP servers:** our own AgriMoist server (9 tools) and the borrowed mcp-server-time, both over stdio
 - **Database:** SQLite
 - **External data:** Open-Meteo weather API; FEWS NET crop calendar (stored in `data/crop_calendar.json`)
@@ -100,7 +102,7 @@ Open-Meteo needs no key.
 
 On a desktop the officer screens are in the left sidebar: **Home**, **Approve
 advice**, **Farmer messages**, **Visits needed**, **Record a visit**, and under
-**More**: **Activity log**, **USSD simulator** and **Farmer page**. On a phone they are
+**More**: **Activity log**, **AI tools (MCP)**, **USSD simulator** and **Farmer page**. On a phone they are
 in the bottom tabs: **Home**, **Approve**, **Messages**, **Visits** and **More**.
 
 1. On **Home**, press **Open** next to a household group, or choose **Record a visit**
@@ -113,10 +115,24 @@ in the bottom tabs: **Home**, **Approve**, **Messages**, **Visits** and **More**
 4. Open **Farmer page** (under **More**, or go to `/farmer`), sign in with a demo
    number (`+256700000001` to `+256700000010`), and read **My advice** - only what was
    just approved shows.
-5. Open **USSD simulator** (under **More**, or go to `/ussd`), press **Dial \*123#**,
-   and tap **1** (My advice). Same rule: nothing unapproved ever appears.
+5. Open **USSD simulator** (under **More**, or go to `/ussd`), pick a registered demo
+   number, press **Dial \*384\*5951#** (or your `USSD_SERVICE_CODE`), and tap **1**
+   (My advice). Same rule: nothing unapproved ever appears. **Menu map** on that page
+   lists every screen. After a report, a visit request or a "did it help?" answer, the
+   simulator links to the officer screen where it has just appeared.
 6. Open **Activity log** (under **More**) to see every tool call for every run, with
-   its source and actor, and each run's cost.
+   its source and actor, and each run's cost. The assistant's calls are labelled with
+   the MCP server and tool that served them. A run's cost is everything the AI spent
+   on that advice: drafting (Groq) plus, after approval, translation (Sunbird). Home's
+   "AI cost this week" adds these up and shows the translation share.
+
+Farmer and officer screens share one database and refresh every 30 seconds, so a
+farmer's report, visit request or answer (web or USSD) appears on the officer
+screens, and an officer's decision (report checked, visit done, advice approved)
+appears on the farmer page, without a reload.
+7. Open **AI tools (MCP)** (under **More**, or go to `/mcp`; JSON at `/api/mcp`). It
+   starts both MCP servers over stdio, exactly as an agent run does, and lists the
+   tools each one reports over the protocol, live, not from a hard-coded list.
 
 To see a deliberate failure: set `WEATHER_FAIL=1` in `.env`, restart, and draft
 advice again. The agent retries once, then marks "weather missing, check before
@@ -206,9 +222,49 @@ it is recorded as a gap.
 
 **Model:** [gpt-oss-120b](https://huggingface.co/openai/gpt-oss-120b) (open weights,
 Apache 2.0), served through [Groq](https://groq.com) using the `openai` client with
-Groq's base URL, for drafting advice and for translating approved advice into
-Ngakarimojong. With no key configured, drafting falls back to a deterministic,
-rule-based mode and farmers see the English text.
+Groq's base URL, for drafting advice. With no key configured, drafting falls back to
+a deterministic, rule-based mode.
+
+**Translator:** [Sunbird AI](https://sunbird.ai)'s `sunflower-9b` (`POST
+/tasks/translate`, `SUNBIRD_API_KEY`), a Ugandan model that supports Karamojong
+(`kdj`). It runs only after an officer approves, never on drafts. A translation is
+shown to farmers only if it keeps every number in the English exactly. Sunbird gets
+a second try, then `gpt-oss-120b`, and otherwise the farmer sees the approved English
+text. The **AI tools (MCP)** screen shows which of these services are linked.
+
+### Use the MCP server from any MCP client
+
+Our server is a normal stdio MCP server, so it works outside this app too. From the
+repository root, with the requirements installed:
+
+```bash
+# Look at and call every tool in the browser with the MCP Inspector
+npx @modelcontextprotocol/inspector python -m backend.mcp_server.server --demo-data
+```
+
+`--demo-data` creates the SQLite database and loads the made-up demo households on a
+fresh clone (it does nothing if they are already there). [`.mcp.json`](.mcp.json) in
+the repository root registers both servers for Claude Code. For Claude Desktop, add
+the same entry to `claude_desktop_config.json`, using full paths (Claude Desktop does
+not start servers from this folder):
+
+```json
+{
+  "mcpServers": {
+    "agrimoist": {
+      "command": "C:/path/to/Agri-moist-AI/.venv/Scripts/python.exe",
+      "args": ["-m", "backend.mcp_server.server", "--demo-data"],
+      "env": {
+        "PYTHONPATH": "C:/path/to/Agri-moist-AI",
+        "DATABASE_URL": "sqlite:///C:/path/to/Agri-moist-AI/data/agrimoist.db"
+      }
+    }
+  }
+}
+```
+
+The same safety rules hold for any client: the write tools only save drafts, flags and
+follow-up dates, and nothing reaches a farmer until a named officer approves it.
 
 ## Safety rules
 
@@ -271,10 +327,11 @@ tokens and $0.60 per million output tokens (Groq's published price for this mode
 
 ## Known gaps
 
-- **Translation into Ngakarimojong does not work.** The model replies that it cannot
-  translate the language (EVALS task 10 failed 3 of 3). The app detects this and
-  shows farmers the officer-approved English text instead; no translation has been
-  checked by a speaker.
+- **Ngakarimojong translations have not been checked by a speaker.** Sunbird AI's
+  `sunflower-9b` translates approved advice (EVALS task 10: 2 of 3). Translations
+  that change or drop a number are rejected, so about one in three approvals still
+  shows the farmer the English text. `gpt-oss-120b`, the backup, cannot translate
+  the language at all.
 - **The model can still give wrong advice.** In the final check it told farmers to
   water just before 45 mm of forecast rain in 3 of 3 runs (7 of 9 across the last
   three runs; EVALS task 2).
@@ -334,6 +391,7 @@ docker compose run app pytest
 - Crop calendar: [FEWS NET Uganda-Karamoja Region Livelihood Zones
   report](https://fews.net/sites/default/files/documents/reports/Karamoja%20Final_LHZ%20Report.pdf).
 - Weather: [Open-Meteo](https://open-meteo.com).
+- Translation into Karamojong: [Sunbird AI](https://sunbird.ai) `sunflower-9b`.
 - Built with FastAPI, SQLModel, LangGraph, the `mcp` Python SDK, and the `openai`
   client against Groq's OpenAI-compatible API.
 

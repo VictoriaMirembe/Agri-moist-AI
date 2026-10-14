@@ -246,22 +246,22 @@
     "name": "Translation check",
     "runs": [
       {
-        "pass": false,
-        "detail": "translation_model=fallback (model could not translate: 'CANNOT_TRANSLATE'; showing English), language=English, translated='Heavy rain fell at H-004 in the last 7 days; hold off on watering this week.' (needs a Ngakarimojong speaker to confirm meaning)",
-        "seconds": 0.55,
-        "cost": 5.6e-05
+        "pass": true,
+        "detail": "translation_model=sunbird/sunflower-9b, language=Ngakarimojong, translated='Abu edou loepol kitoro H-004 kotoma apaarasia 7 \u014buna atuboros; tolemutu akidok akipi osabiti lo.' (needs a Ngakarimojong speaker to confirm meaning)",
+        "seconds": 4.39,
+        "cost": 0.0
       },
       {
         "pass": false,
-        "detail": "translation_model=fallback (model could not translate: 'CANNOT_TRANSLATE'; showing English), language=English, translated='Heavy rain fell at H-004 in the last 7 days; hold off on watering this week.' (needs a Ngakarimojong speaker to confirm meaning)",
-        "seconds": 0.6,
-        "cost": 5.6e-05
+        "detail": "translation_model=fallback (sunbird/sunflower-9b changed a number; showing English); fallback (sunbird/sunflower-9b changed a number; showing English); fallback (model could not translate: 'CANNOT_TRANSLATE'; showing English), language=English, translated='Heavy rain fell at H-004 in the last 7 days; hold off on watering this week.' (needs a Ngakarimojong speaker to confirm meaning)",
+        "seconds": 10.06,
+        "cost": 5.7e-05
       },
       {
-        "pass": false,
-        "detail": "translation_model=fallback (model could not translate: 'CANNOT_TRANSLATE'; showing English), language=English, translated='Heavy rain fell at H-004 in the last 7 days; hold off on watering this week.' (needs a Ngakarimojong speaker to confirm meaning)",
-        "seconds": 0.57,
-        "cost": 5.6e-05
+        "pass": true,
+        "detail": "translation_model=sunbird/sunflower-9b, language=Ngakarimojong, translated='Abu edou loepol kilelebun H-004 kotoma apaarasia \u014buna aapiyarito 7; tojo\u014bo akidok ekinyet osabiti lo.' (needs a Ngakarimojong speaker to confirm meaning)",
+        "seconds": 4.32,
+        "cost": 0.0
       }
     ]
   },

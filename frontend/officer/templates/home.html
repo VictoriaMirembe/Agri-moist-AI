@@ -1,119 +1,16 @@
-{# Home: Officer Dashboard with real-time Open-Meteo weather, human-in-the-loop safeguard banner, pending approval KPIs, "This week at a glance" numbers from the last 7 days, and one row per household group. Counts refresh every 30 seconds. #}
+{# Home: what needs the officer now (three task cards), rain in each village from Open-Meteo, "This week at a glance" numbers from the last 7 days, and one row per household group. Counts refresh every 30 seconds. #}
 {% extends "base.html" %}
 {% block title %}Dashboard{% endblock %}
 {% block content %}
 
-<!-- Human-in-the-Loop Safeguard Banner -->
-<div class="officer-action-banner">
-  <div>
-    <div style="display:flex; align-items:center; gap:0.5rem; margin-bottom:0.35rem;">
-      <span style="background:#70e000; color:#0d281e; font-weight:800; font-size:0.72rem; padding:0.15rem 0.5rem; border-radius:4px; text-transform:uppercase; letter-spacing:0.04em;">
-        Officer Approval Policy
-      </span>
-      <span style="font-size:0.88rem; opacity:0.85;">Human-in-the-Loop Safeguard</span>
-    </div>
-    <div style="font-size:1.05rem; font-weight:600; line-height:1.35;">
-      All farmer-visible advice drafts require Extension Officer review and sign-off before delivery.
-    </div>
-    <div style="font-size:0.85rem; opacity:0.8; margin-top:0.25rem;">
-      AI analyzes live Open-Meteo weather, crop calendars, and visit logs to draft advice, but cannot dispatch without an officer.
-    </div>
-  </div>
-  {% if drafts_total > 0 %}
-  <div>
-    <a href="/approvals" class="btn" style="background:#70e000; border-color:#70e000; color:#0d281e; font-weight:700; white-space:nowrap;">
-      Review {{ drafts_total }} Pending Draft{% if drafts_total != 1 %}s{% endif %} →
-    </a>
-  </div>
-  {% endif %}
-</div>
-
-<!-- Primary KPI Queue Cards -->
-<div class="officer-kpi-grid">
-  <a href="/approvals" class="officer-kpi-card" style="border-left: 4px solid var(--amber);">
-    <div class="officer-kpi-num"><strong>{{ drafts_total }}</strong><div class="muted">drafts waiting for approval</div></div>
-    <div class="muted" style="font-size:0.82rem; margin-top:0.3rem;">Requires officer sign-off before farmer delivery</div>
-  </a>
-  <a href="/flags" class="officer-kpi-card" style="border-left: 4px solid #b3261e;">
-    <div class="officer-kpi-num"><strong>{{ open_flags_total }}</strong><div class="muted">open visit flags</div></div>
-    <div class="muted" style="font-size:0.82rem; margin-top:0.3rem;">Urgent field follow-ups flagged by AI/system</div>
-  </a>
-  <a href="/farmer-reports" class="officer-kpi-card" style="border-left: 4px solid var(--red);">
-    <div class="officer-kpi-num"><strong>{{ unchecked_reports }}</strong><div class="muted">unchecked farmer reports</div></div>
-    <div class="muted" style="font-size:0.82rem; margin-top:0.3rem;">Incoming observations from USSD &amp; web portal</div>
-  </a>
-</div>
-
-<!-- Live Open-Meteo Weather Widget -->
-<div style="display:flex; justify-content:space-between; align-items:center; margin: 1.5rem 0 0.8rem;">
-  <h2 style="margin:0;">Live Village Weather (Open-Meteo)</h2>
-  <div style="display:flex; align-items:center; gap:0.75rem; flex-wrap:wrap;">
-    <div class="officer-pulse-badge">
-      <span class="pulse-dot"></span>
-      <span id="sync-status-text">Open-Meteo Live</span>
-      <span class="muted" style="font-weight:normal;" id="sync-time-text">Syncing...</span>
-    </div>
-    <button class="btn secondary" id="btn-refresh-live" style="min-height:38px; padding:0.4rem 0.9rem; font-size:0.9rem;" onclick="refreshDashboardLive()">
-      ↻ Refresh Live
-    </button>
-  </div>
-</div>
-<div class="officer-weather-grid" id="weather-cards-container">
-  {% for w in weather_list %}
-  <div class="officer-weather-card">
-    <div class="officer-weather-header">
-      <div>
-        <div style="font-size:1.15rem; font-weight:700;">{{ w.village }}</div>
-        <div class="muted" style="font-size:0.75rem;">Lat: {{ w.latitude }}, Lon: {{ w.longitude }}</div>
-      </div>
-      <div>
-        {% if w.status == "live" %}
-        <span class="pill green" style="font-size:0.75rem;">Live</span>
-        {% elif w.status == "override" %}
-        <span class="pill amber" style="font-size:0.75rem;">Demo Override</span>
-        {% else %}
-        <span class="pill red" style="font-size:0.75rem;">Offline</span>
-        {% endif %}
-      </div>
-    </div>
-    <div style="display:flex; align-items:baseline; gap:0.5rem; margin-top:0.5rem;">
-      <span style="font-size:2rem; font-weight:800; color:var(--ink);">
-        {% if w.temperature_c is not none %}{{ w.temperature_c }}°C{% else %}--{% endif %}
-      </span>
-      <span class="muted" style="font-size:0.95rem; font-weight:600;">{{ w.condition }}</span>
-    </div>
-    <div class="weather-metrics-row">
-      <div>
-        <div class="muted" style="font-size:0.72rem; text-transform:uppercase;">Past 7d Rain</div>
-        <div style="font-size:1.1rem; font-weight:700; color:var(--green);">{{ w.past_7_days_rain_mm }} mm</div>
-      </div>
-      <div>
-        <div class="muted" style="font-size:0.72rem; text-transform:uppercase;">Next 7d Rain</div>
-        <div style="font-size:1.1rem; font-weight:700; color:#0077b6;">{{ w.next_7_days_rain_mm }} mm</div>
-      </div>
-      <div>
-        <div class="muted" style="font-size:0.72rem; text-transform:uppercase;">Humidity</div>
-        <div style="font-size:1.1rem; font-weight:700; color:var(--ink);">
-          {% if w.relative_humidity is not none %}{{ w.relative_humidity }}%{% else %}--{% endif %}
-        </div>
-      </div>
-    </div>
-    <div style="display:flex; justify-content:space-between; align-items:center; margin-top:0.75rem; font-size:0.75rem;">
-      <span class="muted">Source: Open-Meteo API</span>
-      <a href="{{ w.source }}" target="_blank" rel="noopener" style="color:var(--green); font-weight:600;">View Raw API Data ↗</a>
-    </div>
-  </div>
-  {% endfor %}
-</div>
-
 {%- set waiting = drafts_total + unchecked_reports + open_flags_total -%}
 <section class="o-hero" aria-labelledby="home-heading">
   <div>
-    <p class="o-eyebrow">Today's work</p>
     <h1 id="home-heading">Home</h1>
-    <p class="o-hero-line"><span id="home-total">{{ waiting }}</span> <span id="home-total-words">{{ "thing needs" if waiting == 1 else "things need" }}</span> your attention.</p>
+    <p class="o-hero-line"><span class="o-gauge-num" id="home-total">{{ waiting }}</span> <span id="home-total-words">{{ "thing needs" if waiting == 1 else "things need" }}</span> your attention.</p>
+    <p class="o-hero-rule">The AI drafts advice from rain, crop calendars and visit records. No farmer sees it until an officer approves it.</p>
   </div>
-  <a class="o-button o-button-light" href="/visits/new">+ Record a visit</a>
+  <a class="o-button" href="/visits/new">Record a visit</a>
 </section>
 
 <div class="o-task-grid">
@@ -124,7 +21,7 @@
     </span>
     <strong class="o-task-count" id="home-drafts">{{ drafts_total }}</strong>
     <span class="o-task-text">AI drafts waiting for you. No farmer sees advice until you approve it.</span>
-    <span class="o-task-go"><span class="o-task-done">All done</span><span class="o-task-open">Open Approve advice</span> →</span>
+    <span class="o-task-go"><span class="o-task-done">All done</span><span class="o-task-open">Review drafts</span></span>
   </a>
   <a class="o-task {% if not unchecked_reports %}is-done{% endif %}" href="/farmer-reports" data-task="reports">
     <span class="o-task-top">
@@ -133,7 +30,7 @@
     </span>
     <strong class="o-task-count" id="home-reports">{{ unchecked_reports }}</strong>
     <span class="o-task-text">New reports from farmers by phone or web, not checked yet.</span>
-    <span class="o-task-go"><span class="o-task-done">All done</span><span class="o-task-open">Open Farmer messages</span> →</span>
+    <span class="o-task-go"><span class="o-task-done">All done</span><span class="o-task-open">Read messages</span></span>
   </a>
   <a class="o-task {% if not open_flags_total %}is-done{% endif %}" href="/flags" data-task="flags">
     <span class="o-task-top">
@@ -142,15 +39,41 @@
     </span>
     <strong class="o-task-count" id="home-flags">{{ open_flags_total }}</strong>
     <span class="o-task-text">Groups asking for, or needing, an officer visit.</span>
-    <span class="o-task-go"><span class="o-task-done">All done</span><span class="o-task-open">Open Visits needed</span> →</span>
+    <span class="o-task-go"><span class="o-task-done">All done</span><span class="o-task-open">See visits</span></span>
   </a>
 </div>
+
+<section class="o-panel" aria-labelledby="rain-heading">
+  <div class="o-panel-heading">
+    <h2 id="rain-heading">Rain in your villages</h2>
+    <div class="o-sync">
+      <span class="o-sync-status"><span id="sync-status-text">Open-Meteo</span>, updated <span id="sync-time-text">just now</span></span>
+      <button class="btn secondary o-button-small" id="btn-refresh-live" type="button" onclick="refreshDashboardLive()">Refresh rain</button>
+    </div>
+  </div>
+  <div class="o-rain-grid" id="weather-cards-container">
+    {% for w in weather_list %}
+    <article class="o-rain">
+      <div class="o-rain-head">
+        <h3>{{ w.village }}</h3>
+        {% if w.status == "live" %}<span class="pill green">Live</span>{% elif w.status == "override" %}<span class="pill amber">Demo figures</span>{% else %}<span class="pill red">No reading</span>{% endif %}
+      </div>
+      <dl class="o-rain-gauge">
+        <div><dt>Last 7 days</dt><dd><span class="o-gauge-num">{{ w.past_7_days_rain_mm }}</span> mm</dd></div>
+        <div><dt>Next 7 days</dt><dd><span class="o-gauge-num">{{ w.next_7_days_rain_mm }}</span> mm</dd></div>
+      </dl>
+      <p class="o-rain-meta">{% if w.temperature_c is not none %}{{ w.temperature_c }}°C, {% endif %}{{ w.condition }}{% if w.relative_humidity is not none %}, humidity {{ w.relative_humidity }}%{% endif %}</p>
+      <a class="o-rain-source" href="{{ w.source }}" target="_blank" rel="noopener">Open-Meteo reading for {{ w.latitude }}, {{ w.longitude }}</a>
+    </article>
+    {% endfor %}
+  </div>
+</section>
 
 <section class="o-panel" aria-labelledby="week-heading">
   <div class="o-panel-heading">
     <div>
-      <p class="o-eyebrow">Last 7 days</p>
       <h2 id="week-heading">This week at a glance</h2>
+      <p class="o-note o-note-tight">The last 7 days</p>
     </div>
     {% if demo %}<span class="pill amber" title="These numbers come from made-up demo households, not real farms.">Demo data</span>{% endif %}
   </div>
@@ -187,17 +110,17 @@
       <div class="o-stat-head"><p class="o-stat-label">Did the advice help?</p><span class="o-kpi-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M2 10h4v11H2zm6 11V10l5-8 1.2.9c.5.4.7 1 .6 1.6L14 9h6a2 2 0 0 1 2 2.3l-1.4 8A2 2 0 0 1 18.6 21z"/></svg></span></div>
       <p class="o-stat-value" data-stat="answers_total">{{ week.answers_total }}</p>
       {% if week.answers_total %}{{ bar([(week.helped.yes, "green"), (week.helped.no, "red"), (week.helped.too_early, "amber")], week.answers_total) }}{% endif %}
-      <p class="o-stat-note">farmer answers: {{ week.helped.yes }} yes, {{ week.helped.no }} no, {{ week.helped.too_early }} too early to say</p>
+      <p class="o-stat-note">farmer answers: <span data-stat="helped_yes">{{ week.helped.yes }}</span> yes, <span data-stat="helped_no">{{ week.helped.no }}</span> no, <span data-stat="helped_too_early">{{ week.helped.too_early }}</span> too early to say</p>
     </div>
     <div class="o-stat">
       <div class="o-stat-head"><p class="o-stat-label">Farmers read approved advice</p><span class="o-kpi-icon blue" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 5C6.5 5 2.5 9.4 1.5 12c1 2.6 5 7 10.5 7s9.5-4.4 10.5-7C21.5 9.4 17.5 5 12 5zm0 11a4 4 0 1 1 0-8 4 4 0 0 1 0 8zm0-6a2 2 0 1 0 0 4 2 2 0 0 0 0-4z"/></svg></span></div>
       <p class="o-stat-value" data-stat="reads_total">{{ week.reads_total }}</p>
-      <p class="o-stat-note">times: {{ week.reads_web }} on the web page, {{ week.reads_ussd }} by phone (USSD)</p>
+      <p class="o-stat-note">times: <span data-stat="reads_web">{{ week.reads_web }}</span> on the web page, <span data-stat="reads_ussd">{{ week.reads_ussd }}</span> by phone (USSD)</p>
     </div>
     <div class="o-stat">
       <div class="o-stat-head"><p class="o-stat-label">AI cost this week</p><span class="o-kpi-icon amber" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm1 15.9V19h-2v-1.1c-1.7-.3-3-1.4-3-3h2c0 .6.8 1.1 2 1.1s2-.5 2-1.1c0-.6-.6-.9-2.2-1.3-2-.5-3.6-1.1-3.6-3 0-1.4 1.1-2.5 2.8-2.8V6.6h2v1.2c1.6.3 2.7 1.4 2.8 2.9h-2c-.1-.6-.8-1-1.8-1s-1.8.4-1.8 1c0 .5.6.8 2.2 1.2 2 .5 3.6 1.2 3.6 3.1 0 1.5-1.2 2.6-3 2.9z"/></svg></span></div>
-      <p class="o-stat-value" data-stat="ai_cost">${{ "%.4f" | format(week.ai_cost) }}</p>
-      <p class="o-stat-note">about ${{ "%.5f" | format(week.ai_cost_per_draft) }} per advice draft</p>
+      <p class="o-stat-value" data-stat="ai_cost">${{ "%.5f" | format(week.ai_cost) }}</p>
+      <p class="o-stat-note">about $<span data-stat="ai_cost_per_draft">{{ "%.5f" | format(week.ai_cost_per_draft) }}</span> per advice draft, including $<span data-stat="ai_cost_translation">{{ "%.5f" | format(week.ai_cost_translation) }}</span> for translation</p>
     </div>
     <div class="o-stat">
       <div class="o-stat-head"><p class="o-stat-label">Groups not visited in 30+ days</p><span class="o-kpi-icon red" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm0 18a8 8 0 1 1 0-16 8 8 0 0 1 0 16zm1-13h-2v6l5 3 1-1.7-4-2.4z"/></svg></span></div>
@@ -209,7 +132,6 @@
 </section>
 
 <section class="o-panel" aria-labelledby="groups-heading">
-  <p class="o-eyebrow">Your groups</p>
   <h2 id="groups-heading">Household groups</h2>
   <div class="table-wrap"><table class="o-table">
     <thead>
@@ -238,7 +160,7 @@ async function refreshDashboardLive() {
   const syncTimeEl = document.getElementById("sync-time-text");
   const refreshBtn = document.getElementById("btn-refresh-live");
 
-  if (syncTimeEl) syncTimeEl.textContent = "Updating...";
+  if (syncTimeEl) syncTimeEl.textContent = "now (updating)";
   if (refreshBtn) refreshBtn.disabled = true;
 
   try {
@@ -252,10 +174,10 @@ async function refreshDashboardLive() {
     // Update timestamp
     const now = new Date();
     if (syncTimeEl) {
-      syncTimeEl.textContent = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+      syncTimeEl.textContent = now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
     }
   } catch (err) {
-    if (syncTimeEl) syncTimeEl.textContent = "Sync failed";
+    if (syncTimeEl) syncTimeEl.textContent = "not updated: the rain service did not answer. Try Refresh rain";
     console.error("Live dashboard sync error:", err);
   } finally {
     if (refreshBtn) refreshBtn.disabled = false;
@@ -265,34 +187,22 @@ async function refreshDashboardLive() {
 function renderWeatherCards(weatherList) {
   const container = document.getElementById("weather-cards-container");
   if (!container) return;
-  container.innerHTML = weatherList.map(w => `
-    <div class="officer-weather-card">
-      <div class="officer-weather-header">
-        <div>
-          <div style="font-size:1.15rem; font-weight:700;">${escapeHTML(w.village)}</div>
-          <div class="muted" style="font-size:0.75rem;">Lat: ${w.latitude}, Lon: ${w.longitude}</div>
-        </div>
-        <div>
-          <span class="pill ${w.status === 'live' ? 'green' : (w.status === 'override' ? 'amber' : 'red')}" style="font-size:0.75rem;">
-            ${w.status === 'live' ? 'Live' : (w.status === 'override' ? 'Demo Override' : 'Offline')}
-          </span>
-        </div>
-      </div>
-      <div style="display:flex; align-items:baseline; gap:0.5rem; margin-top:0.5rem;">
-        <span style="font-size:2rem; font-weight:800; color:var(--ink);">${w.temperature_c !== null && w.temperature_c !== undefined ? w.temperature_c + '\u00b0C' : '--'}</span>
-        <span class="muted" style="font-size:0.95rem; font-weight:600;">${escapeHTML(w.condition || 'Fair')}</span>
-      </div>
-      <div class="weather-metrics-row">
-        <div><div class="muted" style="font-size:0.72rem; text-transform:uppercase;">Past 7d Rain</div><div style="font-size:1.1rem; font-weight:700; color:var(--green);">${w.past_7_days_rain_mm} mm</div></div>
-        <div><div class="muted" style="font-size:0.72rem; text-transform:uppercase;">Next 7d Rain</div><div style="font-size:1.1rem; font-weight:700; color:#0077b6;">${w.next_7_days_rain_mm} mm</div></div>
-        <div><div class="muted" style="font-size:0.72rem; text-transform:uppercase;">Humidity</div><div style="font-size:1.1rem; font-weight:700; color:var(--ink);">${w.relative_humidity !== null && w.relative_humidity !== undefined ? w.relative_humidity + '%' : '--'}</div></div>
-      </div>
-      <div style="display:flex; justify-content:space-between; align-items:center; margin-top:0.75rem; font-size:0.75rem;">
-        <span class="muted">Source: Open-Meteo API</span>
-        <a href="${safeURL(w.source)}" target="_blank" rel="noopener" style="color:var(--green); font-weight:600;">View Raw API Data ↗</a>
-      </div>
-    </div>
-  `).join('');
+  const pill = (status) =>
+    status === "live" ? '<span class="pill green">Live</span>'
+    : status === "override" ? '<span class="pill amber">Demo figures</span>'
+    : '<span class="pill red">No reading</span>';
+  const has = (v) => v !== null && v !== undefined;
+  container.innerHTML = weatherList.map((w) => `
+    <article class="o-rain">
+      <div class="o-rain-head"><h3>${escapeHTML(w.village)}</h3>${pill(w.status)}</div>
+      <dl class="o-rain-gauge">
+        <div><dt>Last 7 days</dt><dd><span class="o-gauge-num">${escapeHTML(String(w.past_7_days_rain_mm))}</span> mm</dd></div>
+        <div><dt>Next 7 days</dt><dd><span class="o-gauge-num">${escapeHTML(String(w.next_7_days_rain_mm))}</span> mm</dd></div>
+      </dl>
+      <p class="o-rain-meta">${has(w.temperature_c) ? escapeHTML(String(w.temperature_c)) + "°C, " : ""}${escapeHTML(w.condition || "")}${has(w.relative_humidity) ? ", humidity " + escapeHTML(String(w.relative_humidity)) + "%" : ""}</p>
+      <a class="o-rain-source" href="${safeURL(w.source)}" target="_blank" rel="noopener">Open-Meteo reading for ${escapeHTML(String(w.latitude))}, ${escapeHTML(String(w.longitude))}</a>
+    </article>
+  `).join("");
 }
 
 // The task-card counts above are rendered server-side; refresh every 30 seconds.
@@ -313,8 +223,35 @@ function setTaskCount(id, count) {
   el.closest(".o-task").classList.toggle("is-done", count === 0);
 }
 
+// "This week at a glance": every number tagged data-stat is refreshed with the rest.
+const MONEY_STATS = new Set(["ai_cost", "ai_cost_per_draft", "ai_cost_translation"]);
+function setWeekStats(week) {
+  const values = {
+    ...week,
+    drafts_approved: week.drafts.approved,
+    drafts_edited: week.drafts.edited_and_approved,
+    drafts_rejected: week.drafts.rejected,
+    drafts_waiting: week.drafts.pending_review,
+    helped_yes: week.helped.yes,
+    helped_no: week.helped.no,
+    helped_too_early: week.helped.too_early,
+  };
+  document.querySelectorAll("[data-stat]").forEach((el) => {
+    const key = el.dataset.stat;
+    if (!(key in values)) return;
+    const value = Number(values[key]);
+    const text = MONEY_STATS.has(key) ? value.toFixed(5) : String(value);
+    el.textContent = key === "ai_cost" ? "$" + text : text;
+  });
+}
+
 async function refreshHome() {
-  const [summary, groups] = await Promise.all([getJSON("/api/pending-summary"), getJSON("/api/groups")]);
+  const [summary, groups, week] = await Promise.all([
+    getJSON("/api/pending-summary"),
+    getJSON("/api/groups"),
+    getJSON("/api/week-at-a-glance"),
+  ]);
+  setWeekStats(week);
   setTaskCount("home-drafts", summary.pending_advice);
   setTaskCount("home-flags", summary.open_flags);
   setTaskCount("home-reports", summary.unchecked_reports);

@@ -5,24 +5,16 @@
 # edited_and_approved rows (see backend/core/database.py).
 from __future__ import annotations
 
-<<<<<<< Updated upstream
-import re
-from datetime import date, datetime, timezone
-=======
 import hmac
 import logging
-from datetime import date
->>>>>>> Stashed changes
+import re
+from datetime import date, datetime, timezone
 from typing import Literal
 
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import PlainTextResponse
-<<<<<<< Updated upstream
-from pydantic import BaseModel, Field, field_validator
-=======
-from pydantic import BaseModel, Field, ValidationError
->>>>>>> Stashed changes
+from pydantic import BaseModel, Field, ValidationError, field_validator
 from sqlalchemy import text
 from sqlmodel import select
 
@@ -42,8 +34,8 @@ from backend.db.models import (
     Plot,
     PlotHistory,
     UssdSession,
-    VisitFlag,
     Village,
+    VisitFlag,
     utcnow,
 )
 from backend.logging.tool_log import run_logged
@@ -268,6 +260,21 @@ def farmer_advice(phone: str):
         return info
 
 
+@router.get("/api/farmer/updates")
+def farmer_updates(phone: str):
+    """What the farmer page polls in the background, so officer decisions (a report
+    checked, a visit done, advice approved) appear without a reload. Not logged as
+    the farmer reading advice - only opening the page or the advice counts."""
+    with session_scope() as session:
+        household = _household_for_phone(session, phone)
+        if household is None:
+            raise HTTPException(404, "This number is not registered. Please ask your extension officer.")
+        return {
+            "advice": _advice_for_group(session, household.group_id),
+            "recent_requests": _recent_farmer_requests(session, household),
+        }
+
+
 @router.get("/api/farmer/profile")
 def farmer_profile(phone: str):
     with session_scope() as session:
@@ -390,6 +397,16 @@ def _describe_report(observation: Observation) -> str:
     return summary
 
 
+def _visit_reason_for_farmer(reason: str, household_code: str) -> str:
+    # Stored as "H-009 asked for a visit: little food left" for the officer; the
+    # farmer only needs to see their own reason.
+    prefix = f"{household_code} asked for a visit: "
+    if reason.startswith(prefix):
+        reason = reason[len(prefix):]
+        return reason[:1].upper() + reason[1:]
+    return reason
+
+
 def _recent_farmer_requests(session, household: Household, limit: int = 6) -> list[dict]:
     """What the farmer sent from their phone or this site, newest first. Reports
     belong to the household; visit requests are kept per household group."""
@@ -417,7 +434,7 @@ def _recent_farmer_requests(session, household: Household, limit: int = 6) -> li
     ] + [
         {
             "kind": "visit",
-            "summary": "Visit request: " + visit.reason.removeprefix("Farmer asked for a visit: "),
+            "summary": "Visit request: " + _visit_reason_for_farmer(visit.reason, household.code),
             "channel": CHANNEL_LABELS[visit.raised_by],
             "status": {"open": "Waiting for officer", "visited": "Officer visited"}.get(visit.status, "Closed"),
             "at": visit.created_at.isoformat(),
@@ -509,9 +526,7 @@ MENU_OPTIONS = {
 MAIN_MENU = "AgriMoist\n1. My advice\n2. Report a problem\n3. Ask for officer visit\n4. Did advice help?"
 NOT_ON_LIST = "That choice is not on the list.\n"
 NOT_UNDERSTOOD = "END Sorry, that was not understood. Please dial again."
-<<<<<<< Updated upstream
 NO_ADVICE_TO_ANSWER = "END No advice to answer yet. Your officer will send advice after checking."
-=======
 NOT_REGISTERED = "END This number is not registered. Please ask your extension officer."
 WRONG_SERVICE_CODE = "END This service is not available on this code."
 ALREADY_RECEIVED = "END Thank you, we already have this. Your officer will follow up."
@@ -580,7 +595,6 @@ def _ussd_reply(body: UssdRequest) -> str:
         screen = DONE + typed if saved else ("/".join(steps) or "home")
         _save_ussd_session(session, body.session_id, body.phone, screen)
         return reply
->>>>>>> Stashed changes
 
 
 @router.post("/ussd", response_class=PlainTextResponse)
@@ -663,14 +677,10 @@ def _handle_ussd(session, household: Household, phone: str, steps: list[str], in
     if top == "1":
         info = _advice_for_group(session, household.group_id)
         if not info.get("has_advice"):
-<<<<<<< Updated upstream
-            return "END No new advice yet. Your officer will send it after checking."
-        _log_advice_viewed(session, household, info, "farmer_ussd")
-=======
             return "END No new advice yet. Your officer will send it after checking.", False
->>>>>>> Stashed changes
+        _log_advice_viewed(session, household, info, "farmer_ussd")
         officer_bit = f" Approved by {info['officer_name']}," if info.get("officer_name") else ""
-        return f"END {info['text'][:140]}.{officer_bit} {info['date'][:10]}.", False
+        return f"END {info['text'][:140].rstrip('.')}.{officer_bit} {info['date'][:10]}.", False
 
     if top == "2":
         if len(steps) == 1:
@@ -709,67 +719,33 @@ def _handle_ussd(session, household: Household, phone: str, steps: list[str], in
             run_id=None,
             func=lambda: impl.flag_for_visit(
                 session,
-<<<<<<< Updated upstream
-                tool="flag_for_visit",
-                inputs={"phone": phone, "reason": reason},
-                actor="farmer",
-                source="farmer_ussd",
-                run_id=None,
-                func=lambda: impl.flag_for_visit(
-                    session,
-                    group_id=household.group_id,
-                    reason=f"{household.code} asked for a visit: {reason.lower()}",
-                    raised_by="farmer_ussd",
-                ),
-            )
-            return "END Request sent. Your officer will plan a visit."
-        return NOT_UNDERSTOOD
-=======
                 group_id=household.group_id,
-                reason=f"Farmer asked for a visit: {reason}",
+                reason=f"{household.code} asked for a visit: {reason.lower()}",
                 raised_by="farmer_ussd",
             ),
         )
         return "END Request sent. Your officer will plan a visit.", True
->>>>>>> Stashed changes
 
     if top == "4":
         info = _advice_for_group(session, household.group_id)
         if not info.get("has_advice"):
-<<<<<<< Updated upstream
             # Nothing approved to answer about: say so, and save nothing.
-            return NO_ADVICE_TO_ANSWER
-=======
-            return "END You have no approved advice to answer about yet.", False
->>>>>>> Stashed changes
+            return NO_ADVICE_TO_ANSWER, False
         if len(steps) == 1:
             return f"CON {retry}Did you follow the last advice?\n1. Yes  2. Partly  3. No" + NAV_HINT, False
         if len(steps) == 2:
-<<<<<<< Updated upstream
-            if steps[1] not in FOLLOWED_MAP:
-                return NOT_UNDERSTOOD
-            return "CON Did it help?\n1. Yes  2. No  3. Too early to say"
-        if len(steps) == 3:
-            followed = FOLLOWED_MAP.get(steps[1])
-            helped = HELPED_MAP.get(steps[2])
-            if followed is None or helped is None:
-                return NOT_UNDERSTOOD
-            _save_followup(session, info["advice_id"], household, followed, helped, "farmer_ussd")
-            run_logged(
-                session,
-                tool="record_followup",
-                inputs={"phone": phone, "advice_id": info["advice_id"], "followed": followed, "helped": helped},
-                actor="farmer",
-                source="farmer_ussd",
-                run_id=None,
-                func=lambda: {"advice_id": info["advice_id"], "followed": followed, "helped": helped},
-            )
-            return "END Thank you. This helps improve advice."
-        return NOT_UNDERSTOOD
-=======
             return f"CON {retry}Did it help?\n1. Yes  2. No  3. Too early to say" + NAV_HINT, False
-        _save_followup(session, info["advice_id"], FOLLOWED_MAP[steps[1]], HELPED_MAP[steps[2]], "farmer_ussd")
+        followed, helped = FOLLOWED_MAP[steps[1]], HELPED_MAP[steps[2]]
+        _save_followup(session, info["advice_id"], household, followed, helped, "farmer_ussd")
+        run_logged(
+            session,
+            tool="record_followup",
+            inputs={"phone": phone, "advice_id": info["advice_id"], "followed": followed, "helped": helped},
+            actor="farmer",
+            source="farmer_ussd",
+            run_id=None,
+            func=lambda: {"advice_id": info["advice_id"], "followed": followed, "helped": helped},
+        )
         return "END Thank you. This helps improve advice.", True
->>>>>>> Stashed changes
 
     return NOT_UNDERSTOOD, False

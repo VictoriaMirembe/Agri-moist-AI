@@ -29,6 +29,13 @@ class Settings(BaseSettings):
     weather_override_next_mm: float | None = None
 
     farmer_language: str = "Ngakarimojong"
+    # ISO 639-3 code Sunbird uses for the same language (Karamojong / Ngakarimojong).
+    farmer_language_code: str = "kdj"
+
+    # Sunbird AI (Ugandan open models). Its sunflower-9b translator supports
+    # Karamojong, so it translates approved advice first; Groq is the backup.
+    sunbird_api_key: str | None = None
+    sunbird_api_url: str = "https://api.sunbird.ai"
 
     # USSD short code shown in the simulator. Set it to the code Africa's Talking
     # gives your channel (sandbox codes look like *384*NNNN#).
@@ -37,9 +44,16 @@ class Settings(BaseSettings):
     # no check, which is fine on localhost but not on a public host.
     ussd_callback_token: str = ""
 
+    # Signs officer session cookies. Blank = a random key each start (see backend/main.py).
+    session_secret: str = ""
+
     @property
     def model_configured(self) -> bool:
         return bool(self.groq_api_key)
+
+    @property
+    def translator_configured(self) -> bool:
+        return bool(self.sunbird_api_key)
 
 
 settings = Settings()

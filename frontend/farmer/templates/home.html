@@ -3,8 +3,11 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="theme-color" content="#174b38">
+  <meta name="theme-color" content="#1F4FA3">
   <title>My farm | AgriMoist AI</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@112..125,600..800&family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&display=swap">
   <link rel="stylesheet" href="../../static/styles.css">
   <script src="../../static/app.js"></script>
 </head>
@@ -35,7 +38,7 @@
       <section id="dashboard-view">
         <section class="farmer-welcome" aria-labelledby="welcome-heading">
           <div class="farmer-welcome-copy">
-            <p class="farmer-eyebrow">YOUR FARM DASHBOARD</p>
+            <p class="farmer-eyebrow">Your farm dashboard</p>
             <h1 id="welcome-heading">Welcome, <span id="farmer-name">farmer</span></h1>
             <p class="farmer-household" id="farmer-location">Loading your registered farm details...</p>
           </div>
@@ -50,7 +53,7 @@
             <section class="farmer-panel" aria-labelledby="conditions-heading">
               <div class="farmer-panel-heading">
                 <div>
-                  <p class="farmer-eyebrow">FIELD CONDITIONS</p>
+                  <p class="farmer-eyebrow">Field conditions</p>
                   <h2 id="conditions-heading">Rainfall and latest field record</h2>
                 </div>
                 <span class="farmer-status" id="weather-status">Loading</span>
@@ -80,7 +83,7 @@
             <section class="farmer-panel farmer-advice-panel" aria-labelledby="advice-heading">
               <div class="farmer-panel-heading">
                 <div>
-                  <p class="farmer-eyebrow">REVIEWED BY YOUR EXTENSION OFFICER</p>
+                  <p class="farmer-eyebrow">Reviewed by your extension officer</p>
                   <h2 id="advice-heading">My advice</h2>
                 </div>
                 <span class="farmer-status" id="advice-status">Loading</span>
@@ -95,7 +98,7 @@
             <section class="farmer-panel" aria-labelledby="shortcuts-heading">
               <div class="farmer-panel-heading">
                 <div>
-                  <p class="farmer-eyebrow">FARMER SERVICES</p>
+                  <p class="farmer-eyebrow">Farmer services</p>
                   <h2 id="shortcuts-heading">Farm shortcuts</h2>
                 </div>
               </div>
@@ -117,7 +120,7 @@
             <section class="farmer-panel" aria-labelledby="requests-heading">
               <div class="farmer-panel-heading">
                 <div>
-                  <p class="farmer-eyebrow">SENT TO YOUR OFFICER</p>
+                  <p class="farmer-eyebrow">Sent to your officer</p>
                   <h2 id="requests-heading">My reports and requests</h2>
                 </div>
                 <span class="farmer-status" id="requests-status">Loading</span>
@@ -129,14 +132,14 @@
 
           <aside class="farmer-dashboard-side">
             <section class="farmer-panel farmer-ussd-card" aria-labelledby="ussd-heading">
-              <p class="farmer-eyebrow">NO SMARTPHONE OR DATA?</p>
+              <p class="farmer-eyebrow">No smartphone or data?</p>
               <h2 id="ussd-heading">Use a basic phone</h2>
               <p class="farmer-panel-description">Dial this code on any phone to read advice, report a problem or ask for a visit.</p>
               <p class="farmer-ussd-code" id="ussd-code">*384*5951#</p>
               <a class="farmer-link-button" href="/farmer/ussd" data-ussd-link>Try the USSD menu</a>
             </section>
             <section class="farmer-panel farmer-profile-card" aria-labelledby="profile-heading">
-              <p class="farmer-eyebrow">YOUR DETAILS</p>
+              <p class="farmer-eyebrow">Your details</p>
               <h2 id="profile-heading">Farm profile</h2>
               <dl class="farmer-profile-list">
                 <div><dt>Household</dt><dd id="profile-household">Loading</dd></div>
@@ -147,7 +150,7 @@
             </section>
 
             <section class="farmer-panel farmer-calendar-panel" aria-labelledby="calendar-heading">
-              <p class="farmer-eyebrow">LOCAL CROP CALENDAR</p>
+              <p class="farmer-eyebrow">Local crop calendar</p>
               <h2 id="calendar-heading">Planting windows</h2>
               <p class="farmer-panel-description" id="calendar-zone">Using the calendar for your recorded agroclimatic zone.</p>
               <div id="crop-calendars" class="farmer-crop-calendars" aria-live="polite">
@@ -161,7 +164,7 @@
 
       <section id="advice-view" class="farmer-action-page farmer-panel" aria-labelledby="advice-page-heading" hidden>
         <a class="farmer-link-button farmer-back-link" href="#" data-view-link="dashboard">Back to my farm</a>
-        <p class="farmer-eyebrow">REVIEWED BY YOUR EXTENSION OFFICER</p>
+        <p class="farmer-eyebrow">Reviewed by your extension officer</p>
         <h1 id="advice-page-heading">My advice</h1>
         <p id="advice-detail" class="farmer-advice-preview" aria-live="polite">Loading your latest approved advice...</p>
         <p id="advice-detail-meta" class="farmer-advice-credit"></p>
@@ -169,7 +172,7 @@
 
       <section id="report-view" class="farmer-action-page farmer-panel" aria-labelledby="report-heading" hidden>
         <a class="farmer-link-button farmer-back-link" href="#" data-view-link="dashboard">Back to my farm</a>
-        <p class="farmer-eyebrow">FARMER SERVICES</p>
+        <p class="farmer-eyebrow">Farmer services</p>
         <h1 id="report-heading">Report an issue</h1>
         <p class="farmer-panel-description">Your report will be shared with your extension officer for review.</p>
         <form id="report-form" class="farmer-form">
@@ -209,7 +212,7 @@
 
       <section id="visit-view" class="farmer-action-page farmer-panel" aria-labelledby="visit-heading" hidden>
         <a class="farmer-link-button farmer-back-link" href="#" data-view-link="dashboard">Back to my farm</a>
-        <p class="farmer-eyebrow">FARMER SERVICES</p>
+        <p class="farmer-eyebrow">Farmer services</p>
         <h1 id="visit-heading">Request an officer visit</h1>
         <p class="farmer-panel-description">Let your extension officer know why you need a visit.</p>
         <form id="visit-form" class="farmer-form">
@@ -227,7 +230,7 @@
 
       <section id="followup-view" class="farmer-action-page farmer-panel" aria-labelledby="followup-heading" hidden>
         <a class="farmer-link-button farmer-back-link" href="#" data-view-link="dashboard">Back to my farm</a>
-        <p class="farmer-eyebrow">FARMER SERVICES</p>
+        <p class="farmer-eyebrow">Farmer services</p>
         <h1 id="followup-heading">Advice follow-up</h1>
         <p id="followup-loading" class="farmer-panel-description">Checking for approved advice...</p>
         <form id="followup-form" class="farmer-form" hidden>
@@ -255,7 +258,7 @@
           <span class="farmer-brand-mark" aria-hidden="true">A</span>
           <span>AgriMoist <strong>AI</strong></span>
         </a>
-        <p class="farmer-eyebrow">FARMER PORTAL</p>
+        <p class="farmer-eyebrow">Farmer portal</p>
         <h1 id="signin-heading">Sign in to your farm</h1>
         <p class="farmer-panel-description">Enter the phone number registered with your extension officer.</p>
         <form id="sign-in-form" class="farmer-form">
@@ -395,7 +398,9 @@ function renderAdvice(advice) {
   if (detailMeta) detailMeta.textContent = metadata;
   if (followupLoading) {
     followupLoading.hidden = true;
-    document.getElementById("followup-form").hidden = false;
+    // A background refresh must not bring the form back once the farmer has answered.
+    const done = document.getElementById("followup-done");
+    if (!done || done.hidden) document.getElementById("followup-form").hidden = false;
   }
 }
 
@@ -534,6 +539,7 @@ function connectSubmit(formId, errorId, doneId, url, makeBody) {
       await postJSON(url, makeBody());
       form.hidden = true;
       document.getElementById(doneId).hidden = false;
+      refreshFarmerUpdates().catch(() => {}); // show the new request in "My reports and requests"
     } catch (failure) {
       error.textContent = failure.message || "Could not send your request.";
       error.hidden = false;
@@ -602,8 +608,19 @@ signInForm.addEventListener("submit", async (event) => {
   }
 });
 
+// Keep "My reports and requests" and the advice card in step with the officer
+// screens: a report checked, a visit done or new advice approved shows up without
+// a reload. Uses /api/farmer/updates, which is not counted as reading the advice.
+async function refreshFarmerUpdates() {
+  if (isFilePreview || !farmerPhone) return;
+  const updates = await getJSON("/api/farmer/updates?phone=" + encodeURIComponent(farmerPhone));
+  renderRecentRequests(updates.recent_requests || []);
+  renderAdvice(updates.advice);
+}
+
 if (activeView === "dashboard") {
   loadDashboard();
+  autoRefresh(refreshFarmerUpdates);
 } else if (!isFilePreview && (activeView === "advice" || activeView === "followup")) {
   getJSON("/api/farmer/advice?phone=" + encodeURIComponent(farmerPhone))
     .then(renderAdvice)

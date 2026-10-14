@@ -5,8 +5,10 @@
 from __future__ import annotations
 
 import json
+import re
 from typing import Any
 
+import httpx
 from openai import OpenAI
 
 from backend.core.config import settings
@@ -20,6 +22,8 @@ _PRICES_PER_MILLION = {
     "llama-3.3-70b-versatile": (0.59, 0.79),
 }
 _DEFAULT_PRICE = (0.60, 0.80)
+# Sunbird AI translation, USD per 1M tokens (GET https://api.sunbird.ai/api/billing/rates).
+_SUNBIRD_TRANSLATION_PRICE_PER_MILLION = 1.0
 
 
 def _get_client() -> OpenAI | None:
@@ -155,15 +159,73 @@ def _is_refusal(text: str) -> bool:
     return CANNOT_TRANSLATE.lower() in lowered or lowered.startswith(_REFUSAL_STARTS)
 
 
+def _numbers(text: str) -> list[str]:
+    return sorted(re.findall(r"\d+(?:\.\d+)?", text))
+
+
 def translate_text(text: str, target_language: str) -> dict[str, Any]:
-    """Returns translated_text=None when no translation actually happened (no model
-    key, or the call failed) - callers should fall back to showing the English
-    original rather than mislabel it as translated."""
+    """Translate approved advice for farmers: Sunbird AI's sunflower-9b first (it is
+    trained on Ugandan languages, Karamojong included), then the Groq model as a
+    backup. Returns translated_text=None when no usable translation came back (no
+    key, a failed call, a refusal, or a translation that changed or dropped a number)
+    - callers then show the English original rather than mislabel it as translated."""
     if not text:
         return {"translated_text": None, "model": "none (nothing to translate)", "cost": 0.0}
+    attempts: list[str] = []
+    cost = 0.0  # a failed or rejected attempt can still have used paid tokens
+    # Sunbird's output varies between calls (it sometimes writes a number out in
+    # words), so it gets a second try before the backup.
+    for translate in (_translate_with_sunbird, _translate_with_sunbird, _translate_with_groq):
+        result = translate(text, target_language)
+        if result is None:
+            continue  # that service has no key configured
+        if result["translated_text"] and _numbers(result["translated_text"]) != _numbers(text):
+            result = {
+                **result,
+                "translated_text": None,
+                "model": f"fallback ({result['model']} changed a number; showing English)",
+            }
+        cost += result["cost"]
+        if result["translated_text"]:
+            return {**result, "cost": round(cost, 6)}
+        attempts.append(result["model"])
+    if not attempts:
+        return {"translated_text": None, "model": "none (no translator key configured; showing English)", "cost": 0.0}
+    return {"translated_text": None, "model": "; ".join(attempts), "cost": round(cost, 6)}
+
+
+def _translate_with_sunbird(text: str, target_language: str) -> dict[str, Any] | None:
+    if not settings.translator_configured:
+        return None
+    target = settings.farmer_language_code if target_language == settings.farmer_language else target_language
+    try:
+        response = httpx.post(
+            settings.sunbird_api_url.rstrip("/") + "/tasks/translate",
+            headers={"Authorization": f"Bearer {settings.sunbird_api_key}"},
+            json={"source_language": "eng", "target_language": target, "text": text},
+            timeout=60,
+        )
+        response.raise_for_status()
+        body = response.json()
+        output = body.get("output") or {}
+        tokens = (body.get("usage") or {}).get("total_tokens") or 0
+        cost = round(tokens / 1_000_000 * _SUNBIRD_TRANSLATION_PRICE_PER_MILLION, 6)
+        translated = (output.get("translated_text") or "").strip()
+        if output.get("Error") or not translated or translated == text.strip():
+            return {
+                "translated_text": None,
+                "model": f"fallback (sunbird could not translate: {output.get('Error') or 'empty reply'})",
+                "cost": cost,
+            }
+        return {"translated_text": translated, "model": "sunbird/sunflower-9b", "cost": cost}
+    except Exception as exc:  # noqa: BLE001 - any failure falls through to the backup
+        return {"translated_text": None, "model": f"fallback (sunbird translation failed: {exc})", "cost": 0.0}
+
+
+def _translate_with_groq(text: str, target_language: str) -> dict[str, Any] | None:
     client = _get_client()
     if client is None:
-        return {"translated_text": None, "model": "none (no model key configured; showing English)", "cost": 0.0}
+        return None
     try:
         response = client.chat.completions.create(
             model=settings.groq_model,

@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "agrimoist": {
+      "command": "python",
+      "args": ["-m", "backend.mcp_server.server", "--demo-data"]
+    },
+    "time": {
+      "command": "python",
+      "args": ["-m", "mcp_server_time", "--local-timezone", "Africa/Kampala"]
+    }
+  }
+}

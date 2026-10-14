@@ -38,7 +38,7 @@
       {% for row in rows %}
       <tr>
         <td>{{ row.at | when }}{% if row.run_id %}<br><span class="muted">run #{{ row.run_id }}</span>{% endif %}</td>
-        <td>{{ row.tool | plain_tool }}</td>
+        <td>{{ row.tool | plain_tool }}{% if row.run_id and row.actor == "assistant" %}<br><span class="muted">MCP tool <code>{{ row.tool }}</code> on {{ "mcp-server-time" if row.tool == "get_current_time" else "agrimoist" }}</span>{% endif %}</td>
         <td>{% if row.actor in officer_names %}{{ officer_names[row.actor] }}{% elif row.actor == "farmer" %}Farmer{% elif row.actor == "assistant" %}AI assistant{% else %}{{ row.actor }}{% endif %}</td>
         <td>{{ row.source | plain_channel }}</td>
         <td>

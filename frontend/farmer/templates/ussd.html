@@ -1,47 +1,69 @@
 {# USSD simulator: a pretend basic phone that sends the same requests a real USSD gateway would (POST /ussd). The bar at the top links back to the officer screens and the farmer page; it sits outside the simulated phone. #}
 {% extends "base.html" %}
 {% block title %}Basic phone (USSD) | AgriMoist AI{% endblock %}
+{% block container_class %}ussd-shell{% endblock %}
 {% block content %}
-<<<<<<< Updated upstream
 <nav class="ussd-bar" aria-label="Leave the simulator">
   <div class="ussd-bar-links">
-    <a href="/">&larr; Officer screens</a>
-    <a href="/farmer">Farmer page</a>
+    <a id="back-link" href="/farmer">&larr; Back to my farm</a>
+    <a href="/">Officer screens</a>
   </div>
-  <p>This simulates a basic phone. Press Dial *123#, then tap the menu number, as a farmer would on *123#.</p>
 </nav>
-<h1>USSD simulator</h1>
-<p class="muted">Simulates a basic-phone USSD session. Uses the same request and reply shape as a real USSD gateway - this page is the only part that is pretend.</p>
-=======
-<a class="farmer-link-button" id="back-link" href="/farmer">Back to my farm</a>
-<h1>Use a basic phone</h1>
-<p>No smartphone or data? Dial <strong>{{ service_code }}</strong> on any phone to read your advice, report a
-problem, ask for a visit or say whether advice helped. Reports sent this way show on your farm page.</p>
-<p class="muted">Try it below. This page sends each keypress as form data (<code>sessionId</code>,
-<code>serviceCode</code>, <code>phoneNumber</code>, <code>networkCode</code>, <code>text</code>), the same way
-Africa's Talking calls <code>/ussd/africastalking</code>, so it runs the real menu. Only the phone screen is pretend.</p>
->>>>>>> Stashed changes
+<div class="ussd-layout">
+  <div class="ussd-phone" aria-label="Simulated basic phone">
+    <p class="ussd-phone-brand" aria-hidden="true">AgriMoist</p>
+    <div class="ussd-screen" id="screen" aria-live="polite">Dial to start a session.</div>
+    <div id="reply-row" class="ussd-reply" style="display:none;">
+      <label for="reply">Your reply</label>
+      <input id="reply" inputmode="numeric" autocomplete="off">
+    </div>
+    <div class="ussd-calls">
+      <button class="ussd-call" id="dial-btn" type="button">Dial {{ service_code }}</button>
+    </div>
+    <div class="keypad" id="keypad">
+      <button type="button" data-k="1">1</button><button type="button" data-k="2">2</button><button type="button" data-k="3">3</button>
+      <button type="button" data-k="4">4</button><button type="button" data-k="5">5</button><button type="button" data-k="6">6</button>
+      <button type="button" data-k="7">7</button><button type="button" data-k="8">8</button><button type="button" data-k="9">9</button>
+      <button type="button" data-k="*">*</button><button type="button" data-k="0">0</button><button type="button" data-k="#">#</button>
+      <button type="button" data-k="cancel" class="ussd-key-end">End</button><button type="button" data-k="del" aria-label="Delete last digit">Del</button><button type="button" data-k="send" class="ussd-key-send">Send</button>
+    </div>
+  </div>
 
-<label for="phone">Phone number</label>
-<input id="phone" type="tel" value="{{ phone or '+256700000001' }}">
-<button class="btn" id="dial-btn" style="margin-top:0.8rem;">Dial {{ service_code }}</button>
+  <div class="ussd-side">
+    <h1>Use a basic phone</h1>
+    <p>No smartphone or data? Dial <strong class="ussd-code">{{ service_code }}</strong> on any phone to read your advice,
+    report a problem, ask for a visit or say whether advice helped.</p>
 
-<div class="ussd-screen" id="screen" style="margin-top:1rem;" aria-live="polite">Dial to start a session.</div>
-<div id="reply-row" style="display:none;">
-  <label for="reply">Your reply</label>
-  <input id="reply" inputmode="numeric" autocomplete="off">
-  <div class="keypad" id="keypad" style="margin-top:0.6rem;">
-    <button data-k="1">1</button><button data-k="2">2</button><button data-k="3">3</button>
-    <button data-k="4">4</button><button data-k="5">5</button><button data-k="6">6</button>
-    <button data-k="7">7</button><button data-k="8">8</button><button data-k="9">9</button>
-    <button data-k="cancel">Cancel</button><button data-k="0">0</button><button data-k="send">Send</button>
+    <label for="phone">Phone number</label>
+    <input id="phone" type="tel" list="registered-phones" value="{{ phone }}">
+    <datalist id="registered-phones">
+      {% for p in phones %}<option value="{{ p.phone }}">{{ p.name }}, household {{ p.household_code }}, group {{ p.group_id }}</option>{% endfor %}
+    </datalist>
+    <p class="muted" id="phone-owner"></p>
+
+    <div id="sent-to-officer" class="ussd-result" hidden>
+      <p><strong>Sent to the officer.</strong> <span id="sent-to-text"></span></p>
+      <p><a id="sent-to-link" href="/">Open the officer screen</a> or <a id="farm-link" href="/farmer">see it on the farmer page</a>.</p>
+    </div>
+
+    <details class="ussd-fold">
+      <summary>Menu map</summary>
+      <pre>1  My advice                      (approved advice only)
+2  Report a problem  &gt; 1 Pests  2 No rain  3 Too much rain  4 Crop looks sick
+                     &gt; 1 Sorghum  2 Maize  3 Other
+3  Ask for officer visit &gt; 1 Pests  2 Little food left  3 Other
+4  Did advice help?  &gt; 1 Yes  2 Partly  3 No
+                     &gt; 1 Yes  2 No  3 Too early to say
+0  Back a screen     00  Back to the main menu</pre>
+    </details>
+    <details class="ussd-fold">
+      <summary>Last request sent</summary>
+      <p class="muted">Each keypress goes to the server as form data, the way Africa's Talking calls
+      <code>/ussd/africastalking</code>, so this runs the real menu. Only the phone is pretend.</p>
+      <pre id="last-request">Nothing sent yet.</pre>
+    </details>
   </div>
 </div>
-
-<details style="margin-top:1rem;">
-  <summary>Last request sent</summary>
-  <pre id="last-request" class="muted">Nothing sent yet.</pre>
-</details>
 
 <script>
 const SERVICE_CODE = {{ service_code | tojson }};
@@ -51,9 +73,31 @@ let sessionId = null;
 let typed = []; // every reply this session, never rewritten - like the real gateway
 
 const phoneInput = document.getElementById("phone");
+const REGISTERED = {{ phones | tojson }};
 function updateBackLink() {
   const phone = phoneInput.value.trim();
-  document.getElementById("back-link").href = phone ? "/farmer/home?phone=" + encodeURIComponent(phone) : "/farmer";
+  const farm = phone ? "/farmer/home?phone=" + encodeURIComponent(phone) : "/farmer";
+  document.getElementById("back-link").href = farm;
+  document.getElementById("farm-link").href = farm;
+  const owner = REGISTERED.find((p) => p.phone === phone);
+  document.getElementById("phone-owner").textContent = owner
+    ? owner.name + " - household " + owner.household_code + ", group " + owner.group_id
+    : "Not a registered number: the menu will say so, as on a real phone.";
+}
+
+// Where a finished session's action shows up for the officer.
+const OFFICER_SCREENS = [
+  ["Your officer will check this report", "/farmer-reports", "The report is under Farmer messages as New."],
+  ["Request sent", "/flags", "The request is under Visits needed."],
+  ["This helps improve advice", "/followups", "The answer is under Farmer messages > Did advice help?"],
+];
+function showWhereItWent(reply) {
+  const box = document.getElementById("sent-to-officer");
+  const match = OFFICER_SCREENS.find(([words]) => reply.includes(words));
+  box.hidden = !match;
+  if (!match) return;
+  document.getElementById("sent-to-link").href = match[1];
+  document.getElementById("sent-to-text").textContent = match[2];
 }
 phoneInput.addEventListener("input", updateBackLink);
 updateBackLink();
@@ -65,7 +109,7 @@ function render(text) {
 function endSession(message) {
   sessionId = null;
   document.getElementById("reply-row").style.display = "none";
-  document.getElementById("dial-btn").textContent = "Dial " + SERVICE_CODE + " again";
+  document.getElementById("dial-btn").textContent = "Dial again";
   if (message) render(message);
 }
 
@@ -92,6 +136,7 @@ async function send() {
     return endSession("Connection problem or invalid MMI code.");
   }
   render(reply);
+  showWhereItWent(reply);
   if (reply.startsWith("END")) {
     endSession();
   } else {
@@ -124,6 +169,11 @@ document.getElementById("keypad").addEventListener("click", (e) => {
   if (!k) return;
   if (k === "send") return submitReply();
   if (k === "cancel") return endSession("Session cancelled.");
+  if (k === "del") {
+    const reply = document.getElementById("reply");
+    reply.value = reply.value.slice(0, -1);
+    return;
+  }
   document.getElementById("reply").value += k;
 });
 </script>

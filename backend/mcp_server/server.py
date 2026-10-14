@@ -5,15 +5,19 @@
 # place an order - see README "Safety rules". Every call is logged by backend.logging.tool_log,
 # through the same database file the web app uses.
 #
-# Run standalone (for MCP Inspector or another MCP client):
-#   python -m backend.mcp_server.server
+# Run standalone (for MCP Inspector, Claude Desktop or another MCP client), from the
+# repository root:
+#   python -m backend.mcp_server.server --demo-data
+# --demo-data creates the database and loads the made-up demo households if this is a
+# fresh clone (the web app does the same on its first start). See .mcp.json.
 from __future__ import annotations
 
+import sys
 from datetime import datetime
 
 from mcp.server.fastmcp import FastMCP
 
-from backend.core.database import session_scope
+from backend.core.database import init_db, session_scope
 from backend.logging.tool_log import run_logged
 from backend.tools import agrimoist_tools as impl
 
@@ -216,4 +220,10 @@ def schedule_followup(advice_id: int, due_on: str, run_id: int | None = None) ->
 
 
 if __name__ == "__main__":
+    init_db()  # creates tables only if missing; safe on every start
+    if "--demo-data" in sys.argv:
+        from backend.db.seed import seed
+
+        with session_scope() as session:
+            seed(session)  # does nothing if the demo data is already there
     mcp.run()

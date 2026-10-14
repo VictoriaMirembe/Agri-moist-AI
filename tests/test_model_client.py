@@ -109,3 +109,50 @@ def test_a_refusal_is_never_stored_as_a_translation(monkeypatch):
     assert result["translated_text"] is None  # farmer is shown the English text instead
     assert result["model"].startswith("fallback")
     assert result["cost"] > 0  # the tokens were still paid for
+
+
+def _fake_sunbird(monkeypatch, translated_text, error=None):
+    from types import SimpleNamespace
+
+    from backend.agent import model_client
+    from backend.core.config import settings
+
+    sent = {}
+
+    def fake_post(url, headers, json, timeout):
+        sent.update(url=url, json=json)
+        body = {"output": {"translated_text": translated_text, "Error": error}, "status": "COMPLETED"}
+        return SimpleNamespace(raise_for_status=lambda: None, json=lambda: body)
+
+    monkeypatch.setattr(settings, "sunbird_api_key", "test-key")
+    monkeypatch.setattr(model_client.httpx, "post", fake_post)
+    return sent
+
+
+def test_sunbird_translates_into_karamojong_first(monkeypatch):
+    from backend.agent import model_client
+
+    sent = _fake_sunbird(monkeypatch, "Kicakak akimyet ŋina 7.")
+    result = model_client.translate_text("Water the sorghum within 7 days.", "Ngakarimojong")
+    assert result["translated_text"] == "Kicakak akimyet ŋina 7."
+    assert result["model"] == "sunbird/sunflower-9b"
+    assert sent["url"].endswith("/tasks/translate")
+    assert sent["json"]["target_language"] == "kdj"  # ISO code for Karamojong
+
+
+def test_a_translation_that_changes_a_number_is_not_shown(monkeypatch):
+    from backend.agent import model_client
+
+    _fake_sunbird(monkeypatch, "Kicakak akimyet ŋina 5.")  # 7 became 5
+    result = model_client.translate_text("Water the sorghum within 7 days.", "Ngakarimojong")
+    assert result["translated_text"] is None  # farmer sees the English text instead
+    assert "changed a number" in result["model"]
+
+
+def test_sunbird_failure_falls_back_to_english_without_groq(monkeypatch):
+    from backend.agent import model_client
+
+    _fake_sunbird(monkeypatch, "", error="model loading")
+    result = model_client.translate_text("Water the sorghum.", "Ngakarimojong")
+    assert result["translated_text"] is None
+    assert "sunbird could not translate" in result["model"]

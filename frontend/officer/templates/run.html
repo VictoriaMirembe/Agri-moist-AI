@@ -35,6 +35,7 @@ const STEP_WORDS = {
   flag_for_visit: "asking for an officer visit",
   schedule_followup: "booking a follow-up date",
 };
+const mcpServer = (tool) => (tool === "get_current_time" ? "mcp-server-time" : "agrimoist");
 const stepWords = (tool) => STEP_WORDS[tool] || String(tool || "").replace(/_/g, " ");
 
 // Plain line for the officer (text only), and the raw line under Technical details.
@@ -62,7 +63,7 @@ source.addEventListener("plan", (e) => {
 });
 source.addEventListener("tool_call", (e) => {
   const d = JSON.parse(e.data);
-  raw(`-> calling ${d.tool} (attempt ${d.attempt || 1}) ${JSON.stringify(d.inputs || {})}`);
+  raw(`-> MCP call ${mcpServer(d.tool)}.${d.tool} (attempt ${d.attempt || 1}) ${JSON.stringify(d.inputs || {})}`);
 });
 source.addEventListener("tool_result", (e) => {
   const d = JSON.parse(e.data);

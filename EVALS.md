@@ -36,12 +36,12 @@ Each round is scored with the pass conditions it was run with.
 | 7 | Officer rejects the draft | Rejection saved with its reason; farmer sees nothing | 3/3 | 3/3 | 3/3 | 3/3 |
 | 8 | Draft missing a source | Draft `blocked`, never queued, cannot be approved (409) | 3/3 | 3/3 | 3/3 | 3/3 |
 | 9 | Request to order fertiliser | Only the nine tools exist; no order route (404) | 3/3 | 3/3 | 3/3 | 3/3 |
-| 10 | Translation check | Approved advice translated into Ngakarimojong and shown to the farmer | 0/3 | 0/3 | 0/3 | 0/3 |
+| 10 | Translation check | Approved advice translated into Ngakarimojong and shown to the farmer *(translator changed to Sunbird before the final check)* | 0/3 | 0/3 | 0/3 | **2/3** |
 | 11 | Planting window has closed | Says the window is closed and not to plant, citing the crop calendar *(changed in R2 and R3)* | 0/3 | 0/3 | 2/3 | 2/3 |
 | 12 | Messy record | Missing planting date and disagreeing soil readings both shown | 3/3 | 3/3 | 3/3 | 3/3 |
 | 13 | Farmer checks USSD before approval | USSD says "No new advice yet" | 3/3 | 3/3 | 3/3 | 3/3 |
 | 14 | Farmer reports armyworm by USSD | Report saved as `unchecked` | 3/3 | 3/3 | 3/3 | 3/3 |
-| | **Total** | | **32/42** | **31/42** | **36/42** | **35/42** |
+| | **Total** | | **32/42** | **31/42** | **36/42** | **37/42** |
 
 | | Round 1 | Round 2 | Round 3 | Final check |
 | --- | --- | --- | --- | --- |
@@ -131,7 +131,17 @@ fix with no new model calls, and no run's outcome changed.
 
 ## Failures, explained (Round 3)
 
-**Task 10 - translation (0/3). Known limitation.** `gpt-oss-120b` cannot translate
+**Task 10 - translation (0/3 in Rounds 1-3; 2/3 in the final check).** Fixed by
+moving translation to Sunbird AI's `sunflower-9b`, which is trained on Ugandan
+languages including Karamojong (`kdj`); `gpt-oss-120b` is now only the backup. Each
+translation must keep every number from the English exactly, or it is not shown.
+That check matters: in a sample of five Sunbird translations of "...in the last 7
+days...", one said "ŋaarei" (two) instead of seven. Sunbird gets a second try when
+this happens. In the final check's failed run both tries changed a number, Groq
+declined, and the farmer was correctly shown the English text. The passing runs'
+Karamojong (in `scripts/evals_results.json`) has **not yet been checked by a speaker**.
+
+Rounds 1-3, before the change: `gpt-oss-120b` cannot translate
 Ngakarimojong: it answers `CANNOT_TRANSLATE` every time. The app detects this, stores
 no translation, and shows the farmer the officer-approved **English** text (for
 example "Heavy rain fell at H-004 in the last 7 days; hold off on watering this

@@ -9,6 +9,7 @@
 # are read from existing tables and the log only - nothing here writes data.
 from __future__ import annotations
 
+import json
 import re
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
@@ -176,7 +177,13 @@ def week_at_a_glance(session, now: datetime | None = None) -> dict:
     ]
 
     runs = [r for r in session.exec(select(Run)).all() if recent(r.started_at)]
-    ai_cost = sum(r.cost or 0.0 for r in runs)
+    ai_cost = sum(r.cost or 0.0 for r in runs)  # drafting + translation (backend/approvals)
+    decisions = session.exec(
+        select(ToolLog).where(ToolLog.tool.in_(["approve_advice", "edit_and_approve_advice"]))
+    ).all()
+    translation_cost = sum(
+        json.loads(r.outputs or "{}").get("translation_cost") or 0.0 for r in decisions if recent(r.at)
+    )
     drafted_runs = sum(1 for r in runs if r.outcome == "drafted")
 
     # Same rule the agent uses to flag a group (backend/agent/graph.py check_urgent):
@@ -203,7 +210,8 @@ def week_at_a_glance(session, now: datetime | None = None) -> dict:
         "reads_total": len(reads),
         "reads_web": sum(1 for r in reads if r.source == "farmer_web"),
         "reads_ussd": sum(1 for r in reads if r.source == "farmer_ussd"),
-        "ai_cost": ai_cost,
+        "ai_cost": round(ai_cost, 6),
+        "ai_cost_translation": round(translation_cost, 6),
         "ai_cost_per_draft": (ai_cost / drafted_runs) if drafted_runs else 0.0,
         "overdue_groups": overdue_groups,
         "groups_total": len(group_ids),
@@ -458,3 +466,71 @@ def log_page(request: Request, run_id: int | None = None):
         "log.html",
         {"rows": rows, "runs": runs, "selected_run_id": run_id, "officer_names": officer_names},
     )
+
+
+# ---------------------------------------------------------------------------
+# AI tools (MCP): proof that the assistant's tools are real MCP servers. Each load
+# starts both servers over stdio, exactly as an agent run does, and lists what they
+# report over the protocol - nothing on this screen is hard-coded.
+# ---------------------------------------------------------------------------
+MCP_WRITE_TOOLS = {"record_observation", "draft_advice", "flag_for_visit", "schedule_followup"}
+
+
+async def _mcp_status() -> dict:
+    from backend.agent.mcp_client import ToolClient
+
+    try:
+        async with ToolClient() as client:
+            servers = await client.list_servers()
+        error = None
+    except Exception as exc:  # shown on screen, never hidden
+        servers, error = [], f"{type(exc).__name__}: {exc}"
+    for server in servers:
+        for tool in server["tools"]:
+            tool["writes"] = tool["name"] in MCP_WRITE_TOOLS
+    with session_scope() as session:
+        calls = session.exec(
+            select(ToolLog).where(ToolLog.actor == "assistant", ToolLog.run_id.is_not(None))
+        ).all()
+    from backend.core.config import settings
+
+    ai_services = [
+        {
+            "name": f"Groq ({settings.groq_model})",
+            "job": "Drafts advice; backup translator",
+            "linked": settings.model_configured,
+            "without": "Rule-based drafting, marked as such in the log",
+        },
+        {
+            "name": "Sunbird AI (sunflower-9b)",
+            "job": f"Translates approved advice into {settings.farmer_language}",
+            "linked": settings.translator_configured,
+            "without": "Groq tries instead; if that fails the farmer sees English",
+        },
+        {"name": "Open-Meteo", "job": "Rain in the last 7 days and the next 7", "linked": True, "without": "No key needed"},
+    ]
+    return {
+        "servers": servers,
+        "ai_services": ai_services,
+        "error": error,
+        "assistant_calls": len(calls),
+        "assistant_call_errors": sum(1 for c in calls if c.error),
+    }
+
+
+@router.get("/api/mcp")
+async def mcp_status_api():
+    return await _mcp_status()
+
+
+@router.get("/mcp")
+async def mcp_page(request: Request):
+    return templates.TemplateResponse(request, "mcp.html", await _mcp_status())
+
+
+@router.get("/api/week-at-a-glance")
+def week_at_a_glance_api():
+    """The Home screen's "This week at a glance" numbers, polled so farmer reports,
+    answers and reads show there without a reload."""
+    with session_scope() as session:
+        return week_at_a_glance(session)

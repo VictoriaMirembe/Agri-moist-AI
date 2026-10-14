@@ -77,7 +77,7 @@ def test_officer_login_page_renders(unauthenticated_client):
     """The /officer/login page renders successfully with profile selector."""
     res = unauthenticated_client.get("/officer/login")
     assert res.status_code == 200
-    assert "Sign In as Extension Officer" in res.text
+    assert "Sign in as this officer" in res.text
     assert "Among Betty" in res.text
 
 

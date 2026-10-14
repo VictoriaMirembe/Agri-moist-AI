@@ -1,34 +1,22 @@
 {# Extension Officer Login Page: server-side session authentication #}
 {% extends "base.html" %}
-{% block title %}Officer Sign In{% endblock %}
+{% block title %}Officer sign in{% endblock %}
 {% block content %}
-<div style="max-width: 480px; margin: 2rem auto;">
-  <div class="card" style="padding: 2rem; border-top: 4px solid var(--green);">
-    <div style="display:flex; align-items:center; gap:0.6rem; margin-bottom: 0.5rem;">
-      <span style="display:inline-block; width:12px; height:12px; background:var(--green); border-radius:50%;"></span>
-      <span class="muted" style="text-transform: uppercase; font-size: 0.85rem; font-weight:700; letter-spacing:0.05em;">Extension Officer Portal</span>
-    </div>
-    <h1 style="font-size: 1.6rem; margin-bottom: 0.5rem;">Sign In</h1>
-    <p class="muted" style="font-size: 0.95rem; margin-bottom: 1.5rem;">
-      Select your officer profile to access field records, approve AI advice drafts, and manage farmer follow-ups.
-    </p>
+<section class="o-login">
+  <h1>Sign in to the extension office</h1>
+  <p class="o-lead">Choose your name to review AI advice drafts, farmer messages and visit requests.</p>
 
-    <form method="POST" action="/officer/login" style="margin-bottom: 1rem;">
-      <input type="hidden" name="next" value="{{ next }}">
-      
-      <label for="officer_id">Officer Profile</label>
-      <select id="officer_id" name="officer_id" style="margin-bottom: 1.25rem;" required>
-        {% for o in officers %}
-        <option value="{{ o.id }}" {% if o.id == 1 %}selected{% endif %}>{{ o.name }} ({{ o.role }})</option>
-        {% endfor %}
-      </select>
+  <form method="POST" action="/officer/login">
+    <input type="hidden" name="next" value="{{ next }}">
+    <label for="officer_id">Officer</label>
+    <select id="officer_id" name="officer_id" required>
+      {% for o in officers %}
+      <option value="{{ o.id }}" {% if o.id == 1 %}selected{% endif %}>{{ o.name }} ({{ o.role }})</option>
+      {% endfor %}
+    </select>
+    <button type="submit" class="btn o-wide">Sign in as this officer</button>
+  </form>
 
-      <button type="submit" class="btn big" style="margin-bottom: 0;">Sign In as Extension Officer</button>
-    </form>
-
-    <div style="margin-top: 1.25rem; padding-top: 1rem; border-top: 1px solid var(--border); font-size: 0.88rem; color: var(--muted);">
-      <strong>Security note:</strong> Extension officer routes require an authenticated server-side session. Client-side authentication alone is not permitted.
-    </div>
-  </div>
-</div>
+  <p class="o-note">Officer screens need a signed-in session on the server. Every approval is recorded under the name you choose here.</p>
+</section>
 {% endblock %}

@@ -3,14 +3,16 @@
 # the officer/farmer HTML screens, and the USSD simulator page.
 from __future__ import annotations
 
+import secrets
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from starlette.middleware.sessions import SessionMiddleware
 from fastapi import FastAPI, Request
 from fastapi.staticfiles import StaticFiles
+from starlette.middleware.sessions import SessionMiddleware
 
 from backend.approvals.router import router as approvals_router
+from backend.core.config import settings
 from backend.core.database import init_db, session_scope
 from backend.db.seed import seed
 from backend.farmer.pages import router as farmer_pages_router
@@ -51,7 +53,9 @@ async def sync_auth_session_middleware(request: Request, call_next):
 # Server-side signed session cookies for extension officer authentication (runs outermost)
 app.add_middleware(
     SessionMiddleware,
-    secret_key="agrimoist-ai-super-secret-session-key-2026",
+    # From SESSION_SECRET in .env. If unset, a random key per start: officers simply
+    # sign in again after a restart, and no key ever lives in the repository.
+    secret_key=settings.session_secret or secrets.token_urlsafe(32),
     session_cookie="agrimoist_session",
     max_age=86400 * 7,
     same_site="lax",

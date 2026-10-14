@@ -43,6 +43,7 @@ class ToolClient:
         self._stack: AsyncExitStack | None = None
         self.agrimoist: ClientSession | None = None
         self.time: ClientSession | None = None
+        self._server_names: dict[int, str] = {}
 
     async def __aenter__(self) -> "ToolClient":
         self._stack = AsyncExitStack()
@@ -55,7 +56,8 @@ class ToolClient:
         assert self._stack is not None
         read, write = await self._stack.enter_async_context(stdio_client(params))
         session = await self._stack.enter_async_context(ClientSession(read, write))
-        await session.initialize()
+        init = await session.initialize()
+        self._server_names[id(session)] = init.serverInfo.name
         return session
 
     async def __aexit__(self, *exc_info: Any) -> None:
@@ -66,6 +68,29 @@ class ToolClient:
         assert self.agrimoist is not None
         result = await self.agrimoist.call_tool(tool_name, arguments)
         return _parse(result, tool_name)
+
+    async def list_servers(self) -> list[dict]:
+        """Ask each connected server, over MCP, who it is and which tools it offers.
+        Used by the officer "AI tools (MCP)" screen and GET /api/mcp."""
+        servers = []
+        for kind, session in (("Built by us", self.agrimoist), ("Borrowed", self.time)):
+            assert session is not None
+            listed = await session.list_tools()
+            servers.append(
+                {
+                    "name": self._server_names[id(session)],
+                    "kind": kind,
+                    "tools": [
+                        {
+                            "name": tool.name,
+                            "description": (tool.description or "").strip(),
+                            "inputs": sorted((tool.inputSchema or {}).get("properties", {})),
+                        }
+                        for tool in listed.tools
+                    ],
+                }
+            )
+        return servers
 
     async def now(self, timezone: str = "Africa/Kampala") -> dict:
         assert self.time is not None

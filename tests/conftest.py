@@ -11,7 +11,7 @@ from sqlmodel import create_engine
 @pytest.fixture(autouse=True)
 def no_model_key(monkeypatch):
     """Force the deterministic rule-based (stub) mode in every test, so no test ever
-    calls the real Groq model even when .env has GROQ_API_KEY. The env var covers
+    calls the real Groq model (or Sunbird) even when .env has the keys. The env var covers
     subprocesses and any fresh Settings(); the attribute covers the already-loaded
     settings object."""
     from backend.agent import model_client
@@ -20,6 +20,8 @@ def no_model_key(monkeypatch):
     monkeypatch.setenv("GROQ_API_KEY", "")
     monkeypatch.setattr(settings, "groq_api_key", None)
     monkeypatch.setattr(model_client, "_client", None)
+    monkeypatch.setenv("SUNBIRD_API_KEY", "")  # nor the real Sunbird translator
+    monkeypatch.setattr(settings, "sunbird_api_key", None)
 
 
 @pytest.fixture()

@@ -1,12 +1,15 @@
 {# Shared officer layout: on wide screens a left sidebar with the five main screens and a "More" group, a slim top bar with a Kampala-time greeting and today's date, and on phones the bottom tab bar. Every officer screen fills in the content block. Loads app.js and styles.css; all officer styles are scoped to body.officer so the farmer pages are not affected. #}
 {%- set path = request.url.path -%}
-{%- set section = "home" if path == "/" else "approve" if path.startswith("/approvals") else "messages" if (path.startswith("/farmer-reports") or path.startswith("/followups")) else "visits" if path.startswith("/flags") else "record" if path.startswith("/visits/new") else "log" if path.startswith("/log") else "" -%}
+{%- set section = "home" if path == "/" else "approve" if path.startswith("/approvals") else "messages" if (path.startswith("/farmer-reports") or path.startswith("/followups")) else "visits" if path.startswith("/flags") else "record" if path.startswith("/visits/new") else "log" if path.startswith("/log") else "mcp" if path.startswith("/mcp") else "" -%}
 <!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>{% block title %}AgriMoist AI{% endblock %} - AgriMoist AI officer</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@112..125,600..800&family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&display=swap">
   <link rel="stylesheet" href="/static/styles.css">
   <script src="/static/app.js"></script>
 </head>
@@ -44,6 +47,10 @@
         <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M5 5h14v2H5zm0 6h14v2H5zm0 6h10v2H5z"/></svg>
         <span class="o-side-label">Activity log</span>
       </a>
+      <a href="/mcp" {% if section == "mcp" %}aria-current="page"{% endif %}>
+        <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M7 2h2v4h6V2h2v4h1a1 1 0 0 1 1 1v4a6 6 0 0 1-5 5.9V22h-2v-5.1A6 6 0 0 1 6 11V7a1 1 0 0 1 1-1h0z"/></svg>
+        <span class="o-side-label">AI tools (MCP)</span>
+      </a>
       <a href="/ussd">
         <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M8 2h8a2 2 0 0 1 2 2v16a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2zm0 3v12h8V5zm4 13.5a1 1 0 1 0 0 2 1 1 0 0 0 0-2z"/></svg>
         <span class="o-side-label">USSD simulator</span>
@@ -64,11 +71,11 @@
         <p class="o-greeting-hello" id="o-greeting">Welcome</p>
         <p class="o-greeting-date" id="o-today"></p>
       </div>
-      <span class="o-topbar-place">Napak District · Extension office</span>
-      <div id="officer-session-pill" style="display:flex; align-items:center; gap:0.6rem; font-size:0.82rem; background:rgba(23,75,56,0.08); padding:0.3rem 0.75rem; border-radius:20px; margin-left:auto;">
-        <span id="officer-status-dot" style="display:inline-block; width:8px; height:8px; border-radius:50%; background:#70e000;"></span>
+      <span class="o-topbar-place">Napak District extension office</span>
+      <div id="officer-session-pill" class="o-session">
+        <span id="officer-status-dot" class="o-session-dot" aria-hidden="true"></span>
         <span id="officer-name-display">Checking...</span>
-        <a id="officer-auth-action" href="/officer/login" style="color:var(--o-green-dark); text-decoration:underline; font-weight:600; margin-left:0.3rem;">Sign In</a>
+        <a id="officer-auth-action" href="/officer/login">Sign in</a>
       </div>
     </header>
 
@@ -123,14 +130,14 @@
       const actionEl = document.getElementById("officer-auth-action");
 
       if (me.authenticated) {
-        nameEl.textContent = me.officer_name || "Extension Officer";
-        dotEl.style.background = "#70e000";
-        actionEl.textContent = "Sign Out";
+        nameEl.textContent = me.officer_name || "Extension officer";
+        dotEl.classList.add("is-in");
+        actionEl.textContent = "Sign out";
         actionEl.href = "/officer/logout";
       } else {
-        nameEl.textContent = "Not Signed In";
-        dotEl.style.background = "#ffcc00";
-        actionEl.textContent = "Sign In";
+        nameEl.textContent = "Not signed in";
+        dotEl.classList.remove("is-in");
+        actionEl.textContent = "Sign in";
         actionEl.href = "/officer/login?next=" + encodeURIComponent(window.location.pathname);
       }
     } catch (_) { /* ignore session errors silently */ }

@@ -4,6 +4,8 @@
 # is filled in by hand from that file so the numbers in the two always match.
 #
 # Run from the repo root: .venv/Scripts/python.exe scripts/run_evals.py
+# To re-run only some tasks (merged into the existing results file):
+#   .venv/Scripts/python.exe scripts/run_evals.py 10 13
 from __future__ import annotations
 
 import asyncio
@@ -312,8 +314,8 @@ async def task_10_translation():
     # the text recorded here.
     from backend.core.config import settings
 
-    if not settings.model_configured:
-        return None, "SKIPPED: no GROQ_API_KEY configured in this environment", 0.0, 0.0
+    if not (settings.translator_configured or settings.model_configured):
+        return None, "SKIPPED: no SUNBIRD_API_KEY or GROQ_API_KEY configured in this environment", 0.0, 0.0
     await new_app()
     from fastapi.testclient import TestClient
 
@@ -332,7 +334,7 @@ async def task_10_translation():
     shown = (farmer.get("text") or "").strip()
     ok = (
         r.status_code == 200
-        and r.json().get("translation_model") == settings.groq_model
+        and r.json().get("translation_model") in ("sunbird/sunflower-9b", settings.groq_model)
         and farmer.get("language") == settings.farmer_language
         and bool(shown)
         and shown != english
@@ -435,8 +437,12 @@ TASKS = [
 
 
 async def main():
-    results = {}
+    sys.stdout.reconfigure(encoding="utf-8")  # translated text has letters like ŋ
+    only = set(sys.argv[1:])
+    results = json.loads(RESULTS_FILE.read_text(encoding="utf-8")) if only and RESULTS_FILE.exists() else {}
     for task_id, name, fn in TASKS:
+        if only and task_id not in only:
+            continue
         runs = []
         for i in range(3):
             CAPTURED.clear()

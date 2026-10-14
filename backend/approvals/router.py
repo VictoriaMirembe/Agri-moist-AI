@@ -12,7 +12,7 @@ from sqlmodel import select
 from backend.agent.model_client import translate_text
 from backend.core.config import settings
 from backend.core.database import session_scope
-from backend.db.models import Advice, AdviceSource, Approval, Officer
+from backend.db.models import Advice, AdviceSource, Approval, Officer, Run
 from backend.logging.tool_log import run_logged
 
 router = APIRouter(prefix="/api/approvals", tags=["approvals"])
@@ -104,6 +104,11 @@ def _translate_and_store(session, advice: Advice) -> dict:
     result = translate_text(advice.final_text or "", settings.farmer_language)
     advice.translated_text = result["translated_text"]
     session.add(advice)
+    # A run's cost is everything AI spent on that advice: drafting, then translating.
+    run = session.get(Run, advice.run_id) if advice.run_id else None
+    if run is not None and result.get("cost"):
+        run.cost = round((run.cost or 0.0) + result["cost"], 6)
+        session.add(run)
     return {"model": result["model"], "cost": result.get("cost", 0.0)}
 
 

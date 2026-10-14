@@ -7,8 +7,11 @@ from pathlib import Path
 
 from fastapi import APIRouter, Request
 from fastapi.templating import Jinja2Templates
+from sqlmodel import select
 
 from backend.core.config import settings
+from backend.core.database import session_scope
+from backend.db.models import Contact, Household
 
 TEMPLATES_DIR = Path(__file__).resolve().parent.parent.parent / "frontend" / "farmer" / "templates"
 templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
@@ -55,6 +58,17 @@ def _farmer_page(request: Request, phone: str, active_view: str):
 @router.get("/ussd")
 @router.get("/farmer/ussd")
 def ussd_simulator(request: Request, phone: str = ""):
+    # The registered (made-up demo) numbers, so the simulator can pick one instead of
+    # guessing - an unregistered number gets "not registered", as on a real phone.
+    with session_scope() as session:
+        rows = session.exec(
+            select(Contact, Household).join(Household, Contact.household_id == Household.id).order_by(Household.code)
+        ).all()
+        phones = [
+            {"phone": c.phone, "name": c.name, "household_code": h.code, "group_id": h.group_id} for c, h in rows
+        ]
     return templates.TemplateResponse(
-        request, "ussd.html", {"service_code": settings.ussd_service_code, "phone": phone}
+        request,
+        "ussd.html",
+        {"service_code": settings.ussd_service_code, "phone": phone or (phones[0]["phone"] if phones else ""), "phones": phones},
     )
