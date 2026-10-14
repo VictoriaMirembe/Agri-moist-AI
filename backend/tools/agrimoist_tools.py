@@ -121,9 +121,14 @@ def get_field_records(session: Session, *, group_id: int, days: int = 60) -> dic
         code = household_by_id[o.household_id].code
         most_recent_by_household.setdefault(code, o.observed_on)
 
+    def _to_utc(dt: datetime) -> datetime:
+        if dt.tzinfo is None:
+            return dt.replace(tzinfo=timezone.utc)
+        return dt.astimezone(timezone.utc)
+
     days_since_any_visit = {
         household_by_id[h.id].code: (
-            (datetime.now(timezone.utc) - most_recent_by_household[household_by_id[h.id].code]).days
+            (datetime.now(timezone.utc) - _to_utc(most_recent_by_household[household_by_id[h.id].code])).days
             if household_by_id[h.id].code in most_recent_by_household
             else None
         )

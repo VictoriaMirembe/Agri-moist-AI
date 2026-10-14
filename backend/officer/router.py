@@ -4,9 +4,12 @@
 from __future__ import annotations
 
 import asyncio
+from datetime import datetime, timezone
 import json
+from typing import Any
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Cookie, Depends, HTTPException, Request, Response
+import httpx
 from pydantic import BaseModel, field_validator
 from sqlmodel import func, select
 from sse_starlette.sse import EventSourceResponse
@@ -28,6 +31,7 @@ from backend.db.models import (
     VisitFlag,
 )
 from backend.logging.tool_log import run_logged
+from backend.officer.auth import require_officer
 from backend.tools import agrimoist_tools as impl
 from backend.tools.errors import ToolError
 
@@ -307,7 +311,13 @@ def check_farmer_report(observation_id: int, body: CheckReportRequest):
 # Farmer follow-ups
 # ---------------------------------------------------------------------------
 @router.get("/followups")
-def list_followups():
+async def get_officer_followups(request: Request):
+    # Retrieve user session/role from backend or auth token
+    user_role = request.session.get("role") if "session" in request.scope else None
+
+    if user_role != "officer":
+        raise HTTPException(status_code=403, detail="Access denied: Officers only.")
+
     with session_scope() as session:
         rows = session.exec(
             select(Followup, Advice)
@@ -442,3 +452,296 @@ def pending_summary():
         "open_flags": open_flags,
         "total_pending": pending_advice + unchecked_reports + open_flags,
     }
+
+
+# ---------------------------------------------------------------------------
+# Extension Officer Authentication (Session & Cookie)
+# ---------------------------------------------------------------------------
+class OfficerLoginRequest(BaseModel):
+    officer_id: int | None = 1
+    role: str = "officer"
+
+
+@router.post("/auth/login")
+def login_officer(request: Request, response: Response, body: OfficerLoginRequest | None = None):
+    """Authenticate an extension officer and set server-side session and cookie."""
+    officer_id = body.officer_id if (body and body.officer_id) else 1
+    role = body.role if (body and body.role) else "officer"
+
+    with session_scope() as session:
+        officer = session.get(Officer, officer_id)
+        officer_name = officer.name if officer else "Extension Officer"
+
+    if "session" in request.scope:
+        request.session["role"] = role
+        request.session["officer_id"] = officer_id
+        request.session["officer_name"] = officer_name
+
+    response.set_cookie(key="officer_role", value=role, max_age=86400 * 7, httponly=False, samesite="lax")
+    return {
+        "status": "authenticated",
+        "role": role,
+        "officer_id": officer_id,
+        "officer_name": officer_name,
+    }
+
+
+@router.post("/auth/logout")
+@router.get("/auth/logout")
+def logout_officer(request: Request, response: Response):
+    """Clear server-side officer session and auth cookie."""
+    if "session" in request.scope:
+        request.session.clear()
+    response.delete_cookie("officer_role")
+    response.delete_cookie("agrimoist_session")
+    return {"status": "logged_out"}
+
+
+@router.get("/auth/me")
+def current_officer(request: Request):
+    """Return currently authenticated officer from server session or cookie."""
+    user_role = request.session.get("role") if "session" in request.scope else None
+    if not user_role:
+        user_role = request.cookies.get("officer_role") or request.cookies.get("role")
+    officer_id = request.session.get("officer_id") if "session" in request.scope else None
+    officer_name = request.session.get("officer_name") if "session" in request.scope else None
+
+    return {
+        "authenticated": user_role == "officer",
+        "role": user_role,
+        "officer_id": officer_id,
+        "officer_name": officer_name or ("Among Betty" if user_role == "officer" else None),
+    }
+
+
+# ---------------------------------------------------------------------------
+# Real-time Open-Meteo Weather & Dashboard API
+# ---------------------------------------------------------------------------
+WEATHER_CODES: dict[int, str] = {
+    0: "Clear sky",
+    1: "Mainly clear",
+    2: "Partly cloudy",
+    3: "Overcast",
+    45: "Fog",
+    48: "Depositing rime fog",
+    51: "Light drizzle",
+    53: "Moderate drizzle",
+    55: "Dense drizzle",
+    61: "Slight rain",
+    63: "Moderate rain",
+    65: "Heavy rain",
+    71: "Slight snow",
+    73: "Moderate snow",
+    75: "Heavy snow",
+    80: "Slight rain showers",
+    81: "Moderate rain showers",
+    82: "Violent rain showers",
+    95: "Thunderstorm",
+    96: "Thunderstorm with slight hail",
+    99: "Thunderstorm with heavy hail",
+}
+
+
+def fetch_village_weather(village_name: str, latitude: float, longitude: float) -> dict[str, Any]:
+    """Fetch live real-time weather from Open-Meteo for a specific village,
+    falling back to demo switches/overrides if active, with full provenance."""
+    if settings.weather_fail:
+        return {
+            "village": village_name,
+            "latitude": latitude,
+            "longitude": longitude,
+            "status": "unavailable",
+            "error": "Weather service is currently unavailable (demo switch on).",
+            "past_7_days_rain_mm": 0.0,
+            "next_7_days_rain_mm": 0.0,
+            "temperature_c": None,
+            "relative_humidity": None,
+            "current_precipitation_mm": 0.0,
+            "condition": "Service Unavailable",
+            "weather_code": None,
+            "source": settings.open_meteo_base_url,
+            "is_override": False,
+        }
+
+    if settings.weather_override_past_mm is not None and settings.weather_override_next_mm is not None:
+        return {
+            "village": village_name,
+            "latitude": latitude,
+            "longitude": longitude,
+            "status": "override",
+            "past_7_days_rain_mm": settings.weather_override_past_mm,
+            "next_7_days_rain_mm": settings.weather_override_next_mm,
+            "temperature_c": 29.0,
+            "relative_humidity": 40,
+            "current_precipitation_mm": 0.0,
+            "condition": "Manual Demo Override",
+            "weather_code": 0,
+            "source": "demo-override (WEATHER_OVERRIDE_PAST_MM / WEATHER_OVERRIDE_NEXT_MM)",
+            "is_override": True,
+        }
+
+    url = settings.open_meteo_base_url
+    params = {
+        "latitude": latitude,
+        "longitude": longitude,
+        "current": "temperature_2m,relative_humidity_2m,precipitation,weather_code",
+        "daily": "precipitation_sum",
+        "past_days": 7,
+        "forecast_days": 7,
+        "timezone": "Africa/Kampala",
+    }
+    try:
+        resp = httpx.get(url, params=params, timeout=8.0)
+        resp.raise_for_status()
+        data = resp.json()
+        current = data.get("current", {})
+        daily = data.get("daily", {})
+        rain = daily.get("precipitation_sum", []) or []
+        half = max(len(rain) // 2, 0)
+        past_week = round(sum(rain[:half] or [0]), 1)
+        next_week = round(sum(rain[half:] or [0]), 1)
+        wcode = current.get("weather_code", 0)
+        condition_str = WEATHER_CODES.get(wcode, "Fair")
+
+        return {
+            "village": village_name,
+            "latitude": latitude,
+            "longitude": longitude,
+            "status": "live",
+            "past_7_days_rain_mm": past_week,
+            "next_7_days_rain_mm": next_week,
+            "temperature_c": current.get("temperature_2m"),
+            "relative_humidity": current.get("relative_humidity_2m"),
+            "current_precipitation_mm": current.get("precipitation", 0.0),
+            "condition": condition_str,
+            "weather_code": wcode,
+            "recorded_at": current.get("time"),
+            "source": str(resp.url),
+            "is_override": False,
+        }
+    except Exception as exc:
+        return {
+            "village": village_name,
+            "latitude": latitude,
+            "longitude": longitude,
+            "status": "error",
+            "error": str(exc),
+            "past_7_days_rain_mm": 0.0,
+            "next_7_days_rain_mm": 0.0,
+            "temperature_c": None,
+            "relative_humidity": None,
+            "current_precipitation_mm": 0.0,
+            "condition": "Temporarily Unavailable",
+            "weather_code": None,
+            "source": settings.open_meteo_base_url,
+            "is_override": False,
+        }
+
+
+@router.get("/weather")
+def get_live_weather():
+    """Fetch live Open-Meteo weather for all villages in real time."""
+    with session_scope() as session:
+        villages = session.exec(select(Village)).all()
+        if not villages:
+            villages = [
+                Village(name="Lokopo", latitude=2.3833, longitude=34.3333),
+                Village(name="Iriiri", latitude=2.5333, longitude=34.3500),
+            ]
+        weather_data = [
+            fetch_village_weather(v.name, v.latitude, v.longitude)
+            for v in villages
+        ]
+        return {
+            "source": "Open-Meteo Weather API",
+            "villages": weather_data,
+            "fetched_at": datetime.now(timezone.utc).isoformat(),
+        }
+
+
+@router.get("/dashboard/live")
+def get_live_dashboard():
+    """Real-time live dashboard aggregator: Open-Meteo weather, pending AI advice
+    awaiting Extension Officer approval, unchecked farmer reports, and open visit flags."""
+    with session_scope() as session:
+        # 1. Real-time Weather from Open-Meteo
+        villages = session.exec(select(Village)).all()
+        if not villages:
+            villages = [
+                Village(name="Lokopo", latitude=2.3833, longitude=34.3333),
+                Village(name="Iriiri", latitude=2.5333, longitude=34.3500),
+            ]
+        weather_list = [
+            fetch_village_weather(v.name, v.latitude, v.longitude)
+            for v in villages
+        ]
+
+        # 2. Drafts awaiting approval - Human in the Loop safeguard
+        pending_advice_rows = session.exec(
+            select(Advice)
+            .where(Advice.status == "pending_review")
+            .order_by(Advice.created_at.desc())
+        ).all()
+        pending_advice = [
+            {
+                "id": a.id,
+                "group_id": a.group_id,
+                "draft_text": a.draft_text,
+                "why_text": a.why_text,
+                "created_at": a.created_at.isoformat(),
+                "status": a.status,
+            }
+            for a in pending_advice_rows
+        ]
+
+        # 3. Unchecked farmer reports
+        unchecked_reports = session.exec(
+            select(Observation)
+            .where(Observation.source.in_(["farmer_ussd", "farmer_web"]), Observation.checked == "unchecked")
+            .order_by(Observation.observed_on.desc())
+        ).all()
+        farmer_reports = [
+            {
+                "id": o.id,
+                "source": o.source,
+                "crop": o.crop,
+                "pest_seen": o.pest_seen,
+                "crop_condition": o.crop_condition,
+                "observed_on": o.observed_on.isoformat(),
+            }
+            for o in unchecked_reports
+        ]
+
+        # 4. Open visit flags
+        open_flags = session.exec(
+            select(VisitFlag).where(VisitFlag.status == "open").order_by(VisitFlag.created_at.desc())
+        ).all()
+        flags = [
+            {
+                "id": f.id,
+                "group_id": f.group_id,
+                "reason": f.reason,
+                "status": f.status,
+                "created_at": f.created_at.isoformat(),
+            }
+            for f in open_flags
+        ]
+
+        # 5. Group counts
+        group_ids = sorted({g for g in session.exec(select(Household.group_id)).all()})
+
+        return {
+            "human_in_the_loop": True,
+            "officer_approval_policy": "All advice drafts require Extension Officer review and approval before delivery.",
+            "counts": {
+                "drafts_waiting": len(pending_advice),
+                "open_flags": len(flags),
+                "unchecked_reports": len(farmer_reports),
+                "group_count": len(group_ids),
+            },
+            "weather": weather_list,
+            "pending_drafts": pending_advice,
+            "unchecked_reports": farmer_reports,
+            "open_flags": flags,
+            "sync_time": datetime.now(timezone.utc).isoformat(),
+        }

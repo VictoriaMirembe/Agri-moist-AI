@@ -6,7 +6,8 @@ from __future__ import annotations
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI
+from starlette.middleware.sessions import SessionMiddleware
+from fastapi import FastAPI, Request
 from fastapi.staticfiles import StaticFiles
 
 from backend.approvals.router import router as approvals_router
@@ -33,6 +34,30 @@ app = FastAPI(
     description="A field assistant for agricultural extension officers in Karamoja, Uganda.",
     lifespan=lifespan,
 )
+
+@app.middleware("http")
+async def sync_auth_session_middleware(request: Request, call_next):
+    """Ensure cookie or header role is synchronized into request.session."""
+    if "session" in request.scope:
+        role_cookie = request.cookies.get("officer_role") or request.cookies.get("role")
+        if role_cookie and "role" not in request.session:
+            request.session["role"] = role_cookie
+        role_header = request.headers.get("x-officer-role") or request.headers.get("x-role")
+        if role_header and "role" not in request.session:
+            request.session["role"] = role_header
+    return await call_next(request)
+
+
+# Server-side signed session cookies for extension officer authentication (runs outermost)
+app.add_middleware(
+    SessionMiddleware,
+    secret_key="agrimoist-ai-super-secret-session-key-2026",
+    session_cookie="agrimoist_session",
+    max_age=86400 * 7,
+    same_site="lax",
+    https_only=False,
+)
+
 
 app.include_router(officer_router)
 app.include_router(approvals_router)

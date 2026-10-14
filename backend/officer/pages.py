@@ -7,7 +7,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, HTTPException, Request, Response
+from fastapi.responses import RedirectResponse
 from fastapi.templating import Jinja2Templates
 from sqlmodel import select
 
@@ -23,6 +24,7 @@ from backend.db.models import (
     Village,
     VisitFlag,
 )
+from backend.officer.router import fetch_village_weather
 
 TEMPLATES_DIR = Path(__file__).resolve().parent.parent.parent / "frontend" / "officer" / "templates"
 templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
@@ -32,7 +34,25 @@ router = APIRouter(tags=["officer-pages"])
 
 @router.get("/")
 def home(request: Request):
+    user_role = request.session.get("role") if "session" in request.scope else None
+    if not user_role:
+        user_role = request.cookies.get("officer_role") or request.cookies.get("role")
+
     with session_scope() as session:
+        villages = session.exec(select(Village)).all()
+        if not villages:
+            villages = [
+                Village(name="Lokopo", latitude=2.3833, longitude=34.3333),
+                Village(name="Iriiri", latitude=2.5333, longitude=34.3500),
+            ]
+        weather_list = [fetch_village_weather(v.name, v.latitude, v.longitude) for v in villages]
+
+        pending_advices = session.exec(
+            select(Advice)
+            .where(Advice.status == "pending_review")
+            .order_by(Advice.created_at.desc())
+        ).all()
+
         group_ids = sorted({g for g in session.exec(select(Household.group_id)).all()})
         groups = []
         for group_id in group_ids:
@@ -71,7 +91,10 @@ def home(request: Request):
             ).all()
         )
         open_flags_total = len(session.exec(select(VisitFlag).where(VisitFlag.status == "open")).all())
-        drafts_total = len(session.exec(select(Advice).where(Advice.status == "pending_review")).all())
+        drafts_total = len(pending_advices)
+        officers = session.exec(select(Officer)).all()
+
+    officer_name = request.session.get("officer_name") if "session" in request.scope else None
 
     return templates.TemplateResponse(
         request,
@@ -81,6 +104,11 @@ def home(request: Request):
             "unchecked_reports": unchecked_reports,
             "open_flags_total": open_flags_total,
             "drafts_total": drafts_total,
+            "weather_list": weather_list,
+            "pending_advices": pending_advices,
+            "officers": officers,
+            "officer_name": officer_name,
+            "user_role": user_role,
         },
     )
 
@@ -144,7 +172,51 @@ def farmer_reports_page(request: Request):
 
 @router.get("/followups")
 def followups_page(request: Request):
+    user_role = request.session.get("role") if "session" in request.scope else None
+    if not user_role:
+        user_role = request.cookies.get("officer_role") or request.cookies.get("role")
+    if user_role != "officer":
+        raise HTTPException(status_code=403, detail="Access denied: Officers only.")
     return templates.TemplateResponse(request, "followups.html", {})
+
+
+@router.get("/officer/login")
+def officer_login_page(request: Request, next: str = "/"):
+    with session_scope() as session:
+        officers = session.exec(select(Officer)).all()
+    return templates.TemplateResponse(request, "officer_login.html", {"officers": officers, "next": next})
+
+
+@router.post("/officer/login")
+async def officer_login_submit(request: Request):
+    form_data = await request.form()
+    try:
+        officer_id = int(form_data.get("officer_id", 1))
+    except (ValueError, TypeError):
+        officer_id = 1
+    next_url = form_data.get("next", "/")
+    with session_scope() as session:
+        officer = session.get(Officer, officer_id)
+        officer_name = officer.name if officer else "Extension Officer"
+
+    if "session" in request.scope:
+        request.session["role"] = "officer"
+        request.session["officer_id"] = officer_id
+        request.session["officer_name"] = officer_name
+
+    resp = RedirectResponse(url=next_url, status_code=303)
+    resp.set_cookie(key="officer_role", value="officer", max_age=86400 * 7, httponly=False, samesite="lax")
+    return resp
+
+
+@router.get("/officer/logout")
+def officer_logout_page(request: Request):
+    if "session" in request.scope:
+        request.session.clear()
+    resp = RedirectResponse(url="/officer/login", status_code=303)
+    resp.delete_cookie("officer_role")
+    resp.delete_cookie("agrimoist_session")
+    return resp
 
 
 @router.get("/flags")

@@ -56,5 +56,16 @@ def client(test_db):
 
     from backend.main import app
 
+    with TestClient(app, cookies={"officer_role": "officer"}) as c:
+        yield c
+
+
+@pytest.fixture()
+def unauthenticated_client(test_db):
+    """A TestClient with no session or cookie set, to test role protection."""
+    from fastapi.testclient import TestClient
+
+    from backend.main import app
+
     with TestClient(app) as c:
         yield c

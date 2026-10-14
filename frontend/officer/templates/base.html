@@ -30,18 +30,25 @@
 <script src="/static/app.js"></script>
 <body>
   <header class="topbar">
-    <a href="/" class="brand">AgriMoist AI</a>
-    <nav>
-      <a href="/">Home</a>
-      <a href="/visits/new">Record visit</a>
-      <a href="/approvals">Approvals<span class="nav-badge amber" id="nav-badge-approvals" style="display:none;"></span></a>
-      <a href="/farmer-reports">Farmer reports<span class="nav-badge" id="nav-badge-reports" style="display:none;"></span></a>
-      <a href="/followups">Farmer follow-ups</a>
-      <a href="/flags">Visit flags<span class="nav-badge" id="nav-badge-flags" style="display:none;"></span></a>
-      <a href="/log">Log</a>
-      <a href="/ussd">USSD simulator</a>
-      <a href="/farmer">Farmer page</a>
-    </nav>
+    <div style="display:flex; align-items:center; gap:1.2rem; flex-wrap:wrap; flex-grow:1;">
+      <a href="/" class="brand">AgriMoist AI</a>
+      <nav>
+        <a href="/">Home</a>
+        <a href="/visits/new">Record visit</a>
+        <a href="/approvals">Approvals<span class="nav-badge amber" id="nav-badge-approvals" style="display:none;"></span></a>
+        <a href="/farmer-reports">Farmer reports<span class="nav-badge" id="nav-badge-reports" style="display:none;"></span></a>
+        <a href="/followups">Farmer follow-ups</a>
+        <a href="/flags">Visit flags<span class="nav-badge" id="nav-badge-flags" style="display:none;"></span></a>
+        <a href="/log">Log</a>
+        <a href="/ussd">USSD simulator</a>
+        <a href="/farmer">Farmer page</a>
+      </nav>
+    </div>
+    <div id="officer-session-pill" style="display:flex; align-items:center; gap:0.6rem; font-size:0.85rem; background:rgba(255,255,255,0.18); padding:0.3rem 0.75rem; border-radius:20px;">
+      <span id="officer-status-dot" style="display:inline-block; width:8px; height:8px; border-radius:50%; background:#70e000;"></span>
+      <span id="officer-name-display">Checking session...</span>
+      <a id="officer-auth-action" href="/officer/login" style="color:#fff; text-decoration:underline; font-weight:600; margin-left:0.3rem;">Sign In</a>
+    </div>
   </header>
   <main class="container">
     {% block content %}{% endblock %}
@@ -49,6 +56,28 @@
   {% block scripts %}{% endblock %}
 
   <script>
+  // Check authenticated officer session
+  (async function checkOfficerSession() {
+    try {
+      const me = await getJSON("/api/auth/me");
+      const nameEl = document.getElementById("officer-name-display");
+      const dotEl = document.getElementById("officer-status-dot");
+      const actionEl = document.getElementById("officer-auth-action");
+
+      if (me.authenticated) {
+        nameEl.textContent = me.officer_name || "Extension Officer";
+        dotEl.style.background = "#70e000";
+        actionEl.textContent = "Sign Out";
+        actionEl.href = "/officer/logout";
+      } else {
+        nameEl.textContent = "Not Signed In";
+        dotEl.style.background = "#ffcc00";
+        actionEl.textContent = "Sign In";
+        actionEl.href = "/officer/login?next=" + encodeURIComponent(window.location.pathname);
+      }
+    } catch (_) { /* ignore session errors silently */ }
+  })();
+
   // Load live badge counts for pending items in nav bar
   (async function loadNavBadges() {
     try {
