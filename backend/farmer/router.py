@@ -725,3 +725,230 @@ def _handle_ussd(session, household: Household, phone: str, steps: list[str], in
         return "END Thank you. This helps improve advice.", True
 
     return NOT_UNDERSTOOD, False
+
+
+# ---------------------------------------------------------------------------
+# Farmer voice audio scripts (English, Karamojong, Swahili)
+# ---------------------------------------------------------------------------
+VOICE_LANG_LABELS = {
+    "en": "English",
+    "kdj": "Ngakarimojong",
+    "karamojong": "Ngakarimojong",
+    "sw": "Kiswahili",
+    "swahili": "Kiswahili",
+}
+
+
+def _canonical_voice_lang(lang: str) -> str:
+    cleaned = (lang or "").strip().lower()
+    if cleaned in ("sw", "swahili", "kiswahili"):
+        return "sw"
+    if cleaned in ("kdj", "karamojong", "ngakarimojong", "ngakarimonjong"):
+        return "kdj"
+    return "en"
+
+
+@router.get("/api/farmer/voice-script")
+def get_farmer_voice_script(phone: str = "", lang: str = "en", view: str = "dashboard"):
+    """Returns a structured voice narration script for the farmer page in English,
+    Karamojong (Ngakarimojong), or Swahili (Kiswahili). Suitable for browser Web Speech
+    Synthesis and audio visualizers."""
+    norm_lang = _canonical_voice_lang(lang)
+    lang_name = VOICE_LANG_LABELS.get(norm_lang, "English")
+    sentences: list[dict[str, str]] = []
+
+    if view == "signin" or (view == "dashboard" and not phone):
+        if norm_lang == "sw":
+            sentences.append({
+                "label": "Karibu",
+                "text": "Karibu kwenye ukurasa wa wakulima wa AgriMoist AI. Tafadhali ingiza nambari yako ya simu iliyosajiliwa ili kupakia taarifa za shamba lako.",
+            })
+        elif norm_lang == "kdj":
+            sentences.append({
+                "label": "Ejok nooi",
+                "text": "Ejok nooi amana kon aloma AgriMoist AI. Tolim namba kon naka simu na egeritai ka ekaunan aanyun eboyer loka amana kon.",
+            })
+        else:
+            sentences.append({
+                "label": "Welcome",
+                "text": "Welcome to the AgriMoist AI farmer portal. Please sign in with your registered phone number to view your farm details, weather forecast, and extension officer advice.",
+            })
+        full_text = " ".join(s["text"] for s in sentences)
+        return {"language": norm_lang, "language_label": lang_name, "view": view, "sentences": sentences, "full_script": full_text}
+
+    if view == "report":
+        if norm_lang == "sw":
+            sentences.append({"label": "Ripoti tatizo", "text": "Ripoti tatizo shambani. Taarifa yako itatumwa kwa afisa kilimo wako kuikagua."})
+            sentences.append({"label": "Maelezo", "text": "Chagua kama umeona wadudu waharibifu, ukame na ukosefu wa mvua, mvua nyingi kupita kiasi, au mmea unaugua. Kisha chagua aina ya mmea na ubonyeze Tuma ripoti."})
+        elif norm_lang == "kdj":
+            sentences.append({"label": "Elimo aroniar", "text": "Elimo ngikaat na aroniar amana. Ekaunan ekoniite ripoot kon."})
+            sentences.append({"label": "Akisil", "text": "Tooseu arai ngikuruk, akamu na emam akiru, akiru na alal nooi, kori ekaat lo ekae. Kosodi tooseu ngimomwa kon kosodi tojuka."})
+        else:
+            sentences.append({"label": "Report issue", "text": "Report an issue. Your report will be shared with your extension officer for review."})
+            sentences.append({"label": "Options", "text": "Select what you observed: pests, no rain, too much rain, or sick crops. Choose your crop and click Send report."})
+        full_text = " ".join(s["text"] for s in sentences)
+        return {"language": norm_lang, "language_label": lang_name, "view": view, "sentences": sentences, "full_script": full_text}
+
+    if view == "visit":
+        if norm_lang == "sw":
+            sentences.append({"label": "Omba ziara", "text": "Omba afisa kilimo akutembelee shambani."})
+            sentences.append({"label": "Sababu", "text": "Eleza afisa wako sababu ya kuhitaji ukaguzi, kama vile wadudu shambani au chakula kidogo kilichobaki nyumbani."})
+        elif norm_lang == "kdj":
+            sentences.append({"label": "Ilipe ekaunan", "text": "Ilipe ekaunan ebu amana kon."})
+            sentences.append({"label": "Eboyer", "text": "Kitatam ekaunan nyo ebunere amana, kotere ngikuruk aloma amana kori edis akimuj na edongit."})
+        else:
+            sentences.append({"label": "Request visit", "text": "Request an extension officer visit. Let your officer know why you need a visit to your farm, such as pests or food security concerns."})
+        full_text = " ".join(s["text"] for s in sentences)
+        return {"language": norm_lang, "language_label": lang_name, "view": view, "sentences": sentences, "full_script": full_text}
+
+    if view == "followup":
+        if norm_lang == "sw":
+            sentences.append({"label": "Tathmini ya ushauri", "text": "Tathmini ya ushauri wa kilimo. Eleza kama ulifuata ushauri wa mwisho ulioidhinishwa, na kama ulikusaidia kuboresha mavuno yako."})
+        elif norm_lang == "kdj":
+            sentences.append({"label": "Akiwotokin", "text": "Akiwotokin naka akisil. Kitatam arai itupit akisil na sek, ka arai kitiakite amana kon."})
+        else:
+            sentences.append({"label": "Advice follow-up", "text": "Advice follow-up. Share whether you followed the approved advice from your extension officer, and whether it helped your field."})
+        full_text = " ".join(s["text"] for s in sentences)
+        return {"language": norm_lang, "language_label": lang_name, "view": view, "sentences": sentences, "full_script": full_text}
+
+    with session_scope() as session:
+        household = _household_for_phone(session, phone)
+        if household is None:
+            if norm_lang == "sw":
+                text = "Nambari hii ya simu haijasajiliwa. Tafadhali wasiliana na afisa wako wa kilimo."
+            elif norm_lang == "kdj":
+                text = "Namba kon na emam na egeritai. Inyono ekaunan kon."
+            else:
+                text = "This phone number is not registered. Please contact your extension officer."
+            return {"language": norm_lang, "language_label": lang_name, "view": view, "sentences": [{"label": "Notice", "text": text}], "full_script": text}
+
+        contact = _contact_for_phone(session, household, phone)
+        farmer_name = contact.name if contact else "Farmer"
+        village = session.get(Village, household.village_id)
+        district = session.get(District, village.district_id) if village else None
+        loc_str = ", ".join(filter(None, [village.name if village else None, district.name if district else None]))
+
+        advice_info = _advice_for_group(session, household.group_id)
+
+        if view == "advice":
+            if advice_info.get("has_advice"):
+                raw_text = advice_info.get("text", "")
+                officer = advice_info.get("officer_name") or "Extension officer"
+                if norm_lang == "sw":
+                    sentences.append({"label": "Ushauri wako", "text": f"Ushauri kutoka kwa afisa kilimo {officer}. {raw_text}"})
+                elif norm_lang == "kdj":
+                    sentences.append({"label": "Akisil kon", "text": f"Akisil naka ekaunan {officer}. {raw_text}"})
+                else:
+                    sentences.append({"label": "My advice", "text": f"Advice from extension officer {officer}. {raw_text}"})
+            else:
+                if norm_lang == "sw":
+                    sentences.append({"label": "Ushauri", "text": "Bado huna ushauri mpya kutoka kwa afisa wako. Utaonekana hapa baada ya kukaguliwa."})
+                elif norm_lang == "kdj":
+                    sentences.append({"label": "Akisil", "text": "Emam akisil na ngitet naka ekaunan sek. Ebuni aanyun na erikuno akisil."})
+                else:
+                    sentences.append({"label": "Advice", "text": "You have no new approved advice yet. Your officer will send it after checking your farm."})
+            full_text = " ".join(s["text"] for s in sentences)
+            return {"language": norm_lang, "language_label": lang_name, "view": view, "sentences": sentences, "full_script": full_text}
+
+        # Dashboard View:
+        if norm_lang == "sw":
+            sentences.append({"label": "Karibu", "text": f"Karibu kwenye shamba lako, {farmer_name}. Shamba limesajiliwa {loc_str}." if loc_str else f"Karibu kwenye shamba lako, {farmer_name}."})
+        elif norm_lang == "kdj":
+            sentences.append({"label": "Ejok nooi", "text": f"Ejok nooi amana kon, {farmer_name}. Amana na egeritai aloma {loc_str}." if loc_str else f"Ejok nooi amana kon, {farmer_name}."})
+        else:
+            sentences.append({"label": "Welcome", "text": f"Welcome to your farm dashboard, {farmer_name}. Registered at {loc_str}." if loc_str else f"Welcome to your farm dashboard, {farmer_name}."})
+
+        coordinates = (village.latitude, village.longitude) if village else None
+        weather = None
+        if coordinates:
+            try:
+                weather = impl.get_weather(latitude=coordinates[0], longitude=coordinates[1])
+            except Exception:
+                pass
+
+        latest_obs = session.exec(
+            select(Observation)
+            .where(Observation.household_id == household.id)
+            .order_by(Observation.observed_on.desc())
+        ).first()
+
+        past_rain = f"{weather['past_7_days_rain_mm']:.1f}" if weather and isinstance(weather.get("past_7_days_rain_mm"), (int, float)) else None
+        next_rain = f"{weather['next_7_days_rain_mm']:.1f}" if weather and isinstance(weather.get("next_7_days_rain_mm"), (int, float)) else None
+        soil_raw = (latest_obs.soil_wetness if latest_obs else "") or "not recorded"
+
+        soil_map = {
+            "wet": {"en": "Wet", "sw": "Unyevu mwingi", "kdj": "Adelunit nooi"},
+            "moist": {"en": "Moist", "sw": "Unyevu mzuri wa kutosha", "kdj": "Edol alupok akipi"},
+            "dry": {"en": "Dry", "sw": "Kavu", "kdj": "Ekatung"},
+        }
+        soil_text = soil_map.get(soil_raw.lower(), {"en": soil_raw, "sw": soil_raw, "kdj": soil_raw})[norm_lang]
+
+        if past_rain and next_rain:
+            if norm_lang == "sw":
+                sentences.append({
+                    "label": "Hali ya hewa",
+                    "text": f"Hali ya hewa na udongo. Mvua siku saba zilizopita: milimita {past_rain}. Utabiri wa mvua siku saba zijazo: milimita {next_rain}. Hali ya udongo: {soil_text}."
+                })
+            elif norm_lang == "kdj":
+                sentences.append({
+                    "label": "Eboyer loka amana",
+                    "text": f"Eboyer loka akiru ka alupok. Akiru napaarisyet 7 naka alotung: milimita {past_rain}. Etebito akiru napaarisyet 7 nukebunit: milimita {next_rain}. Eboyer loka alupok: {soil_text}."
+                })
+            else:
+                sentences.append({
+                    "label": "Field conditions",
+                    "text": f"Field conditions: Rain in the past 7 days: {past_rain} millimeters. Rain forecast for the next 7 days: {next_rain} millimeters. Latest soil condition: {soil_text}."
+                })
+        else:
+            if norm_lang == "sw":
+                sentences.append({"label": "Hali ya udongo", "text": f"Hali ya udongo shambani ni {soil_text}."})
+            elif norm_lang == "kdj":
+                sentences.append({"label": "Eboyer loka alupok", "text": f"Eboyer loka alupok amana kon erai {soil_text}."})
+            else:
+                sentences.append({"label": "Soil condition", "text": f"Recorded field soil condition is {soil_text}."})
+
+        if advice_info.get("has_advice"):
+            raw_text = advice_info.get("text", "")
+            officer = advice_info.get("officer_name") or "extension officer"
+            if norm_lang == "sw":
+                sentences.append({"label": "Ushauri wa afisa", "text": f"Ushauri kutoka kwa afisa kilimo {officer}: {raw_text}"})
+            elif norm_lang == "kdj":
+                sentences.append({"label": "Akisil naka ekaunan", "text": f"Akisil naka ekaunan {officer}: {raw_text}"})
+            else:
+                sentences.append({"label": "Officer advice", "text": f"Advice from extension officer {officer}: {raw_text}"})
+        else:
+            if norm_lang == "sw":
+                sentences.append({"label": "Ushauri", "text": "Bado huna ushauri mpya kutoka kwa afisa wako. Utaonekana hapa baada ya kukaguliwa."})
+            elif norm_lang == "kdj":
+                sentences.append({"label": "Akisil", "text": "Emam akisil na ngitet naka ekaunan sek. Ebuni aanyun na erikuno akisil."})
+            else:
+                sentences.append({"label": "Officer advice", "text": "You have no new advice yet. Your extension officer will send advice after review."})
+
+        zone = district.agroclimatic_zone if district else ""
+        calendars = session.exec(
+            select(CropCalendar).where(CropCalendar.zone == zone).order_by(CropCalendar.crop)
+        ).all()
+        if calendars:
+            crop_names = ", ".join(c.crop.capitalize() for c in calendars)
+            if norm_lang == "sw":
+                sentences.append({"label": "Msimu wa kupanda", "text": f"Mwongozo wa msimu wa kupanda kwa eneo lako unajumuisha mazao ya {crop_names}."})
+            elif norm_lang == "kdj":
+                sentences.append({"label": "Esaawa loka arowot", "text": f"Apak naka arowot ngimomwa nuka {zone} erai {crop_names}."})
+            else:
+                sentences.append({"label": "Planting guidance", "text": f"Planting calendar guidance for your zone covers {crop_names}."})
+
+        if norm_lang == "sw":
+            sentences.append({"label": "Huduma", "text": "Unaweza kutumia huduma za ukurasa huu kuripoti tatizo shambani, au kuomba afisa akutembelee."})
+        elif norm_lang == "kdj":
+            sentences.append({"label": "Aswamisiot", "text": "Ipedori iyon elimun aroniar amana, kori alip ekaunan ebu amana kon."})
+        else:
+            sentences.append({"label": "Services", "text": "You can use this page to report an issue with your crop, or request an extension officer visit."})
+
+    full_text = " ".join(s["text"] for s in sentences)
+    return {
+        "language": norm_lang,
+        "language_label": lang_name,
+        "view": view,
+        "sentences": sentences,
+        "full_script": full_text,
+    }

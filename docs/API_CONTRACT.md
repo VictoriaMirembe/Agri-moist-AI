@@ -52,6 +52,7 @@ Only this router may change an advice row's status to `approved` or
 | `GET` | `/api/farmer/profile` | `?phone=` | Registered farmer name, household code, and household group |
 | `GET` | `/api/farmer/dashboard` | `?phone=` | The farmer page's data: profile, latest observation, current weather (or `weather_error`) and crop calendar |
 | `GET` | `/api/farmer/advice` | `?phone=` | Most recent `approved`/`edited_and_approved` advice for that phone's household group, translated text if available. When advice is returned, a `farmer_viewed_advice` log entry is written |
+| `GET` | `/api/farmer/voice-script` | `?phone=&lang=&view=` | Localized voice audio narration script in English (`en`), Karamojong (`kdj`), or Swahili (`sw`) for speech synthesis |
 | `POST` | `/api/farmer/followup` | `{phone, advice_id, followed, helped}` | Saves a follow-up answer for approved advice belonging to that farmer's group |
 
 Every `?phone=` and `phone` field accepts `+256...`, `256...` or `07...`, with or
