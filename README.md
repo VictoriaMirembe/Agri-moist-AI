@@ -225,6 +225,15 @@ tokens and $0.60 per million output tokens (Groq's published price for this mode
 - **Bigger database:** move from SQLite to PostgreSQL when more than one office uses
   it (the app already uses SQLAlchemy/SQLModel, so this is a connection-string
   change, not a rewrite).
+- **Photo reports are not built yet.** Farmers can pick the problem and the pest from a
+  list, but cannot attach a photo of a damaged crop. Next step: optional photo upload
+  on the farmer web page for smartphone users, shown to the officer for diagnosis (the
+  officer still decides). USSD users on basic phones cannot send photos, and our
+  open-weights model reads text only, so photos would support the officer, not the AI
+  draft.
+- **Community alerts.** Officer-approved alerts to all farmers in an area (for example,
+  a disease outbreak warning), using the same approval gate and log as advice: a draft
+  alert is shown to farmers only after a named officer approves it.
 
 ## Known gaps
 
@@ -261,6 +270,10 @@ tokens and $0.60 per million output tokens (Groq's published price for this mode
   or USSD) writes a `farmer_viewed_advice` log row; the advice status stays
   `approved` / `edited_and_approved` - see `docs/API_CONTRACT.md`.
 - **Made-up data only** - 10 households, 2 villages, 3 groups; see `backend/db/seed.py`.
+- **No registration screen yet.** Households, farmer contacts and groups come from the
+  synthetic seed data (`backend/db/seed.py`), so no real farmer's data is used without
+  consent. Next step: an officer form to register a household and farmer that records
+  the farmer's consent before saving.
 - **Docker was not run in this build environment** (no Docker available here); the
   app was verified directly with `uvicorn` plus the automated test suite instead.
   The Dockerfile and compose file follow the same `pip install -r requirements.txt`

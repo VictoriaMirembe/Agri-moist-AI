@@ -293,3 +293,38 @@ def test_crop_calendar_source_link_only_allows_http(client):
     page = client.get("/farmer/home", params={"phone": "+256700000001"}).text
     assert "if (safeURL(entry.source_url))" in page
     assert "source.href = entry.source_url;" in page.split("if (safeURL(entry.source_url))", 1)[1]
+
+
+def _latest_report(client):
+    return client.get("/api/farmer-reports").json()[0]
+
+
+def test_typed_other_crop_is_saved_trimmed_and_lowercase(client):
+    r = client.post("/api/farmer-reports", json={"phone": "+256700000006", "problem": "crop_sick", "crop": "  GroundNuts  "})
+    assert r.status_code == 200
+    assert _latest_report(client)["crop"] == "groundnuts"
+    # Limited to 40 characters.
+    client.post("/api/farmer-reports", json={"phone": "+256700000006", "problem": "crop_sick", "crop": "x" * 60})
+    assert _latest_report(client)["crop"] == "x" * 40
+
+
+def test_other_crop_with_an_empty_box_saves_no_crop(client):
+    for crop in (None, "", "   "):
+        body = {"phone": "+256700000006", "problem": "no_rain"}
+        if crop is not None:
+            body["crop"] = crop
+        assert client.post("/api/farmer-reports", json=body).status_code == 200
+        assert _latest_report(client)["crop"] is None
+
+
+def test_sorghum_and_maize_are_saved_as_before(client):
+    for crop in ("sorghum", "maize"):
+        client.post("/api/farmer-reports", json={"phone": "+256700000006", "problem": "pests", "crop": crop})
+        assert _latest_report(client)["crop"] == crop
+
+
+def test_report_form_shows_a_crop_box_only_for_other(client):
+    page = client.get("/farmer/report", params={"phone": "+256700000006"}).text
+    assert '<div id="crop-other-field" hidden>' in page
+    assert 'id="crop-other" type="text" maxlength="40"' in page
+    assert "otherField.hidden = crop.value !== \"\";" in page

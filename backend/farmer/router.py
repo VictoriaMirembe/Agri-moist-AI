@@ -11,7 +11,7 @@ from typing import Literal
 
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import PlainTextResponse
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import text
 from sqlmodel import select
 
@@ -179,8 +179,17 @@ def _touch_ussd_session(session, session_id: str, phone: str, screen: str) -> No
 class FarmerReportRequest(BaseModel):
     phone: str
     problem: str  # pests, no_rain, heavy_rain, crop_sick
-    crop: str | None = None
+    crop: str | None = None  # sorghum, maize, or a crop name the farmer typed under "Other"
     pest: str | None = None  # optional: the pest the farmer picked or named (problem "pests" only)
+
+    @field_validator("crop")
+    @classmethod
+    def _tidy_crop(cls, value: str | None) -> str | None:
+        # A typed crop name is saved trimmed, lowercase and at most 40 characters;
+        # an empty one means no crop, as before. "sorghum" and "maize" are unchanged.
+        if value is None:
+            return None
+        return " ".join(value.split())[:40].strip().lower() or None
 
 
 def _report_fields(problem: str, pest: str | None) -> dict:
