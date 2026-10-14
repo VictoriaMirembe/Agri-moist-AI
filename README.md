@@ -30,6 +30,12 @@ A named extension officer approves every word before it reaches a farmer.
 | :---: | :---: | :---: | :---: | :---: |
 | MCP tools in our server | MCP servers used by the agent | Evaluation score (final check) | Automated tests | Model cost per agent run |
 
+<p align="center">
+  <img src="images/officer.png" width="49%" alt="Officer home: drafts waiting for approval, farmer messages and visits needed">
+  <img src="images/farmer.png" width="49%" alt="Farmer dashboard: rainfall, field record, voice reader and USSD code">
+</p>
+<p align="center"><em>Left: the extension officer's home screen. Right: the farmer's dashboard.</em></p>
+
 ## Table of contents
 
 - [The problem](#the-problem)
@@ -73,6 +79,9 @@ The officer keeps the judgement.
 3. **Draft.** An open-weights model writes advice in which every fact cites its source. Urgent cases are flagged for a visit instead.
 4. **Approve.** A named officer approves, edits or rejects each draft. Nothing reaches a farmer without that approval.
 5. **Follow up.** Farmers read approved advice by USSD or on the web, in English or Ngakarimojong, and say whether it helped.
+
+![Approve advice: a real AI draft for one household group, the reason behind it, and each of the 11 facts it used with its source](images/approve-advice.png)
+<p align="center"><em>A real draft from <code>gpt-oss-120b</code> waiting for an officer. Each fact shows where it came from: Open-Meteo, a farmer's USSD report, an officer visit or the FEWS NET crop calendar.</em></p>
 
 **Users**
 
@@ -267,6 +276,13 @@ No real person's data is used.
 | 6 | **Activity log** | Every tool call, with its MCP server, source, actor and per-run cost |
 | 7 | **AI tools (MCP)** (`/mcp`) | Both MCP servers are started and their tools listed live over the protocol |
 
+<p align="center">
+  <img src="images/ai-draft-run.png" width="58%" alt="AI draft screen: each MCP tool call checked off, with the raw calls under Technical details">
+  <img src="images/farmer-phone.png" width="19%" alt="Farmer page on a phone">
+  <img src="images/ussd-phone.png" width="19%" alt="USSD menu on the simulated basic phone">
+</p>
+<p align="center"><em>Left: an agent run, each step a real MCP tool call. Middle: the farmer page on a phone. Right: the USSD menu on a basic phone.</em></p>
+
 Officer and farmer screens share one database and refresh every 30 seconds. A farmer's
 report shows up on the officer's screens, and an officer's decision shows up on the
 farmer's page, without a reload.
@@ -329,6 +345,8 @@ be reused unchanged by other agents and tools.
 | MCP status API | `GET /api/mcp` | The same information as JSON, for scripts and monitoring |
 | **AI draft** screen | Group → **Draft advice** → **Technical details** | Each MCP call streamed live as it happens, e.g. `-> MCP call agrimoist.get_weather (attempt 1) {...}`, including retries |
 | **Activity log** | Officer sidebar → **More** → **Activity log**, or `/log` | Every call the assistant made, labelled with the MCP tool and the server that handled it (`agrimoist` or `mcp-server-time`) |
+
+![AI tools (MCP) page: tool calls so far, linked AI services, and the tools each MCP server reports live](images/mcp-tools.png)
 
 ### Connect your own MCP client
 
@@ -449,6 +467,7 @@ frontend/
   static/         Shared CSS and JavaScript
 data/             Crop calendar (FEWS NET) and the SQLite database
 docs/             API contract, tool contract, user research
+images/           Screenshots used in this README
 scripts/          Evaluation harness and saved results
 tests/            pytest suite
 ```
