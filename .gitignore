@@ -30,3 +30,6 @@ data/*.db-shm
 .idea/
 .DS_Store
 Thumbs.db
+
+# Generated Sunbird voice audio (re-created on demand)
+data/voice_cache/

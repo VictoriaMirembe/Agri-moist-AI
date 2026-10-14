@@ -106,6 +106,7 @@
         </div>
       </aside>
 
+      <div id="offline-notice" class="farmer-data-note" role="status" hidden></div>
       <div id="local-file-notice" class="farmer-data-note" role="status" hidden>
         You are viewing the dashboard file directly. Open the farmer portal through the running AgriMoist AI app to load registered farm data and use its services.
       </div>
@@ -510,11 +511,36 @@ async function loadDashboard() {
     return;
   }
 
+  // Show the saved copy at once (instant on a slow connection), then refresh it.
+  const saved = readFarmCopy();
+  if (saved) renderDashboard(saved.dashboard, saved.advice);
   try {
     const [dashboard, advice] = await Promise.all([
       getJSON("/api/farmer/dashboard?phone=" + encodeURIComponent(farmerPhone)),
       getJSON("/api/farmer/advice?phone=" + encodeURIComponent(farmerPhone)),
     ]);
+    renderDashboard(dashboard, advice);
+    saveFarmCopy({ dashboard, advice });
+    showOfflineNotice(null);
+  } catch (error) {
+    if (saved) {
+      showOfflineNotice(saved.saved_at);
+      return;
+    }
+    document.getElementById("farmer-location").textContent = error.message || "Could not load your registered farm details.";
+    document.getElementById("weather-status").textContent = "Unavailable";
+    const note = document.getElementById("weather-note");
+    note.textContent = isFilePreview
+      ? "Live farm data cannot be loaded from a file preview. Open the farmer portal through the running app."
+      : "Farm details could not be loaded.";
+    note.hidden = false;
+    document.getElementById("crop-calendars").textContent = "Crop calendar unavailable.";
+    document.getElementById("advice-preview").textContent = "Could not load approved advice.";
+    document.getElementById("requests-status").textContent = "Unavailable";
+  }
+}
+
+function renderDashboard(dashboard, advice) {
     const profile = dashboard.profile;
     document.getElementById("farmer-name").textContent = profile.full_name;
     document.getElementById("farmer-location").textContent =
@@ -596,19 +622,50 @@ async function loadDashboard() {
     }
     renderRecentRequests(dashboard.recent_requests || []);
     renderAdvice(advice);
-  } catch (error) {
-    document.getElementById("farmer-location").textContent = error.message || "Could not load your registered farm details.";
-    document.getElementById("weather-status").textContent = "Unavailable";
-    const note = document.getElementById("weather-note");
-    note.textContent = isFilePreview
-      ? "Live farm data cannot be loaded from a file preview. Open the farmer portal through the running app."
-      : "Farm details could not be loaded.";
-    note.hidden = false;
-    document.getElementById("crop-calendars").textContent = "Crop calendar unavailable.";
-    document.getElementById("advice-preview").textContent = "Could not load approved advice.";
-    document.getElementById("requests-status").textContent = "Unavailable";
+}
+
+// Saved copy of this farmer's page on the phone (localStorage), for weak signal:
+// the page opens instantly from it, and still shows the last approved advice when
+// there is no connection. Only data this farmer already loaded is kept, and signing
+// out removes it, since farm phones are often shared.
+const FARM_COPY_KEY = "agrimoist_farm_copy_" + farmerPhone;
+
+function readFarmCopy() {
+  try {
+    return JSON.parse(localStorage.getItem(FARM_COPY_KEY) || "null");
+  } catch (_) {
+    return null;
   }
 }
+
+function saveFarmCopy(parts) {
+  try {
+    const copy = { ...(readFarmCopy() || {}), ...parts, saved_at: Date.now() };
+    localStorage.setItem(FARM_COPY_KEY, JSON.stringify(copy));
+  } catch (_) {
+    // storage full or blocked: the page still works, just without a saved copy
+  }
+}
+
+function showOfflineNotice(savedAt) {
+  const notice = document.getElementById("offline-notice");
+  if (!notice) return;
+  notice.hidden = !savedAt;
+  if (savedAt) {
+    notice.textContent = "No connection. Showing your farm as saved on this phone at " +
+      new Date(savedAt).toLocaleString() + ". It will update when the signal returns.";
+  }
+}
+
+document.querySelectorAll(".farmer-signout").forEach((link) => {
+  link.addEventListener("click", () => {
+    try {
+      Object.keys(localStorage)
+        .filter((key) => key.startsWith("agrimoist_farm_copy_"))
+        .forEach((key) => localStorage.removeItem(key));
+    } catch (_) {}
+  });
+});
 
 function connectSubmit(formId, errorId, doneId, url, makeBody) {
   const form = document.getElementById(formId);
@@ -703,6 +760,11 @@ async function refreshFarmerUpdates() {
   const updates = await getJSON("/api/farmer/updates?phone=" + encodeURIComponent(farmerPhone));
   renderRecentRequests(updates.recent_requests || []);
   renderAdvice(updates.advice);
+  const saved = readFarmCopy();
+  if (saved && saved.dashboard) {
+    saveFarmCopy({ advice: updates.advice, dashboard: { ...saved.dashboard, recent_requests: updates.recent_requests || [] } });
+  }
+  showOfflineNotice(null);
 }
 
 if (activeView === "dashboard") {
@@ -710,8 +772,17 @@ if (activeView === "dashboard") {
   autoRefresh(refreshFarmerUpdates);
 } else if (!isFilePreview && (activeView === "advice" || activeView === "followup")) {
   getJSON("/api/farmer/advice?phone=" + encodeURIComponent(farmerPhone))
-    .then(renderAdvice)
+    .then((advice) => {
+      renderAdvice(advice);
+      saveFarmCopy({ advice });
+    })
     .catch((error) => {
+      const saved = readFarmCopy();
+      if (saved && saved.advice) {
+        renderAdvice(saved.advice);
+        showOfflineNotice(saved.saved_at);
+        return;
+      }
       const message = error.message || "Could not load approved advice.";
       const detail = document.getElementById("advice-detail");
       const loading = document.getElementById("followup-loading");

@@ -5,17 +5,18 @@
 # edited_and_approved rows (see backend/core/database.py).
 from __future__ import annotations
 
+import hashlib
 import hmac
 import logging
 import re
 import threading
-import time
 from datetime import date, datetime, timezone
+from pathlib import Path
 from typing import Literal
 
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.concurrency import run_in_threadpool
-from fastapi.responses import PlainTextResponse
+from fastapi.responses import FileResponse, PlainTextResponse
 from pydantic import BaseModel, Field, ValidationError, field_validator
 from sqlalchemy import text
 from sqlmodel import select
@@ -986,13 +987,13 @@ class VoiceAudioRequest(BaseModel):
     lang: str = "en"
 
 
-# (lang, text) -> (stored_at, result). Sunbird's signed audio URLs last 30 minutes,
-# so a cached one is reused for 25. After that the stored audio is re-signed (~2s)
-# instead of generated again (10-30s), so a sentence is only ever generated once.
-_VOICE_AUDIO_CACHE: dict[tuple[str, str], tuple[float, dict]] = {}
-_VOICE_AUDIO_TTL_SECONDS = 25 * 60
-# One lock per sentence: a page-load warm-up and a Listen press asking for the same
-# sentence at once share one Sunbird call instead of paying for two.
+# Each piece of speech is downloaded from Sunbird once and kept as a file named
+# after its text, so it is generated once ever (it survives restarts), and phones
+# keep it in their own cache: listening again downloads nothing.
+VOICE_CACHE_DIR = Path(__file__).resolve().parents[2] / "data" / "voice_cache"
+_VOICE_FILE_NAME = re.compile(r"^[0-9a-f]{32}\.wav$")
+# One lock per piece: a page-load warm-up and a Listen press asking for the same
+# piece at once share one Sunbird call instead of paying for two.
 _VOICE_AUDIO_LOCKS: dict[tuple[str, str], threading.Lock] = {}
 _VOICE_AUDIO_LOCKS_GUARD = threading.Lock()
 
@@ -1000,27 +1001,31 @@ _VOICE_AUDIO_LOCKS_GUARD = threading.Lock()
 @router.post("/api/farmer/voice-audio")
 def get_farmer_voice_audio(body: VoiceAudioRequest):
     """Speech for one short piece of the voice script, from Sunbird AI's Ugandan TTS
-    voices. 503 when Sunbird is not configured or fails; the page then uses the
-    browser's own voice instead."""
+    voices, served from this app. 503 when Sunbird is not configured or fails; the
+    page then uses the browser's own voice instead."""
     lang = _canonical_voice_lang(body.lang)
-    key = (lang, body.text.strip())
+    text = body.text.strip()
+    name = hashlib.sha256(f"{lang}|{text}".encode("utf-8")).hexdigest()[:32] + ".wav"
+    path = VOICE_CACHE_DIR / name
     with _VOICE_AUDIO_LOCKS_GUARD:
-        lock = _VOICE_AUDIO_LOCKS.setdefault(key, threading.Lock())
+        lock = _VOICE_AUDIO_LOCKS.setdefault((lang, text), threading.Lock())
     with lock:
-        now = time.monotonic()
-        cached = _VOICE_AUDIO_CACHE.get(key)
-        if cached and now - cached[0] < _VOICE_AUDIO_TTL_SECONDS:
-            return cached[1]
-        result = None
-        if cached and cached[1].get("gcs_object"):
-            url = model_client.refresh_speech_url(cached[1]["gcs_object"])
-            if url:
-                result = {**cached[1], "audio_url": url}
-        if result is None:
-            result = model_client.synthesize_speech(key[1], lang)
-        if result is None:
-            raise HTTPException(503, "Voice audio is unavailable; use the browser voice.")
-        if len(_VOICE_AUDIO_CACHE) > 2000:
-            _VOICE_AUDIO_CACHE.clear()
-        _VOICE_AUDIO_CACHE[key] = (now, result)
-        return result
+        if not path.exists():
+            result = model_client.synthesize_speech(text, lang)
+            audio = model_client.download_audio(result["audio_url"]) if result else None
+            if not audio:
+                raise HTTPException(503, "Voice audio is unavailable; use the browser voice.")
+            VOICE_CACHE_DIR.mkdir(parents=True, exist_ok=True)
+            partial = path.with_suffix(".part")
+            partial.write_bytes(audio)
+            partial.replace(path)  # never serve a half-written file
+    return {"audio_url": f"/api/farmer/voice-audio/{name}", "voice": model_client.SUNBIRD_VOICES[lang][1]}
+
+
+@router.get("/api/farmer/voice-audio/{name}")
+def get_farmer_voice_audio_file(name: str):
+    path = VOICE_CACHE_DIR / name
+    if not _VOICE_FILE_NAME.match(name) or not path.is_file():
+        raise HTTPException(404, "No such voice audio.")
+    # The name is derived from the text, so a file never changes: phones may keep it.
+    return FileResponse(path, media_type="audio/wav", headers={"Cache-Control": "public, max-age=31536000, immutable"})

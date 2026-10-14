@@ -261,20 +261,13 @@ def synthesize_speech(text: str, lang: str) -> dict[str, Any] | None:
         return None
 
 
-def refresh_speech_url(gcs_object: str) -> str | None:
-    """A fresh signed URL for audio Sunbird already generated (~2s, against 10-30s to
-    generate it again). None on any failure; the caller then generates it anew."""
-    if not settings.translator_configured or not gcs_object:
-        return None
+def download_audio(url: str) -> bytes | None:
+    """The generated audio itself, so the app can keep it and serve it (Sunbird's
+    storage links expire after 30 minutes and cannot be cached by browsers)."""
     try:
-        response = httpx.get(
-            settings.sunbird_api_url.rstrip("/") + "/tasks/audio/speech/url",
-            headers={"Authorization": f"Bearer {settings.sunbird_api_key}"},
-            params={"gcs_object": gcs_object},
-            timeout=30,
-        )
+        response = httpx.get(url, timeout=60)
         response.raise_for_status()
-        return response.json().get("audio_url") or None
+        return response.content or None
     except Exception:  # noqa: BLE001
         return None
 

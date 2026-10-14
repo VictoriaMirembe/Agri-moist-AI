@@ -26,7 +26,7 @@ A named extension officer approves every word before it reaches a farmer.
 
 > **Agentic AI for Africa Challenge** · Agriculture & Food Security track · Climate-smart advisory theme
 
-| 9 | 2 | 37 / 42 | 140 | ~$0.0008 |
+| 9 | 2 | 37 / 42 | 141 | ~$0.0008 |
 | :---: | :---: | :---: | :---: | :---: |
 | MCP tools in our server | MCP servers used by the agent | Evaluation score (final check) | Automated tests | Model cost per agent run |
 
@@ -90,7 +90,8 @@ The officer keeps the judgement.
 - **Two MCP servers.** Our own 9-tool AgriMoist server, plus the borrowed reference server `mcp-server-time`, both connected over stdio.
 - **Basic-phone access.** A USSD menu compatible with Africa's Talking, plus an in-browser handset simulator.
 - **Local language.** Approved advice is translated into Ngakarimojong by Sunbird AI. Translations that change any number are rejected.
-- **Voice reader.** Farmers can have their page read aloud in English, Swahili or Karamojong, using Sunbird AI's Ugandan voices.
+- **Voice reader.** Farmers can have their page read aloud in English, Swahili or Karamojong, using Sunbird AI's Ugandan voices. Speech is generated in short pieces and prepared in the background when the page opens. Each piece is generated once, stored by the app, and kept by the phone, so listening again uses no data.
+- **Built for weak signal.** The farmer page keeps a copy of the farmer's own data on the phone. It opens instantly, and when there is no connection it still shows the last approved advice, clearly labelled as saved. Signing out removes the copy, because farm phones are often shared.
 - **Full audit log.** Every tool call, officer decision and farmer action is logged with its inputs, outputs, source, actor and cost.
 
 ## Architecture
@@ -154,7 +155,7 @@ drafting advice. See [ARCHITECTURE.md](ARCHITECTURE.md) for the full design.
 | Translation and speech | [Sunbird AI](https://sunbird.ai): `sunflower-9b` translation and Orpheus text-to-speech |
 | Persistence | SQLite via SQLModel / SQLAlchemy |
 | External data | [Open-Meteo](https://open-meteo.com) weather; [FEWS NET](https://fews.net) crop calendar |
-| Testing | pytest (140 tests) and a 14-task evaluation harness |
+| Testing | pytest (141 tests) and a 14-task evaluation harness |
 | Deployment | Docker and Docker Compose; hosted demo on Render |
 
 ## Getting started
@@ -421,7 +422,7 @@ about $0.00006.
 ## Testing
 
 ```bash
-pytest                              # 140 tests
+pytest                              # 141 tests
 docker compose run app pytest       # inside Docker
 python scripts/run_evals.py         # 14-task evaluation (uses the real model if a key is set)
 ```
@@ -480,8 +481,8 @@ This is a hackathon build. We state its limits plainly.
 
 | Name | Role |
 | --- | --- |
+| **Victoria Mirembe Ssekajja** | **Team lead**; officer app and approval gate |
 | Ashelycole Niwasiima | Core agent and backend |
-| Victoria Mirembe Ssekajja | Officer app and approval gate |
 | Evans Rwothomio | Farmer channels and data |
 
 ## Acknowledgements
