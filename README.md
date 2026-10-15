@@ -7,6 +7,8 @@
 The agent turns weather, pest and field-visit data into sourced, plot-specific advice.
 A named extension officer approves every word before it reaches a farmer.
 
+Demo video (under 3 min): https://www.youtube.com/watch?v=nb6u-yo-OVU
+
 [![Python 3.12](https://img.shields.io/badge/python-3.12-3776AB?logo=python&logoColor=white)](https://www.python.org/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-009688?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
 [![LangGraph](https://img.shields.io/badge/agent-LangGraph-1C3C3C)](https://github.com/langchain-ai/langgraph)
@@ -263,6 +265,8 @@ Open-Meteo needs no key. API keys: [Groq](https://console.groq.com/keys) · [Sun
 
 ## Demo walkthrough
 
+Watch the recorded demo first: https://www.youtube.com/watch?v=nb6u-yo-OVU
+
 The demo uses synthetic data for 10 households in 2 villages and 3 household groups.
 No real person's data is used.
 
@@ -478,7 +482,7 @@ tests/            pytest suite
 
 This is a hackathon build. We state its limits plainly.
 
-- **Officer authentication is demo-grade.** Officers choose their name at sign-in with no password, and the role is carried in a cookie. This is not production authentication.
+- **Officer authentication is demo-grade.** Officers sign in by choosing their name, with no password yet. The sign-in is held only in a signed server-side session; plain cookies or headers are not trusted. This is not production authentication.
 - **Farmer sign-in is a phone-number lookup**, not authentication.
 - **The model can still give wrong advice.** See EVALS task 2. Officer approval is the safeguard.
 - **Only numbers are checked automatically against the sources**, and only numbers written as digits. The officer reviews the rest of the wording.
