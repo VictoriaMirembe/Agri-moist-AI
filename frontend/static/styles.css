@@ -1853,3 +1853,79 @@ body.farmer {
   .ussd-phone .ussd-screen { min-height: 132px; font-size: 0.92rem; }
   .ussd-phone .keypad button { min-height: 42px; font-size: 1.15rem; }
 }
+
+/* ---------------------------------------------------------------------------
+   Soft alerts: a light tinted background, darker matching text, a 4px left
+   border and a small icon. Used for error, warning, success and info messages
+   on officer and farmer pages. Classes are added next to the existing ones (which
+   JavaScript still uses), so the repeated `.alert` in the officer selectors exists only
+   to outrank older officer rules such as `body.officer p.pill.red` and
+   `body.officer .o-note`; nothing here sets `display`, so `hidden` and
+   the scripts' own show/hide keep working. Icons are our own SVGs, used as masks so
+   they take the alert's colour.
+   --------------------------------------------------------------------------- */
+:root {
+  --alert-info: var(--am-cobalt-dark);
+  --alert-info-bg: var(--am-cobalt-wash);
+  --alert-info-line: var(--am-cobalt);
+  --alert-icon-success: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20'%3E%3Cpath d='M10 1.5a8.5 8.5 0 1 0 0 17 8.5 8.5 0 0 0 0-17zm-1.2 12.3-3.6-3.6 1.4-1.4 2.2 2.2 4.6-4.6 1.4 1.4z'/%3E%3C/svg%3E");
+  --alert-icon-warning: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20'%3E%3Cpath d='M10 1.8 0.9 17.5h18.2zM9 7.5h2v5H9zm0 6.5h2v2H9z'/%3E%3C/svg%3E");
+  --alert-icon-danger: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20'%3E%3Cpath d='M10 1.5a8.5 8.5 0 1 0 0 17 8.5 8.5 0 0 0 0-17zM9 5h2v6.5H9zm0 8h2v2H9z'/%3E%3C/svg%3E");
+  --alert-icon-info: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20'%3E%3Cpath d='M10 1.5a8.5 8.5 0 1 0 0 17 8.5 8.5 0 0 0 0-17zM9 8.5h2V15H9zm0-3.5h2v2H9z'/%3E%3C/svg%3E");
+}
+
+.alert,
+body.officer .alert.alert.alert {
+  position: relative;
+  margin: 0.8rem 0 0;
+  padding: 0.7rem 0.9rem 0.7rem 2.5rem;
+  border: 0;
+  border-left: 4px solid currentColor;
+  border-radius: 8px;
+  min-height: 0;
+  font-size: 0.92rem;
+  font-weight: 500;
+  line-height: 1.5;
+  text-align: left;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.alert::before {
+  content: "";
+  position: absolute;
+  top: 0.78rem;
+  left: 0.85rem;
+  width: 1.1rem;
+  height: 1.1rem;
+  background-color: currentColor;
+  -webkit-mask: var(--alert-icon) center / contain no-repeat;
+  mask: var(--alert-icon) center / contain no-repeat;
+}
+
+.alert a { color: inherit; font-weight: 700; text-decoration: underline; }
+
+.alert-success,
+body.officer .alert.alert.alert-success { --alert-icon: var(--alert-icon-success); background: var(--green-bg); color: var(--green); border-left-color: var(--green); }
+.alert-warning,
+body.officer .alert.alert.alert-warning { --alert-icon: var(--alert-icon-warning); background: var(--amber-bg); color: var(--amber); border-left-color: var(--amber); }
+.alert-danger,
+body.officer .alert.alert.alert-danger { --alert-icon: var(--alert-icon-danger); background: var(--red-bg); color: var(--red); border-left-color: var(--red); }
+.alert-info,
+body.officer .alert.alert.alert-info { --alert-icon: var(--alert-icon-info); background: var(--alert-info-bg); color: var(--alert-info); border-left-color: var(--alert-info-line); }
+
+/* Close button, for a message that can already be dismissed. */
+.alert-close {
+  position: absolute;
+  top: 0.35rem;
+  right: 0.4rem;
+  min-width: 32px;
+  min-height: 32px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font-size: 1.2rem;
+  line-height: 1;
+  cursor: pointer;
+}
+.alert:has(.alert-close) { padding-right: 2.6rem; }

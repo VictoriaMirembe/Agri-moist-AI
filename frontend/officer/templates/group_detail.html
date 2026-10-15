@@ -18,9 +18,9 @@
   {% if signed_in %}
   <button class="btn" id="draft-btn">Draft advice</button>
   {% else %}
-  <p class="o-signin-note">Please <a href="/officer/login?next=/groups/{{ group_id }}">sign in</a> to draft advice.</p>
+  <p class="o-signin-note alert alert-info">Please <a href="/officer/login?next=/groups/{{ group_id }}">sign in</a> to draft advice.</p>
   {% endif %}
-  <p id="draft-error" class="pill red" style="display:none;margin-top:0.8rem;"></p>
+  <p id="draft-error" class="pill red alert alert-danger" style="display:none;margin-top:0.8rem;"></p>
 </section>
 
 {% if flags %}

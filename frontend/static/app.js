@@ -280,7 +280,7 @@ function reportCard(r, idAttr) {
     ${details ? `<dl class="o-facts">${details}</dl>` : ""}
     <p>${r.notes ? escapeHTML(r.notes) : "<span class='muted'>No extra notes.</span>"}</p>
     ${r.checked === "unchecked" ? `<div class="row actions"><button class="btn secondary" onclick="markChecked(${Number(r.id)})">Mark as checked</button></div>` : ""}
-    <p class="error pill red" style="display:none;margin-top:0.6rem;"></p>
+    <p class="error pill red alert alert-danger" style="display:none;margin-top:0.6rem;"></p>
   </article>`;
 }
 
@@ -296,6 +296,6 @@ function flagCard(f, idAttr) {
     <p>${escapeHTML(plainFact(f.reason))}</p>
     ${f.visited_by ? `<p class="muted">Visited - marked by ${escapeHTML(f.visited_by)}, ${escapeHTML(formatWhen(f.visited_at))}</p>` : ""}
     ${f.status === "open" ? `<div class="row actions"><button class="btn secondary" onclick="markVisited(${Number(f.id)})">Mark as visited</button></div>` : ""}
-    <p class="error pill red" style="display:none;margin-top:0.6rem;"></p>
+    <p class="error pill red alert alert-danger" style="display:none;margin-top:0.6rem;"></p>
   </article>`;
 }

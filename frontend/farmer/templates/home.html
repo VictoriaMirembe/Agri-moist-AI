@@ -106,8 +106,8 @@
         </div>
       </aside>
 
-      <div id="offline-notice" class="farmer-data-note" role="status" hidden></div>
-      <div id="local-file-notice" class="farmer-data-note" role="status" hidden>
+      <div id="offline-notice" class="farmer-data-note alert alert-warning" role="status" hidden></div>
+      <div id="local-file-notice" class="farmer-data-note alert alert-info" role="status" hidden>
         You are viewing the dashboard file directly. Open the farmer portal through the running AgriMoist AI app to load registered farm data and use its services.
       </div>
 
@@ -292,10 +292,10 @@
             <label for="crop-other">Which crop? Type its name</label>
             <input id="crop-other" type="text" maxlength="40" autocomplete="off" autocapitalize="none" placeholder="For example: groundnuts">
           </div>
-          <p id="report-error" class="farmer-form-error" role="alert" hidden></p>
+          <p id="report-error" class="farmer-form-error alert alert-danger" role="alert" hidden></p>
           <button class="farmer-button farmer-button-primary" type="submit">Send report</button>
         </form>
-        <p id="report-done" class="farmer-success" role="status" hidden>Thank you. Your officer will check this report.</p>
+        <p id="report-done" class="farmer-success alert alert-success" role="status" hidden>Thank you. Your officer will check this report.</p>
       </section>
 
       <section id="visit-view" class="farmer-action-page farmer-panel" aria-labelledby="visit-heading" hidden>
@@ -310,10 +310,10 @@
             <option value="Little food left">Little food left</option>
             <option value="Other">Other</option>
           </select>
-          <p id="visit-error" class="farmer-form-error" role="alert" hidden></p>
+          <p id="visit-error" class="farmer-form-error alert alert-danger" role="alert" hidden></p>
           <button class="farmer-button farmer-button-primary" type="submit">Send visit request</button>
         </form>
-        <p id="visit-done" class="farmer-success" role="status" hidden>Request sent. Your officer will plan a visit.</p>
+        <p id="visit-done" class="farmer-success alert alert-success" role="status" hidden>Request sent. Your officer will plan a visit.</p>
       </section>
 
       <section id="followup-view" class="farmer-action-page farmer-panel" aria-labelledby="followup-heading" hidden>
@@ -334,10 +334,10 @@
             <option value="no">No</option>
             <option value="">Too early to say</option>
           </select>
-          <p id="followup-error" class="farmer-form-error" role="alert" hidden></p>
+          <p id="followup-error" class="farmer-form-error alert alert-danger" role="alert" hidden></p>
           <button class="farmer-button farmer-button-primary" type="submit">Send follow-up</button>
         </form>
-        <p id="followup-done" class="farmer-success" role="status" hidden>Thank you. This helps improve advice.</p>
+        <p id="followup-done" class="farmer-success alert alert-success" role="status" hidden>Thank you. This helps improve advice.</p>
         <p id="followup-none" class="farmer-data-note" hidden>You have no approved advice to answer about yet.</p>
       </section>
 
@@ -352,7 +352,7 @@
         <form id="sign-in-form" class="farmer-form">
           <label for="phone">Phone number</label>
           <input id="phone" type="tel" inputmode="tel" autocomplete="tel" placeholder="+256700000001" required>
-          <p id="signin-error" class="farmer-form-error" role="alert" hidden></p>
+          <p id="signin-error" class="farmer-form-error alert alert-danger" role="alert" hidden></p>
           <button class="farmer-button farmer-button-primary" type="submit">Continue</button>
         </form>
       </section>
