@@ -1708,6 +1708,11 @@ body.officer .event-log .err { color: #f2a493; }
 body.officer input, body.officer select, body.officer textarea { border-color: #b9beb4; border-radius: 6px; }
 body.officer .o-login { max-width: 30rem; margin: 2rem auto; padding: clamp(1.2rem, 4vw, 2rem); border: 1px solid var(--am-line); border-radius: 10px; background: var(--am-surface); }
 body.officer .o-login .o-lead { margin-bottom: 0.4rem; }
+body.officer .o-login-error { margin: 0.7rem 0 0; padding: 0.5rem 0.7rem; border-radius: 6px; background: var(--o-red-bg); color: var(--o-red); font-weight: 700; }
+body.officer .o-demo-login { margin-top: 1.4rem; padding: 0.9rem 1rem; border: 1px dashed #b9beb4; border-radius: 8px; background: var(--am-millet-wash); }
+body.officer .o-demo-login p { margin: 0 0 0.6rem; }
+body.officer .o-demo-login code { padding: 0.1rem 0.35rem; border-radius: 4px; background: var(--am-surface); font-size: 1rem; }
+body.officer .o-demo-login .btn { width: 100%; }
 
 body.officer .o-tabbar { box-shadow: none; }
 body.officer .o-tabbar [aria-current="page"] { color: var(--am-cobalt); background: var(--am-cobalt-wash); }

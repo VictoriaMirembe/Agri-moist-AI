@@ -8,7 +8,7 @@ from datetime import datetime, timezone
 import json
 from typing import Any
 
-from fastapi import APIRouter, Cookie, Depends, HTTPException, Request, Response
+from fastapi import APIRouter, Depends, HTTPException, Request
 import httpx
 from pydantic import BaseModel, field_validator
 from sqlmodel import func, select
@@ -33,11 +33,13 @@ from backend.db.models import (
     VisitFlagVisit,
 )
 from backend.logging.tool_log import run_logged
-from backend.officer.auth import require_officer
+from backend.officer.auth import password_ok, require_officer, sign_in, signed_in_officer
 from backend.tools import agrimoist_tools as impl
 from backend.tools.errors import ToolError
 
-router = APIRouter(prefix="/api", tags=["officer"])
+# Every officer endpoint needs a signed-in officer; only sign-in itself (auth_router) does not.
+router = APIRouter(prefix="/api", tags=["officer"], dependencies=[Depends(require_officer)])
+auth_router = APIRouter(prefix="/api/auth", tags=["officer-auth"])
 
 # asyncio only holds a weak reference to a task once nothing else references it, so a
 # fire-and-forget asyncio.create_task() can be garbage-collected mid-run. Keep a
@@ -313,13 +315,7 @@ def check_farmer_report(observation_id: int, body: CheckReportRequest):
 # Farmer follow-ups
 # ---------------------------------------------------------------------------
 @router.get("/followups")
-async def get_officer_followups(request: Request):
-    # Retrieve user session/role from backend or auth token
-    user_role = request.session.get("role") if "session" in request.scope else None
-
-    if user_role != "officer":
-        raise HTTPException(status_code=403, detail="Access denied: Officers only.")
-
+async def get_officer_followups():
     with session_scope() as session:
         rows = session.exec(
             select(Followup, Advice)
@@ -509,63 +505,52 @@ def pending_summary():
 
 
 # ---------------------------------------------------------------------------
-# Extension Officer Authentication (Session & Cookie)
+# Extension officer sign-in (signed session cookie, see backend/officer/auth.py)
 # ---------------------------------------------------------------------------
 class OfficerLoginRequest(BaseModel):
-    officer_id: int
-    role: str = "officer"
+    officer_id: int = 1
+    password: str = ""
+    role: str = "officer"  # the only role there is; anything else is refused
 
 
-@router.post("/auth/login")
+@auth_router.post("/login")
 def login_officer(request: Request, body: OfficerLoginRequest):
-    """Sign in as an existing extension officer - the same check as the /officer/login
-    form - and store it in the signed server-side session. Only the "officer" role
-    exists; any other role, or an unknown officer id, is refused."""
+    """Sign an extension officer in with the demo password; sets the signed session."""
     if body.role != "officer":
-        raise HTTPException(400, "Only officers can sign in here.")
-    officer_id = body.officer_id
-    role = "officer"
-
+        raise HTTPException(status_code=400, detail="Only officers can sign in here.")
+    if not password_ok(body.password):
+        raise HTTPException(status_code=401, detail="Wrong password.")
     with session_scope() as session:
-        officer = session.get(Officer, officer_id)
+        officer = session.get(Officer, body.officer_id)
         if officer is None:
-            raise HTTPException(400, f"No officer with id {officer_id}")
+            raise HTTPException(status_code=400, detail=f"No officer with id {body.officer_id}")
         officer_name = officer.name
-
-    request.session["role"] = role
-    request.session["officer_id"] = officer_id
-    request.session["officer_name"] = officer_name
+    sign_in(request, body.officer_id, officer_name)
     return {
         "status": "authenticated",
-        "role": role,
-        "officer_id": officer_id,
+        "role": "officer",
+        "officer_id": body.officer_id,
         "officer_name": officer_name,
     }
 
 
-@router.post("/auth/logout")
-@router.get("/auth/logout")
-def logout_officer(request: Request, response: Response):
-    """Clear server-side officer session and auth cookie."""
-    if "session" in request.scope:
-        request.session.clear()
-    response.delete_cookie("officer_role")
-    response.delete_cookie("agrimoist_session")
+@auth_router.post("/logout")
+@auth_router.get("/logout")
+def logout_officer(request: Request):
+    """Clear the officer's signed session."""
+    request.session.clear()
     return {"status": "logged_out"}
 
 
-@router.get("/auth/me")
+@auth_router.get("/me")
 def current_officer(request: Request):
-    """Return the officer signed in through the signed server-side session."""
-    user_role = request.session.get("role") if "session" in request.scope else None
-    officer_id = request.session.get("officer_id") if "session" in request.scope else None
-    officer_name = request.session.get("officer_name") if "session" in request.scope else None
-
+    """The signed-in officer, if any."""
+    officer = signed_in_officer(request)
     return {
-        "authenticated": user_role == "officer",
-        "role": user_role,
-        "officer_id": officer_id,
-        "officer_name": officer_name or ("Among Betty" if user_role == "officer" else None),
+        "authenticated": officer is not None,
+        "role": "officer" if officer else None,
+        "officer_id": officer["officer_id"] if officer else None,
+        "officer_name": officer["officer_name"] if officer else None,
     }
 
 

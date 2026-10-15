@@ -14,11 +14,12 @@ import re
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
-from fastapi import APIRouter, HTTPException, Request, Response
+from fastapi import APIRouter, Depends, Request
 from fastapi.responses import RedirectResponse
 from fastapi.templating import Jinja2Templates
 from sqlmodel import select
 
+from backend.core.config import settings
 from backend.core.database import session_scope
 from backend.db.models import (
     Advice,
@@ -33,14 +34,26 @@ from backend.db.models import (
     Village,
     VisitFlag,
 )
-from backend.officer.auth import get_current_user_role, signed_in_officer_id
+from backend.officer.auth import (
+    password_ok,
+    require_officer,
+    require_officer_page,
+    sign_in,
+    signed_in_officer,
+    signed_in_officer_id,
+)
 from backend.officer.router import fetch_village_weather
 from backend.tools import agrimoist_tools as impl
 
 TEMPLATES_DIR = Path(__file__).resolve().parent.parent.parent / "frontend" / "officer" / "templates"
 templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
 
-router = APIRouter(tags=["officer-pages"])
+# Every officer screen sends a visitor who is not signed in to /officer/login first.
+router = APIRouter(tags=["officer-pages"], dependencies=[Depends(require_officer_page)])
+# The JSON behind those screens answers 403 instead of redirecting.
+api_router = APIRouter(tags=["officer-pages"], dependencies=[Depends(require_officer)])
+# Sign in and sign out need no session.
+public_router = APIRouter(tags=["officer-auth"])
 
 # ---------------------------------------------------------------------------
 # Plain words for officers. The stored values never change; only what is shown.
@@ -221,7 +234,7 @@ def week_at_a_glance(session, now: datetime | None = None) -> dict:
 
 @router.get("/")
 def home(request: Request):
-    user_role = get_current_user_role(request)
+    officer = signed_in_officer(request)
 
     with session_scope() as session:
         villages = session.exec(select(Village)).all()
@@ -281,8 +294,6 @@ def home(request: Request):
         week = week_at_a_glance(session)
         demo = _is_demo_data(session)
 
-    officer_name = request.session.get("officer_name") if "session" in request.scope else None
-
     return templates.TemplateResponse(
         request,
         "home.html",
@@ -294,8 +305,8 @@ def home(request: Request):
             "weather_list": weather_list,
             "pending_advices": pending_advices,
             "officers": officers,
-            "officer_name": officer_name,
-            "user_role": user_role,
+            "officer_name": officer["officer_name"],
+            "user_role": "officer",
             "week": week,
             "demo": demo,
         },
@@ -403,49 +414,63 @@ def farmer_reports_page(request: Request):
 
 @router.get("/followups")
 def followups_page(request: Request):
-    if get_current_user_role(request) != "officer":
-        raise HTTPException(status_code=403, detail="Access denied: Officers only.")
     with session_scope() as session:
         group_villages = _group_villages(session)
     return templates.TemplateResponse(request, "followups.html", {"group_villages": group_villages})
 
 
-@router.get("/officer/login")
-def officer_login_page(request: Request, next: str = "/"):
+def _safe_next(next_url: str | None) -> str:
+    # Only send people back to a page on this site, never to another host.
+    return next_url if next_url and next_url.startswith("/") and not next_url.startswith("//") else "/"
+
+
+def _login_page(request: Request, next_url: str, error: str | None = None, officer_id: int = 1, status_code: int = 200):
     with session_scope() as session:
         officers = session.exec(select(Officer)).all()
-    return templates.TemplateResponse(request, "officer_login.html", {"officers": officers, "next": next})
+    return templates.TemplateResponse(
+        request,
+        "officer_login.html",
+        {
+            "officers": officers,
+            "next": _safe_next(next_url),
+            "error": error,
+            "selected_id": officer_id,
+            "demo_password": settings.officer_demo_password,
+        },
+        status_code=status_code,
+    )
 
 
-@router.post("/officer/login")
+@public_router.get("/officer/login")
+def officer_login_page(request: Request, next: str = "/"):
+    if signed_in_officer(request):
+        return RedirectResponse(url=_safe_next(next), status_code=303)
+    return _login_page(request, next)
+
+
+@public_router.post("/officer/login")
 async def officer_login_submit(request: Request):
     form_data = await request.form()
     try:
         officer_id = int(form_data.get("officer_id"))
     except (ValueError, TypeError):
-        raise HTTPException(400, "Choose an officer to sign in.")
-    next_url = form_data.get("next", "/")
+        officer_id = 1
+    next_url = str(form_data.get("next", "/"))
+    if not password_ok(str(form_data.get("password", ""))):
+        return _login_page(request, next_url, "That password is not right. Try again.", officer_id, 401)
     with session_scope() as session:
         officer = session.get(Officer, officer_id)
         if officer is None:
-            raise HTTPException(400, f"No officer with id {officer_id}")
+            return _login_page(request, next_url, "Choose an officer from the list.", 1, 400)
         officer_name = officer.name
-
-    # The signed session is the only sign-in; no plain role cookie is set.
-    request.session["role"] = "officer"
-    request.session["officer_id"] = officer_id
-    request.session["officer_name"] = officer_name
-    return RedirectResponse(url=next_url, status_code=303)
+    sign_in(request, officer_id, officer_name)
+    return RedirectResponse(url=_safe_next(next_url), status_code=303)
 
 
-@router.get("/officer/logout")
+@public_router.get("/officer/logout")
 def officer_logout_page(request: Request):
-    if "session" in request.scope:
-        request.session.clear()
-    resp = RedirectResponse(url="/officer/login", status_code=303)
-    resp.delete_cookie("officer_role")
-    resp.delete_cookie("agrimoist_session")
-    return resp
+    request.session.clear()
+    return RedirectResponse(url="/officer/login", status_code=303)
 
 
 @router.get("/flags")
@@ -498,8 +523,6 @@ async def _mcp_status() -> dict:
         calls = session.exec(
             select(ToolLog).where(ToolLog.actor == "assistant", ToolLog.run_id.is_not(None))
         ).all()
-    from backend.core.config import settings
-
     ai_services = [
         {
             "name": f"Groq ({settings.groq_model})",
@@ -530,7 +553,7 @@ async def _mcp_status() -> dict:
     }
 
 
-@router.get("/api/mcp")
+@api_router.get("/api/mcp")
 async def mcp_status_api():
     return await _mcp_status()
 
@@ -540,7 +563,7 @@ async def mcp_page(request: Request):
     return templates.TemplateResponse(request, "mcp.html", await _mcp_status())
 
 
-@router.get("/api/week-at-a-glance")
+@api_router.get("/api/week-at-a-glance")
 def week_at_a_glance_api():
     """The Home screen's "This week at a glance" numbers, polled so farmer reports,
     answers and reads show there without a reload."""

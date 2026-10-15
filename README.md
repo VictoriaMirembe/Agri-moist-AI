@@ -28,7 +28,7 @@ Demo video (under 3 min): https://www.youtube.com/watch?v=nb6u-yo-OVU
 
 > **Agentic AI for Africa Challenge** · Agriculture & Food Security track · Climate-smart advisory theme
 
-| 9 | 2 | 37 / 42 | 141 | ~$0.0008 |
+| 9 | 2 | 37 / 42 | 178 | ~$0.0008 |
 | :---: | :---: | :---: | :---: | :---: |
 | MCP tools in our server | MCP servers used by the agent | Evaluation score (final check) | Automated tests | Model cost per agent run |
 
@@ -166,7 +166,7 @@ drafting advice. See [ARCHITECTURE.md](ARCHITECTURE.md) for the full design.
 | Translation and speech | [Sunbird AI](https://sunbird.ai): `sunflower-9b` translation and Orpheus text-to-speech |
 | Persistence | SQLite via SQLModel / SQLAlchemy |
 | External data | [Open-Meteo](https://open-meteo.com) weather; [FEWS NET](https://fews.net) crop calendar |
-| Testing | pytest (156 tests) and a 14-task evaluation harness |
+| Testing | pytest (178 tests) and a 14-task evaluation harness |
 | Deployment | Docker and Docker Compose; hosted demo on Render |
 
 ## Getting started
@@ -256,6 +256,7 @@ All settings are read from `.env`. See [`.env.example`](.env.example) for the fu
 | `GROQ_MODEL` | Drafting model | `openai/gpt-oss-120b` |
 | `SUNBIRD_API_KEY` | Enables Karamojong translation and the Sunbird voice reader. Blank = farmers see English and the voice reader uses the browser's voice. | blank |
 | `SESSION_SECRET` | Signs officer session cookies. Blank = a new random key on each start. | blank |
+| `OFFICER_DEMO_PASSWORD` | Password for the officer sign-in page, shown there as the demo login. Change it on a public host. | `napak2026` |
 | `USSD_SERVICE_CODE` | Short code shown in the simulator | `*384*5951#` |
 | `USSD_CALLBACK_TOKEN` | Shared secret required on the Africa's Talking callback URLs | blank |
 | `WEATHER_FAIL` | `1` forces `get_weather` to fail, to demonstrate the retry-and-gap behaviour | `0` |
@@ -272,7 +273,7 @@ No real person's data is used.
 
 | Step | Where | What to look for |
 | --- | --- | --- |
-| 1 | **Officer sign-in** → **Home** | Choose an officer, then open a household group |
+| 1 | **Officer sign-in** → **Home** | Choose an officer and use the demo login (password `napak2026`), then open a household group |
 | 2 | Group → **Draft advice** | Agent steps stream in live; raw tool calls and sources are under *Technical details* |
 | 3 | **Approve advice** | Each claim shows its source and gaps are highlighted. Approve, edit and approve, or reject |
 | 4 | **Farmer page** (`/farmer`) | Sign in as `+256700000001` to `+256700000010`. Only approved advice appears. Try **Listen** |
@@ -446,7 +447,7 @@ about $0.00006.
 ## Testing
 
 ```bash
-pytest                              # 141 tests
+pytest                              # 178 tests
 docker compose run app pytest       # inside Docker
 python scripts/run_evals.py         # 14-task evaluation (uses the real model if a key is set)
 ```
@@ -482,7 +483,7 @@ tests/            pytest suite
 
 This is a hackathon build. We state its limits plainly.
 
-- **Officer authentication is demo-grade.** Officers sign in by choosing their name, with no password yet. The sign-in is held only in a signed server-side session; plain cookies or headers are not trusted. This is not production authentication.
+- **Officer authentication is demo-grade.** Every officer screen and officer API needs a signed session, but all officers share one demo password (`OFFICER_DEMO_PASSWORD`) and choose their name at sign-in. This is not production authentication.
 - **Farmer sign-in is a phone-number lookup**, not authentication.
 - **The model can still give wrong advice.** See EVALS task 2. Officer approval is the safeguard.
 - **Only numbers are checked automatically against the sources**, and only numbers written as digits. The officer reviews the rest of the wording.

@@ -4,14 +4,15 @@ from __future__ import annotations
 import pytest
 from fastapi.testclient import TestClient
 
+from backend.core.config import settings
 from backend.main import app
 
 
 def test_unauthenticated_followups_denied(unauthenticated_client):
-    """Accessing /followups without an authenticated officer session returns 403."""
-    res = unauthenticated_client.get("/followups")
-    assert res.status_code == 403
-    assert res.json().get("detail") == "Access denied: Officers only."
+    """Opening /followups without a signed-in officer goes to the sign-in page first."""
+    res = unauthenticated_client.get("/followups", follow_redirects=False)
+    assert res.status_code == 303
+    assert res.headers["location"] == "/officer/login?next=/followups"
 
 
 def test_unauthenticated_api_followups_denied(unauthenticated_client):
@@ -28,8 +29,8 @@ def test_farmer_role_cannot_access_officer_followups(test_db):
         assert res.status_code == 403
         assert res.json().get("detail") == "Access denied: Officers only."
 
-        page_res = client.get("/followups")
-        assert page_res.status_code == 403
+        page_res = client.get("/followups", follow_redirects=False)
+        assert page_res.status_code == 303
 
 
 def test_authenticated_officer_can_access_followups(client):
@@ -49,7 +50,9 @@ def test_officer_login_and_logout_flow(unauthenticated_client):
     assert me_before["authenticated"] is False
 
     # 2. Log in as Among Betty (officer_id 1)
-    login_res = unauthenticated_client.post("/api/auth/login", json={"officer_id": 1, "role": "officer"})
+    login_res = unauthenticated_client.post(
+        "/api/auth/login", json={"officer_id": 1, "password": settings.officer_demo_password}
+    )
     assert login_res.status_code == 200
     assert login_res.json()["status"] == "authenticated"
     assert login_res.json()["role"] == "officer"
@@ -79,6 +82,86 @@ def test_officer_login_page_renders(unauthenticated_client):
     assert res.status_code == 200
     assert "Sign in as this officer" in res.text
     assert "Among Betty" in res.text
+    assert "Demo login" in res.text
+    assert settings.officer_demo_password in res.text
+
+
+@pytest.mark.parametrize(
+    "path", ["/", "/approvals", "/farmer-reports", "/flags", "/visits/new", "/log", "/mcp", "/groups/1", "/runs/1"]
+)
+def test_officer_screens_redirect_to_sign_in(unauthenticated_client, path):
+    res = unauthenticated_client.get(path, follow_redirects=False)
+    assert res.status_code == 303
+    assert res.headers["location"].startswith("/officer/login?next=")
+
+
+@pytest.mark.parametrize(
+    "method,path",
+    [
+        ("get", "/api/approvals"),
+        ("post", "/api/approvals/1/approve"),
+        ("post", "/api/approvals/1/reject"),
+        ("post", "/api/visits"),
+        ("post", "/api/groups/1/draft"),
+        ("get", "/api/farmer-reports"),
+        ("post", "/api/flags/1/visited"),
+        ("get", "/api/logs"),
+        ("get", "/api/week-at-a-glance"),
+    ],
+)
+def test_officer_api_needs_sign_in(unauthenticated_client, method, path):
+    res = getattr(unauthenticated_client, method)(path, **({"json": {}} if method == "post" else {}))
+    assert res.status_code == 403
+
+
+def test_forged_role_cookie_or_header_is_not_a_sign_in(test_db):
+    """A plain cookie or header saying "officer" is not the signed session."""
+    with TestClient(app, cookies={"officer_role": "officer", "role": "officer"}) as client:
+        assert client.get("/api/approvals").status_code == 403
+        assert client.get("/", follow_redirects=False).status_code == 303
+        assert client.get("/api/auth/me").json()["authenticated"] is False
+    with TestClient(app, headers={"x-officer-role": "officer", "x-role": "officer"}) as client:
+        assert client.get("/api/approvals").status_code == 403
+        assert client.post("/api/approvals/1/approve", json={"officer_id": 1}).status_code == 403
+
+
+def test_wrong_password_is_refused(unauthenticated_client):
+    res = unauthenticated_client.post("/api/auth/login", json={"officer_id": 1, "password": "guess"})
+    assert res.status_code == 401
+    assert unauthenticated_client.get("/api/approvals").status_code == 403
+
+    page = unauthenticated_client.post(
+        "/officer/login", data={"officer_id": "1", "password": "guess", "next": "/approvals"}, follow_redirects=False
+    )
+    assert page.status_code == 401
+    assert "password is not right" in page.text
+
+
+def test_sign_in_form_returns_to_the_page_asked_for(unauthenticated_client):
+    res = unauthenticated_client.post(
+        "/officer/login",
+        data={"officer_id": "2", "password": settings.officer_demo_password, "next": "/approvals"},
+        follow_redirects=False,
+    )
+    assert res.status_code == 303
+    assert res.headers["location"] == "/approvals"
+    assert unauthenticated_client.get("/approvals").status_code == 200
+    assert unauthenticated_client.get("/api/auth/me").json()["officer_id"] == 2
+
+
+def test_sign_in_never_redirects_off_site(unauthenticated_client):
+    res = unauthenticated_client.post(
+        "/officer/login",
+        data={"officer_id": "1", "password": settings.officer_demo_password, "next": "//evil.example"},
+        follow_redirects=False,
+    )
+    assert res.headers["location"] == "/"
+
+
+def test_farmer_screens_stay_open(unauthenticated_client):
+    assert unauthenticated_client.get("/farmer").status_code == 200
+    assert unauthenticated_client.get("/ussd").status_code == 200
+    assert unauthenticated_client.get("/api/farmer/profile", params={"phone": "+256700000001"}).status_code == 200
 
 
 def test_live_weather_api_returns_open_meteo_data(client):

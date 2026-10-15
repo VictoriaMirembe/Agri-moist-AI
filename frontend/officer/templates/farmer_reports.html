@@ -12,7 +12,7 @@
     <label for="officer">Acting as</label>
     <select id="officer">
       {% for o in officers %}
-      <option value="{{ o.id }}">{{ o.name }}</option>
+      <option value="{{ o.id }}" {% if o.id == request.session.get("officer_id") %}selected{% endif %}>{{ o.name }}</option>
       {% endfor %}
     </select>
   </div>

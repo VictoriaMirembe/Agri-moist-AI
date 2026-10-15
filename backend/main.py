@@ -17,7 +17,10 @@ from backend.core.database import init_db, session_scope
 from backend.db.seed import seed
 from backend.farmer.pages import router as farmer_pages_router
 from backend.farmer.router import router as farmer_router
+from backend.officer.pages import api_router as officer_pages_api_router
+from backend.officer.pages import public_router as officer_login_router
 from backend.officer.pages import router as officer_pages_router
+from backend.officer.router import auth_router as officer_auth_router
 from backend.officer.router import router as officer_router
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -62,10 +65,13 @@ app.add_middleware(
 )
 
 
+app.include_router(officer_auth_router)
 app.include_router(officer_router)
 app.include_router(approvals_router)
+app.include_router(officer_login_router)
 app.include_router(farmer_router)
 app.include_router(officer_pages_router)
+app.include_router(officer_pages_api_router)
 app.include_router(farmer_pages_router)
 
 static_dir = REPO_ROOT / "frontend" / "static"

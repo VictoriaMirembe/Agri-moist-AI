@@ -46,6 +46,9 @@ class Settings(BaseSettings):
 
     # Signs officer session cookies. Blank = a random key each start (see backend/main.py).
     session_secret: str = ""
+    # Shared demo password for the officer sign-in page (shown on that page, like the
+    # farmer demo phone numbers). Set your own on a public host.
+    officer_demo_password: str = "napak2026"
 
     @property
     def model_configured(self) -> bool:

@@ -1,4 +1,4 @@
-{# Extension Officer Login Page: server-side session authentication #}
+{# Officer sign-in: choose your name and give the office password. Every officer screen and officer API needs this signed session. The demo login box shows the password (OFFICER_DEMO_PASSWORD), like the demo phone numbers on the farmer sign-in page. #}
 {% extends "base.html" %}
 {% block title %}Officer sign in{% endblock %}
 {% block content %}
@@ -6,17 +6,33 @@
   <h1>Sign in to the extension office</h1>
   <p class="o-lead">Choose your name to review AI advice drafts, farmer messages and visit requests.</p>
 
-  <form method="POST" action="/officer/login">
+  <form method="POST" action="/officer/login" id="officer-login-form">
     <input type="hidden" name="next" value="{{ next }}">
     <label for="officer_id">Officer</label>
     <select id="officer_id" name="officer_id" required>
       {% for o in officers %}
-      <option value="{{ o.id }}" {% if o.id == 1 %}selected{% endif %}>{{ o.name }} ({{ o.role }})</option>
+      <option value="{{ o.id }}" {% if o.id == selected_id %}selected{% endif %}>{{ o.name }} ({{ o.role }})</option>
       {% endfor %}
     </select>
+    <label for="password">Password</label>
+    <input id="password" name="password" type="password" autocomplete="current-password" required>
+    {% if error %}<p class="o-login-error" role="alert">{{ error }}</p>{% endif %}
     <button type="submit" class="btn o-wide">Sign in as this officer</button>
   </form>
 
-  <p class="o-note alert alert-info">Officer screens need a signed-in session on the server. Every approval is recorded under the name you choose here.</p>
+  <div class="o-demo-login">
+    <p><strong>Demo login</strong> · any officer, password <code>{{ demo_password }}</code></p>
+    <button type="button" class="btn secondary" id="use-demo-login">Sign in with the demo login</button>
+  </div>
+
+  <p class="o-note">Officer screens need a signed-in session on the server. Every approval is recorded under the name you choose here.</p>
 </section>
+{% endblock %}
+{% block scripts %}
+<script>
+document.getElementById("use-demo-login").addEventListener("click", () => {
+  document.getElementById("password").value = {{ demo_password | tojson }};
+  document.getElementById("officer-login-form").submit();
+});
+</script>
 {% endblock %}

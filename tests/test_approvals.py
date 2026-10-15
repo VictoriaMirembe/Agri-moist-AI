@@ -3,6 +3,8 @@
 # HTTP layer, validation and status rules are all exercised.
 from __future__ import annotations
 
+from backend.core.config import settings
+
 
 def test_seeded_pending_draft_exists_for_group_2(client):
     r = client.get("/api/approvals", params={"status": "pending_review"})
@@ -14,7 +16,7 @@ def test_seeded_pending_draft_exists_for_group_2(client):
 def test_approve_requires_a_real_officer(unauthenticated_client):
     # The deciding officer now comes from the signed session, so the "real officer"
     # check happens at sign-in: an unknown officer cannot sign in, and so cannot approve.
-    r = unauthenticated_client.post("/api/auth/login", json={"officer_id": 9999})
+    r = unauthenticated_client.post("/api/auth/login", json={"officer_id": 9999, "password": settings.officer_demo_password})
     assert r.status_code == 400
     r = unauthenticated_client.post("/api/approvals/1/approve", json={"officer_id": 9999})
     assert r.status_code == 403
@@ -56,7 +58,7 @@ def test_reject_is_logged_and_never_reaches_a_farmer(client):
 def test_edit_and_approve_stores_the_officers_final_text(client):
     pending = client.get("/api/approvals", params={"status": "pending_review"}).json()
     advice_id = pending[0]["id"]
-    assert client.post("/api/auth/login", json={"officer_id": 2}).status_code == 200
+    assert client.post("/api/auth/login", json={"officer_id": 2, "password": settings.officer_demo_password}).status_code == 200
     r = client.post(
         f"/api/approvals/{advice_id}/edit",
         json={"officer_id": 2, "final_text": "Edited: water twice this week."},
@@ -87,7 +89,7 @@ def test_every_approval_decision_is_in_the_log(client):
     pending = client.get("/api/approvals", params={"status": "pending_review"}).json()
     assert pending
     advice = pending[0]
-    assert client.post("/api/auth/login", json={"officer_id": 2}).status_code == 200
+    assert client.post("/api/auth/login", json={"officer_id": 2, "password": settings.officer_demo_password}).status_code == 200
     r = client.post(f"/api/approvals/{advice['id']}/reject", json={"officer_id": 2, "reason": "rain figure looks wrong"})
     assert r.status_code == 200
 

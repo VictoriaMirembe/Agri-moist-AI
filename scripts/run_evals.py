@@ -36,6 +36,13 @@ def reset_env():
         os.environ.pop(key, None)
 
 
+def _sign_in(client) -> None:
+    """Officer endpoints need a signed-in officer, exactly as in the browser."""
+    from backend.core.config import settings
+
+    client.post("/api/auth/login", json={"officer_id": 1, "password": settings.officer_demo_password}).raise_for_status()
+
+
 async def new_app(**env_overrides):
     """Fresh temp DB, fresh engine, fresh settings, seeded. Returns helpers."""
     reset_env()
@@ -254,7 +261,7 @@ async def task_7_officer_rejects():
 
     started = time.monotonic()
     with TestClient(app) as client:
-        assert client.post("/api/auth/login", json={"officer_id": 1}).status_code == 200  # approvals need a signed-in officer
+        _sign_in(client)
         pending = client.get("/api/approvals", params={"status": "pending_review"}).json()
         advice_id = pending[0]["id"]
         r = client.post(f"/api/approvals/{advice_id}/reject", json={"officer_id": 1, "reason": "Needs recheck"})
@@ -278,7 +285,7 @@ async def task_8_blocked_draft():
     from backend.main import app
 
     with TestClient(app) as client:
-        assert client.post("/api/auth/login", json={"officer_id": 1}).status_code == 200  # approvals need a signed-in officer
+        _sign_in(client)
         pending = client.get("/api/approvals", params={"status": "pending_review"}).json()
         not_in_queue = all(a["id"] != result["advice_id"] for a in pending)
         approve = client.post(f"/api/approvals/{result['advice_id']}/approve", json={"officer_id": 1})
@@ -303,6 +310,7 @@ async def task_9_no_order_tool():
     from backend.main import app
 
     with TestClient(app) as client:
+        _sign_in(client)
         no_order_route = client.post("/api/order-fertiliser", json={}).status_code == 404
     elapsed = time.monotonic() - started
     ok = tool_names == expected and no_order_route
@@ -325,7 +333,7 @@ async def task_10_translation():
 
     started = time.monotonic()
     with TestClient(app) as client:
-        assert client.post("/api/auth/login", json={"officer_id": 1}).status_code == 200  # approvals need a signed-in officer
+        _sign_in(client)
         pending = client.get("/api/approvals", params={"status": "pending_review"}).json()[0]
         r = client.post(f"/api/approvals/{pending['id']}/approve", json={"officer_id": 1})
         log_row = next(row for row in client.get("/api/logs").json() if row["tool"] == "approve_advice")
@@ -388,6 +396,7 @@ async def task_13_farmer_checks_before_approval():
     from backend.main import app
 
     with TestClient(app) as client:
+        _sign_in(client)
         reply = client.post(
             "/ussd", json={"sessionId": "eval", "phoneNumber": "+256700000004", "text": "1"}
         ).text
@@ -404,6 +413,7 @@ async def task_14_farmer_reports_armyworm():
     from backend.main import app
 
     with TestClient(app) as client:
+        _sign_in(client)
         client.post("/ussd", json={"sessionId": "eval", "phoneNumber": "+256700000008", "text": "2"})
         client.post("/ussd", json={"sessionId": "eval", "phoneNumber": "+256700000008", "text": "2*1"})
         reply = client.post(

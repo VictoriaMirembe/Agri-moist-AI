@@ -7,7 +7,10 @@ from __future__ import annotations
 import pytest
 from fastapi.testclient import TestClient
 
+from backend.core.config import settings
 from backend.main import app
+
+PASSWORD = settings.officer_demo_password
 
 DECISIONS = [
     ("approve", {"officer_id": 1}),
@@ -61,16 +64,16 @@ def test_fake_role_cookie_or_header_is_rejected(client, test_db, cookies, header
 
 
 def test_sign_in_refuses_other_roles_and_unknown_officers(unauthenticated_client):
-    assert unauthenticated_client.post("/api/auth/login", json={"officer_id": 1, "role": "admin"}).status_code == 400
-    assert unauthenticated_client.post("/api/auth/login", json={"officer_id": 9999}).status_code == 400
-    assert unauthenticated_client.post("/officer/login", data={"officer_id": "9999"}).status_code == 400
+    assert unauthenticated_client.post("/api/auth/login", json={"officer_id": 1, "role": "admin", "password": PASSWORD}).status_code == 400
+    assert unauthenticated_client.post("/api/auth/login", json={"officer_id": 9999, "password": PASSWORD}).status_code == 400
+    assert unauthenticated_client.post("/officer/login", data={"officer_id": "9999", "password": PASSWORD}).status_code == 400
     assert unauthenticated_client.get("/api/auth/me").json()["authenticated"] is False
 
 
 def test_approval_is_logged_with_the_session_officer_not_the_body(unauthenticated_client):
     client = unauthenticated_client
     # Sign in through the officer sign-in form, as the web page does.
-    r = client.post("/officer/login", data={"officer_id": "2", "next": "/approvals"}, follow_redirects=False)
+    r = client.post("/officer/login", data={"officer_id": "2", "password": PASSWORD, "next": "/approvals"}, follow_redirects=False)
     assert r.status_code == 303
     assert "officer_role" not in r.cookies  # no plain role cookie is set any more
 
@@ -98,7 +101,7 @@ def test_signed_out_visitor_is_sent_to_sign_in_from_approvals(unauthenticated_cl
 
 def test_approvals_page_shows_the_signed_in_officer_and_no_officer_picker(unauthenticated_client):
     client = unauthenticated_client
-    assert client.post("/api/auth/login", json={"officer_id": 2}).status_code == 200
+    assert client.post("/api/auth/login", json={"officer_id": 2, "password": PASSWORD}).status_code == 200
     page = client.get("/approvals").text
     assert "Signed in as <strong>Lomuria Peter</strong>" in page
     assert "Acting as" not in page
@@ -110,15 +113,13 @@ def test_approvals_page_shows_the_signed_in_officer_and_no_officer_picker(unauth
     assert 'decide(id, "reject", { reason });' in page
 
 
-def test_group_page_asks_signed_out_visitors_to_sign_in_before_drafting(client, unauthenticated_client):
-    signed_out = unauthenticated_client.get("/groups/1")
-    assert signed_out.status_code == 200
-    assert 'id="draft-btn"' not in signed_out.text
-    assert 'Please <a href="/officer/login?next=/groups/1">sign in</a> to draft advice.' in signed_out.text
+def test_group_page_and_home_send_signed_out_visitors_to_sign_in(client, unauthenticated_client):
+    r = unauthenticated_client.get("/groups/1", follow_redirects=False)
+    assert r.status_code == 303
+    assert r.headers["location"] == "/officer/login?next=/groups/1"
     assert 'id="draft-btn"' in client.get("/groups/1").text
 
-
-def test_home_still_opens_for_signed_out_visitors(unauthenticated_client):
-    r = unauthenticated_client.get("/")
-    assert r.status_code == 200
-    assert 'class="table-wrap"' in r.text
+    r = unauthenticated_client.get("/", follow_redirects=False)
+    assert r.status_code == 303
+    assert r.headers["location"] == "/officer/login?next=/"
+    assert 'class="table-wrap"' in client.get("/").text
