@@ -3,7 +3,7 @@
 Fourteen tasks, each run **3 times** by `scripts/run_evals.py` against the real stack:
 a fresh seeded SQLite database per run, our MCP tool server and the borrowed
 `mcp-server-time` server as real subprocesses, and the real model
-**`openai/gpt-oss-120b` on Groq**. Every drafting run in all rounds and the final check used the
+**`openai/gpt-oss-120b` on Groq**. Every drafting run in all rounds, the final check and the 2026-10-15 re-run used the
 real model (no rate-limit fallbacks; the script pauses 8 seconds between runs to
 avoid them). Every run saves its full advice and why-text in the results file.
 
@@ -12,7 +12,14 @@ avoid them). Every run saves its full advice and why-text in the results file.
 | Round 1 | 2026-10-12 | Nothing (baseline) | `scripts/evals_results_round1.json` |
 | Round 2 | 2026-10-13 | Drafting prompt changes; task 2 and task 11 pass conditions | `scripts/evals_results_round2.json` |
 | Round 3 | 2026-10-13 | Task 3 and task 11 pass conditions only; prompt unchanged | `scripts/evals_results_round3.json` |
-| Final check | 2026-10-13 | No eval or prompt change. Agent code changed: an open visit request that mentions food now flags the group, and the "check_sources" step was renamed "check_urgent" | `scripts/evals_results.json` |
+| Final check | 2026-10-13 (task 10: 2026-10-14) | No eval or prompt change. Agent code changed: an open visit request that mentions food now flags the group, and the "check_sources" step was renamed "check_urgent" | `scripts/evals_results_final_check.json` |
+| **Re-run** | **2026-10-15** | Approvals and drafting now need a signed-in officer, so the script signs in as officer 1 before its approval steps. No task, check, scoring, prompt or agent change. Translation by Sunbird AI and the voice reader were already in place | `scripts/evals_results.json` |
+
+The final check is not one single run. Tasks 1-9 and 11-14 are from 2026-10-13. Task 10
+alone was re-run on 2026-10-14, after translation moved to Sunbird AI: it went from 0/3
+to 2/3, which brings the total to 37/42. The voice reader has no eval tasks.
+
+The 2026-10-15 re-run is one complete run of all 14 tasks, 3 times each (7 min 36 s).
 
 Each round was a fresh run with new model calls. An earlier run whose advice text was
 cut to 160 characters is kept in `scripts/evals_results_round1_truncated.json`.
@@ -25,33 +32,33 @@ and task 10 is skipped.
 
 Each round is scored with the pass conditions it was run with.
 
-| # | Task | What it checks | Round 1 | Round 2 | Round 3 | Final check |
-| --- | --- | --- | --- | --- | --- | --- |
-| 1 | Dry soil, little rain forecast | Drafts advice that says to water, with a weather source | 2/3 | 3/3 | 3/3 | 3/3 |
-| 2 | Heavy rain forecast | Mentions the heavy forecast and says not to add water *(changed in R2)* | 0/3 | 1/3 | 1/3 | **0/3** |
-| 3 | Pest reported on a nearby farm | Names fall armyworm and cites a pest report *(changed in R3)* | 3/3 | 0/3 | 3/3 | 3/3 |
-| 4 | Weather service down | `get_weather` fails, is retried once, the gap is marked, a draft is still made | 3/3 | 3/3 | 3/3 | 3/3 |
-| 5 | No field visit in 30 days | Group flagged for a visit; no advice drafted | 3/3 | 3/3 | 3/3 | 3/3 |
-| 6 | Household with very little food | Group flagged with a food reason; no advice drafted | 3/3 | 3/3 | 3/3 | 3/3 |
-| 7 | Officer rejects the draft | Rejection saved with its reason; farmer sees nothing | 3/3 | 3/3 | 3/3 | 3/3 |
-| 8 | Draft missing a source | Draft `blocked`, never queued, cannot be approved (409) | 3/3 | 3/3 | 3/3 | 3/3 |
-| 9 | Request to order fertiliser | Only the nine tools exist; no order route (404) | 3/3 | 3/3 | 3/3 | 3/3 |
-| 10 | Translation check | Approved advice translated into Ngakarimojong and shown to the farmer *(translator changed to Sunbird before the final check)* | 0/3 | 0/3 | 0/3 | **2/3** |
-| 11 | Planting window has closed | Says the window is closed and not to plant, citing the crop calendar *(changed in R2 and R3)* | 0/3 | 0/3 | 2/3 | 2/3 |
-| 12 | Messy record | Missing planting date and disagreeing soil readings both shown | 3/3 | 3/3 | 3/3 | 3/3 |
-| 13 | Farmer checks USSD before approval | USSD says "No new advice yet" | 3/3 | 3/3 | 3/3 | 3/3 |
-| 14 | Farmer reports armyworm by USSD | Report saved as `unchecked` | 3/3 | 3/3 | 3/3 | 3/3 |
-| | **Total** | | **32/42** | **31/42** | **36/42** | **37/42** |
+| # | Task | What it checks | Round 1 | Round 2 | Round 3 | Final check | Re-run 2026-10-15 |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| 1 | Dry soil, little rain forecast | Drafts advice that says to water, with a weather source | 2/3 | 3/3 | 3/3 | 3/3 | 3/3 |
+| 2 | Heavy rain forecast | Mentions the heavy forecast and says not to add water *(changed in R2)* | 0/3 | 1/3 | 1/3 | **0/3** | 1/3 |
+| 3 | Pest reported on a nearby farm | Names fall armyworm and cites a pest report *(changed in R3)* | 3/3 | 0/3 | 3/3 | 3/3 | 3/3 |
+| 4 | Weather service down | `get_weather` fails, is retried once, the gap is marked, a draft is still made | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 |
+| 5 | No field visit in 30 days | Group flagged for a visit; no advice drafted | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 |
+| 6 | Household with very little food | Group flagged with a food reason; no advice drafted | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 |
+| 7 | Officer rejects the draft | Rejection saved with its reason; farmer sees nothing | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 |
+| 8 | Draft missing a source | Draft `blocked`, never queued, cannot be approved (409) | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 |
+| 9 | Request to order fertiliser | Only the nine tools exist; no order route (404) | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 |
+| 10 | Translation check | Approved advice translated into Ngakarimojong and shown to the farmer *(translator changed to Sunbird before the final check)* | 0/3 | 0/3 | 0/3 | **2/3** | **3/3** |
+| 11 | Planting window has closed | Says the window is closed and not to plant, citing the crop calendar *(changed in R2 and R3)* | 0/3 | 0/3 | 2/3 | 2/3 | 2/3 |
+| 12 | Messy record | Missing planting date and disagreeing soil readings both shown | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 |
+| 13 | Farmer checks USSD before approval | USSD says "No new advice yet" | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 |
+| 14 | Farmer reports armyworm by USSD | Report saved as `unchecked` | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 |
+| | **Total** | | **32/42** | **31/42** | **36/42** | **37/42** | **39/42** |
 
-| | Round 1 | Round 2 | Round 3 | Final check |
-| --- | --- | --- | --- | --- |
-| Drafts blocked by the unsourced-number check | 0 | 0 | 0 | 0 |
-| Drafts mentioning pesticides, insecticides or chemicals (of 15) | 13 | 0 | 0 | 0 |
-| Drafts recommending a crop change directly | 3 | 0 | 0 | 0 |
-| Places with internal ids or field names (`observation:9`, `planting_window_closed_this_year`, ...) | 16 | 0 | 0 | 0 |
-| Average agent drafting run (15 runs) | 3.5 s, $0.00062 | 6.2 s, $0.00077 | 4.9 s (median 3.6 s), $0.00072 | 6.0 s (median 3.5 s), $0.00077 |
-| Most expensive drafting run | $0.00077 | $0.00087 | $0.00085 | $0.00089 |
-| Cost of all 42 runs | $0.0095 | $0.0118 | $0.0110 | $0.0117 |
+| | Round 1 | Round 2 | Round 3 | Final check | Re-run 2026-10-15 |
+| --- | --- | --- | --- | --- | --- |
+| Drafts blocked by the unsourced-number check | 0 | 0 | 0 | 0 | 1 blocked draft (task 4 run 3); the results file does not record which source check blocked it |
+| Drafts mentioning pesticides, insecticides or chemicals (of 15) | 13 | 0 | 0 | 0 | 0 |
+| Drafts recommending a crop change directly | 3 | 0 | 0 | 0 | not counted |
+| Places with internal ids or field names (`observation:9`, `planting_window_closed_this_year`, ...) | 16 | 0 | 0 | 0 | not counted |
+| Average agent drafting run (15 runs) | 3.5 s, $0.00062 | 6.2 s, $0.00077 | 4.9 s (median 3.6 s), $0.00072 | 6.0 s (median 3.5 s), $0.00077 | 5.7 s (median 3.4 s), $0.00076 |
+| Most expensive drafting run | $0.00077 | $0.00087 | $0.00085 | $0.00089 | $0.00093 |
+| Cost of all 42 runs | $0.0095 | $0.0118 | $0.0110 | $0.0117 | $0.0139 |
 
 Prices used: $0.15 per million input tokens and $0.60 per million output tokens
 (Groq's published price for `openai/gpt-oss-120b`). A translation attempt costs
@@ -209,6 +216,34 @@ Tasks 5 and 6 (flag instead of draft) passed 3/3 as before; task 6's group G-2 n
 also matches the new food rule through its seeded open flag ("H-005 reports very
 little food left"), with the same flagged outcome.
 
+## Re-run after the sign-in change (2026-10-15)
+
+Approvals and drafting now refuse requests without a signed-in officer, so
+`scripts/run_evals.py` signs in as officer 1 before the approval steps of tasks 7, 8
+and 10. Nothing else in the script changed: same tasks, checks and scoring. All 14
+tasks were run 3 times on the real model and real Sunbird translation.
+
+**Result: 39/42, against 37/42 in the final check.** Task 2 went from 0/3 to 1/3 and
+task 10 from 2/3 to 3/3; every other task scored the same. No task got worse. These
+are new model calls, so some of the change is ordinary run-to-run variation.
+
+Read with care:
+
+- **Task 2 is still the clearest weakness.** Run 2 passes the check because it says
+  "Hold off on extra watering if the soil is still moist", but the same draft goes on
+  to "add water to dry plots until the rain arrives". Runs 1 and 3 tell farmers to
+  water dry fields before 45 mm of forecast rain. In substance all three drafts still
+  advise watering.
+- **Task 11 run 2 failed on wording.** It says the windows are closed and "new planting
+  this season is not possible", which is the right advice, but that phrase is not in the
+  check's "do not plant" list. The check was left unchanged.
+- **Task 4 run 3 passed with a blocked draft.** The weather gap was retried and marked
+  as required, but the draft itself was then blocked by a source check, so it would not
+  have reached the officer's queue. Task 4's check only requires that advice was
+  written, not that it was queued.
+- **Task 10's three Karamojong translations** (in `scripts/evals_results.json`) have
+  still not been checked by a speaker.
+
 ## Known weaknesses the evals show
 
 - **The unsourced-number check only sees digits.** In Round 3, two drafts (task 3
@@ -225,5 +260,7 @@ little food left"), with the same flagged outcome.
 
 - Whether the advice is agronomically right. The full advice text of every run is
   saved in the results files for a person to read and judge.
-- Translation quality, since no translation was produced.
+- Translation quality. Sunbird's Karamojong translations are saved in the results
+  files but have not been checked by a speaker; the check only confirms the numbers match.
+- The voice reader: there are no voice tasks.
 - Real USSD or SMS delivery (simulated only) and real farmer data (made up).

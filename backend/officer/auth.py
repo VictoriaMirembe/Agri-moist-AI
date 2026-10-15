@@ -1,48 +1,32 @@
 # Server-side authentication and role-checking helpers for Extension Officers.
+# An officer counts as signed in ONLY through the signed session cookie
+# (Starlette SessionMiddleware, see backend/main.py), which is set by the officer
+# sign-in routes. Plain cookies or headers that claim a role are never trusted:
+# anyone can send those.
 from __future__ import annotations
 
-from typing import Annotated
-
-from fastapi import Cookie, Depends, Header, HTTPException, Request
+from fastapi import HTTPException, Request
 
 
-def get_current_user_role(
-    request: Request,
-    officer_role_cookie: Annotated[str | None, Cookie(alias="officer_role")] = None,
-    role_cookie: Annotated[str | None, Cookie(alias="role")] = None,
-    officer_role_header: Annotated[str | None, Header(alias="x-officer-role")] = None,
-) -> str | None:
-    """Retrieve user role from server-side session, cookie, or header."""
-    has_session = "session" in request.scope
+def get_current_user_role(request: Request) -> str | None:
+    """The role stored in the signed server-side session, or None."""
+    if "session" not in request.scope:
+        return None
+    return request.session.get("role")
 
-    # 1. Server-side session
-    if has_session:
-        session_role = request.session.get("role")
-        if session_role:
-            return session_role
 
-    # 2. Cookies (officer_role or role)
-    cookie_val = officer_role_cookie or role_cookie or request.cookies.get("officer_role") or request.cookies.get("role")
-    if cookie_val:
-        if has_session and "role" not in request.session:
-            request.session["role"] = cookie_val
-        return cookie_val
-
-    # 3. Headers (for API / testing clients)
-    header_val = officer_role_header or request.headers.get("x-officer-role") or request.headers.get("x-role")
-    if header_val:
-        if has_session and "role" not in request.session:
-            request.session["role"] = header_val
-        return header_val
-
-    return None
+def signed_in_officer_id(request: Request) -> int | None:
+    """The signed-in officer's id from the signed session, or None."""
+    if get_current_user_role(request) != "officer":
+        return None
+    officer_id = request.session.get("officer_id")
+    return officer_id if isinstance(officer_id, int) else None
 
 
 def require_officer(request: Request) -> str:
-    """Validate that the requesting client has an authenticated 'officer' session or cookie.
+    """Validate that the request carries a signed-in officer session.
     Raises HTTP 403 if unauthenticated or not an officer.
     """
-    user_role = get_current_user_role(request)
-    if user_role != "officer":
+    if signed_in_officer_id(request) is None:
         raise HTTPException(status_code=403, detail="Access denied: Officers only.")
-    return user_role
+    return "officer"

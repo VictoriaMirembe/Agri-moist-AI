@@ -33,6 +33,7 @@ from backend.db.models import (
     Village,
     VisitFlag,
 )
+from backend.officer.auth import get_current_user_role, signed_in_officer_id
 from backend.officer.router import fetch_village_weather
 from backend.tools import agrimoist_tools as impl
 
@@ -220,9 +221,7 @@ def week_at_a_glance(session, now: datetime | None = None) -> dict:
 
 @router.get("/")
 def home(request: Request):
-    user_role = request.session.get("role") if "session" in request.scope else None
-    if not user_role:
-        user_role = request.cookies.get("officer_role") or request.cookies.get("role")
+    user_role = get_current_user_role(request)
 
     with session_scope() as session:
         villages = session.exec(select(Village)).all()
@@ -315,6 +314,7 @@ def visit_form(request: Request):
 
 @router.get("/groups/{group_id}")
 def group_detail_page(request: Request, group_id: int):
+    signed_in = signed_in_officer_id(request) is not None
     with session_scope() as session:
         households = session.exec(select(Household).where(Household.group_id == group_id)).all()
         village = session.get(Village, households[0].village_id) if households else None
@@ -335,6 +335,7 @@ def group_detail_page(request: Request, group_id: int):
             "zone": district.agroclimatic_zone if district else None,
             "advices": advices,
             "flags": flags,
+            "signed_in": signed_in,  # drafting needs a signed-in officer
         },
     )
 
@@ -370,14 +371,23 @@ def _group_villages(session) -> dict[int, str]:
 
 @router.get("/approvals")
 def approvals_page(request: Request):
+    # The approval API needs a signed-in officer, so a signed-out visitor is sent to
+    # sign in first rather than shown an empty or broken list.
+    officer_id = signed_in_officer_id(request)
+    if officer_id is None:
+        return RedirectResponse(url="/officer/login?next=/approvals", status_code=303)
     with session_scope() as session:
-        officers = session.exec(select(Officer)).all()
         observation_labels = _observation_labels(session)
         group_villages = _group_villages(session)
     return templates.TemplateResponse(
         request,
         "approvals.html",
-        {"officers": officers, "observation_labels": observation_labels, "group_villages": group_villages},
+        {
+            "officer_id": officer_id,
+            "officer_name": request.session.get("officer_name"),
+            "observation_labels": observation_labels,
+            "group_villages": group_villages,
+        },
     )
 
 
@@ -393,10 +403,7 @@ def farmer_reports_page(request: Request):
 
 @router.get("/followups")
 def followups_page(request: Request):
-    user_role = request.session.get("role") if "session" in request.scope else None
-    if not user_role:
-        user_role = request.cookies.get("officer_role") or request.cookies.get("role")
-    if user_role != "officer":
+    if get_current_user_role(request) != "officer":
         raise HTTPException(status_code=403, detail="Access denied: Officers only.")
     with session_scope() as session:
         group_villages = _group_villages(session)
@@ -414,22 +421,21 @@ def officer_login_page(request: Request, next: str = "/"):
 async def officer_login_submit(request: Request):
     form_data = await request.form()
     try:
-        officer_id = int(form_data.get("officer_id", 1))
+        officer_id = int(form_data.get("officer_id"))
     except (ValueError, TypeError):
-        officer_id = 1
+        raise HTTPException(400, "Choose an officer to sign in.")
     next_url = form_data.get("next", "/")
     with session_scope() as session:
         officer = session.get(Officer, officer_id)
-        officer_name = officer.name if officer else "Extension Officer"
+        if officer is None:
+            raise HTTPException(400, f"No officer with id {officer_id}")
+        officer_name = officer.name
 
-    if "session" in request.scope:
-        request.session["role"] = "officer"
-        request.session["officer_id"] = officer_id
-        request.session["officer_name"] = officer_name
-
-    resp = RedirectResponse(url=next_url, status_code=303)
-    resp.set_cookie(key="officer_role", value="officer", max_age=86400 * 7, httponly=False, samesite="lax")
-    return resp
+    # The signed session is the only sign-in; no plain role cookie is set.
+    request.session["role"] = "officer"
+    request.session["officer_id"] = officer_id
+    request.session["officer_name"] = officer_name
+    return RedirectResponse(url=next_url, status_code=303)
 
 
 @router.get("/officer/logout")

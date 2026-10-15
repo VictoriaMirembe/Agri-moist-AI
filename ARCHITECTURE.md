@@ -19,12 +19,13 @@ flowchart LR
 
 - **Flow:** LangGraph in `backend/agent/graph.py`: plan → gather → check_urgent →
   draft or flag.
-- **Retry rule:** each tool call is retried once. If it still fails, the gap is written
-  into the draft ("weather missing after one retry"), never guessed.
+- **Retry rule:** each call to our own tools is retried once. If it still fails, the gap
+  is written into the draft ("weather missing after one retry"), never guessed. A failed
+  call to the borrowed clock is not retried; it is recorded as a gap.
 - **Sources:** the `draft_advice` tool sets a draft to `blocked` if any fact has no
   source, or if the wording uses a number that appears in none of the sources.
 - **Approval gate:** `backend/approvals/router.py` is the only code that sets
-  `approved` or `edited_and_approved`. Rejecting needs a reason, and every decision is
+  `approved` or `edited_and_approved` (apart from one pre-approved demo seed record). Rejecting needs a reason, and every decision is
   logged with the officer who made it.
 
 ## 3. MCP servers
@@ -56,9 +57,17 @@ tool can do is put a draft in the officer's queue.
 ## 4. Model
 
 `openai/gpt-oss-120b`, an open-weights model, served through Groq for the hackathon.
-Because the weights are open, the same model could be run in-country. It also tries
-to translate approved advice into Ngakarimojong, but cannot, so farmers see the
-approved English text. With no `GROQ_API_KEY`, drafting falls back to a deterministic
+Because the weights are open, the same model could be run in-country.
+
+Approved advice is translated into Ngakarimojong by Sunbird AI (`sunflower-9b`), with
+the Groq model as a backup (`backend/agent/model_client.py`, called from
+`backend/approvals/router.py` only after approval). A translation that changes any
+number is discarded, and the farmer sees the approved English text. The farmer page's
+voice reader uses Sunbird text-to-speech (`backend/agent/model_client.py`, served by
+`backend/farmer/router.py`). Sunbird has no Karamojong voice, so Karamojong is read
+with its Ateso voice.
+
+With no `GROQ_API_KEY`, drafting falls back to a deterministic
 rule-based mode, labelled `rule-based-stub` in the log.
 
 ## 5. Channels and data
@@ -68,8 +77,9 @@ rule-based mode, labelled `rule-based-stub` in the log.
 - **Farmers only see approved advice:** they read it through the
   `advice_visible_to_farmer` database view, which contains only `approved` and
   `edited_and_approved` advice.
-- **Everything is logged:** every tool call, officer decision and farmer action is
-  written to the log, and each agent run records its model and cost.
+- **Logged:** every agent tool call, officer decision and saved farmer action is
+  written to the log, and each agent run records its model and cost. Voice playback,
+  sign-ins and the weather shown on screens are not logged.
 
 ## 6. Honest limits
 

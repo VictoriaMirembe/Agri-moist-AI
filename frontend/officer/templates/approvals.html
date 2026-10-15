@@ -10,12 +10,7 @@
     <p class="o-lead">No farmer sees any advice until a named officer approves it here.</p>
   </div>
   <div class="o-acting">
-    <label for="officer">Acting as</label>
-    <select id="officer">
-      {% for o in officers %}
-      <option value="{{ o.id }}">{{ o.name }} ({{ o.role }})</option>
-      {% endfor %}
-    </select>
+    <p class="o-signed-in">Signed in as <strong>{{ officer_name }}</strong> · <a href="/officer/logout">Sign out</a></p>
   </div>
 </div>
 
@@ -59,7 +54,10 @@
 </section>
 
 <script>
-const officerSelect = document.getElementById("officer");
+// The signed-in officer (from the session). Approval decisions send no officer id:
+// the server records the officer from the session. Checking a report and marking a
+// visit done still need an id in the request, so they send this one.
+const SIGNED_IN_OFFICER_ID = {{ officer_id | tojson }};
 // Page data for plain-language sources: which household and date each cited
 // observation is, and each group's village. Read-only, from backend/officer/pages.py.
 const OBSERVATIONS = {{ observation_labels | tojson }};
@@ -228,7 +226,7 @@ async function decide(id, path, body) {
 }
 
 function approve(id) {
-  decide(id, "approve", { officer_id: parseInt(officerSelect.value, 10) });
+  decide(id, "approve", {});
 }
 
 function editApprove(id) {
@@ -238,13 +236,13 @@ function editApprove(id) {
     cardError(id, new Error("The text has not been changed. Edit it first, or use Approve."));
     return;
   }
-  decide(id, "edit", { officer_id: parseInt(officerSelect.value, 10), final_text: text });
+  decide(id, "edit", { final_text: text });
 }
 
 function reject(id) {
   const reason = prompt("Reason for rejecting this advice:");
   if (!reason) return;
-  decide(id, "reject", { officer_id: parseInt(officerSelect.value, 10), reason });
+  decide(id, "reject", { reason });
 }
 
 // ---------------------------------------------------------------------------
@@ -252,12 +250,12 @@ function reject(id) {
 // ---------------------------------------------------------------------------
 function markChecked(id) {
   const card = document.querySelector(`[data-report-id="${id}"]`);
-  return cardAction(card, () => postJSON(`/api/farmer-reports/${id}/check`, { officer_id: parseInt(officerSelect.value, 10) }), loadReports);
+  return cardAction(card, () => postJSON(`/api/farmer-reports/${id}/check`, { officer_id: SIGNED_IN_OFFICER_ID }), loadReports);
 }
 
 function markVisited(id) {
   const card = document.querySelector(`[data-flag-id="${id}"]`);
-  return cardAction(card, () => postJSON(`/api/flags/${id}/visited`, { officer_id: parseInt(officerSelect.value, 10) }), loadFlags);
+  return cardAction(card, () => postJSON(`/api/flags/${id}/visited`, { officer_id: SIGNED_IN_OFFICER_ID }), loadFlags);
 }
 
 loadAll();

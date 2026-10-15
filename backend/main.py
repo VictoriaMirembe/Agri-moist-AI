@@ -47,20 +47,9 @@ async def revalidate_static_files(request: Request, call_next):
     return response
 
 
-@app.middleware("http")
-async def sync_auth_session_middleware(request: Request, call_next):
-    """Ensure cookie or header role is synchronized into request.session."""
-    if "session" in request.scope:
-        role_cookie = request.cookies.get("officer_role") or request.cookies.get("role")
-        if role_cookie and "role" not in request.session:
-            request.session["role"] = role_cookie
-        role_header = request.headers.get("x-officer-role") or request.headers.get("x-role")
-        if role_header and "role" not in request.session:
-            request.session["role"] = role_header
-    return await call_next(request)
-
-
-# Server-side signed session cookies for extension officer authentication (runs outermost)
+# Server-side signed session cookies for extension officer authentication (runs outermost).
+# This signed session is the only thing that makes a request "signed in"; plain role
+# cookies or headers are not trusted (see backend/officer/auth.py).
 app.add_middleware(
     SessionMiddleware,
     # From SESSION_SECRET in .env. If unset, a random key per start: officers simply

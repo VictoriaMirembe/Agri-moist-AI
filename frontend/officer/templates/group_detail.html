@@ -15,7 +15,11 @@
     <h2>Draft advice for this group</h2>
     <p class="muted">The AI assistant checks the weather, visits, pests and the crop calendar, then writes a draft for you to approve. Urgent cases are sent for a visit instead.</p>
   </div>
+  {% if signed_in %}
   <button class="btn" id="draft-btn">Draft advice</button>
+  {% else %}
+  <p class="o-signin-note">Please <a href="/officer/login?next=/groups/{{ group_id }}">sign in</a> to draft advice.</p>
+  {% endif %}
   <p id="draft-error" class="pill red" style="display:none;margin-top:0.8rem;"></p>
 </section>
 
@@ -103,7 +107,7 @@ async function loadDetail() {
 }
 loadDetail();
 
-document.getElementById("draft-btn").addEventListener("click", async () => {
+document.getElementById("draft-btn")?.addEventListener("click", async () => {
   const errorEl = document.getElementById("draft-error");
   errorEl.style.display = "none";
   try {

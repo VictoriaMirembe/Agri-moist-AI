@@ -254,6 +254,7 @@ async def task_7_officer_rejects():
 
     started = time.monotonic()
     with TestClient(app) as client:
+        assert client.post("/api/auth/login", json={"officer_id": 1}).status_code == 200  # approvals need a signed-in officer
         pending = client.get("/api/approvals", params={"status": "pending_review"}).json()
         advice_id = pending[0]["id"]
         r = client.post(f"/api/approvals/{advice_id}/reject", json={"officer_id": 1, "reason": "Needs recheck"})
@@ -277,6 +278,7 @@ async def task_8_blocked_draft():
     from backend.main import app
 
     with TestClient(app) as client:
+        assert client.post("/api/auth/login", json={"officer_id": 1}).status_code == 200  # approvals need a signed-in officer
         pending = client.get("/api/approvals", params={"status": "pending_review"}).json()
         not_in_queue = all(a["id"] != result["advice_id"] for a in pending)
         approve = client.post(f"/api/approvals/{result['advice_id']}/approve", json={"officer_id": 1})
@@ -323,6 +325,7 @@ async def task_10_translation():
 
     started = time.monotonic()
     with TestClient(app) as client:
+        assert client.post("/api/auth/login", json={"officer_id": 1}).status_code == 200  # approvals need a signed-in officer
         pending = client.get("/api/approvals", params={"status": "pending_review"}).json()[0]
         r = client.post(f"/api/approvals/{pending['id']}/approve", json={"officer_id": 1})
         log_row = next(row for row in client.get("/api/logs").json() if row["tool"] == "approve_advice")

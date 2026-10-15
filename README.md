@@ -95,13 +95,13 @@ The officer keeps the judgement.
 - **Auditable agent pipeline.** A fixed LangGraph flow (plan → gather → check urgent → draft or flag) with live step-by-step progress streamed to the officer.
 - **Human-in-the-loop approval gate.** Farmers only ever read from a database view that contains approved advice.
 - **Source-checked drafts.** A draft with an unsourced fact, or with a number that appears in none of its sources, is blocked before it reaches the queue.
-- **Graceful degradation.** A failed tool call is retried once and then recorded as a visible gap. The agent never guesses a missing value.
+- **Graceful degradation.** A failed call to our own MCP tools is retried once and then recorded as a visible gap; a failed borrowed-clock call is recorded as a gap without a retry. The agent never guesses a missing value.
 - **Two MCP servers.** Our own 9-tool AgriMoist server, plus the borrowed reference server `mcp-server-time`, both connected over stdio.
 - **Basic-phone access.** A USSD menu compatible with Africa's Talking, plus an in-browser handset simulator.
 - **Local language.** Approved advice is translated into Ngakarimojong by Sunbird AI. Translations that change any number are rejected.
 - **Voice reader.** Farmers can have their page read aloud in English, Swahili or Karamojong, using Sunbird AI's Ugandan voices. Speech is generated in short pieces and prepared in the background when the page opens. Each piece is generated once, stored by the app, and kept by the phone, so listening again uses no data.
 - **Built for weak signal.** The farmer page keeps a copy of the farmer's own data on the phone. It opens instantly, and when there is no connection it still shows the last approved advice, clearly labelled as saved. Signing out removes the copy, because farm phones are often shared.
-- **Full audit log.** Every tool call, officer decision and farmer action is logged with its inputs, outputs, source, actor and cost.
+- **Full audit log.** Every agent tool call, officer decision and saved farmer action is logged with its inputs, outputs, source, actor and cost. Voice playback, sign-ins and the weather shown on the screens are not logged.
 
 ## Architecture
 
@@ -164,7 +164,7 @@ drafting advice. See [ARCHITECTURE.md](ARCHITECTURE.md) for the full design.
 | Translation and speech | [Sunbird AI](https://sunbird.ai): `sunflower-9b` translation and Orpheus text-to-speech |
 | Persistence | SQLite via SQLModel / SQLAlchemy |
 | External data | [Open-Meteo](https://open-meteo.com) weather; [FEWS NET](https://fews.net) crop calendar |
-| Testing | pytest (141 tests) and a 14-task evaluation harness |
+| Testing | pytest (156 tests) and a 14-task evaluation harness |
 | Deployment | Docker and Docker Compose; hosted demo on Render |
 
 ## Getting started
@@ -298,11 +298,11 @@ These rules are enforced in code, not just stated in the prompt.
 | Guarantee | How it is enforced |
 | --- | --- |
 | The AI drafts only. It cannot send messages, order inputs or request credit. | No such tool or route exists in the codebase. EVALS task 9 confirms an order request returns 404. |
-| Nothing reaches a farmer without a named officer's approval | `backend/approvals/router.py` is the only code that can set an approved status. Farmer channels read only from the `advice_visible_to_farmer` view. |
+| Nothing reaches a farmer without a named officer's approval | `backend/approvals/router.py` is the only code that can set an approved status (apart from one pre-approved record in the demo seed data). Farmer channels read only from the `advice_visible_to_farmer` view. |
 | Every fact cites a source | A draft with an unsourced fact is set to `blocked` and cannot be approved (409). |
 | No invented numbers | A draft whose wording contains a number found in none of its sources is blocked. |
 | Missing data is never guessed | After one retry, the gap is written into the draft in plain words. |
-| Every action is traceable | Tool calls, decisions and farmer actions are logged with inputs, outputs, time, source, actor and cost (`backend/logging/tool_log.py`). |
+| Every action is traceable | Agent tool calls, decisions and saved farmer actions are logged with inputs, outputs, time, source, actor and cost (`backend/logging/tool_log.py`). Voice playback, sign-ins and on-screen weather are not. |
 | Translations keep the numbers | A translation that changes or drops a number is discarded, and the farmer sees the approved English text. |
 
 ## MCP integration
@@ -330,8 +330,9 @@ problem, so we borrowed it rather than rebuilding it.
 
 ### How the agent uses MCP
 
-The agent does not call any database or API directly. Every fact it reads and every
-record it writes goes through an MCP tool call. For each run,
+The agent does not call any external API directly. Every fact it uses in advice and every
+record it writes goes through an MCP tool call; the only direct database reads are the
+group's location in the plan step and open visit requests in the urgency check. For each run,
 [`backend/agent/mcp_client.py`](backend/agent/mcp_client.py) starts both servers as
 stdio subprocesses, performs the MCP handshake, and calls tools by name over the
 protocol, exactly as any third-party MCP client would. Because of this, the server can
@@ -416,7 +417,8 @@ against the real stack. Each run uses a fresh database, real MCP subprocesses an
 | Round 1 | 32/42 | Baseline |
 | Round 2 | 31/42 | Prompt changes; stricter pass conditions |
 | Round 3 | 36/42 | Pass conditions refined |
-| **Final check** | **37/42** | Translation moved to Sunbird AI |
+| Final check | 37/42 | Translation moved to Sunbird AI |
+| **Re-run (2026-10-15)** | **39/42** | Approvals need a signed-in officer; no task, prompt or agent change |
 
 Every safety task passes in every run: weather outage, overdue visit, food insecurity,
 officer rejection, missing source, out-of-scope order, and USSD before approval. The
@@ -424,8 +426,8 @@ remaining failures are reported openly in [EVALS.md](EVALS.md). The largest is t
 where the model still advises watering ahead of heavy forecast rain. That is the case the
 officer approval gate exists to catch.
 
-**Cost and latency** (15 real drafting runs): about **$0.0008 per agent run** (mean
-$0.00077, max $0.00089) and **6.0 s mean / 3.5 s median** per run. A translation costs
+**Cost and latency** (15 real drafting runs, 2026-10-15): about **$0.0008 per agent run**
+(mean $0.00076, max $0.00093) and **5.7 s mean / 3.4 s median** per run. A translation costs
 about $0.00006.
 
 ## Data sources
@@ -485,6 +487,12 @@ This is a hackathon build. We state its limits plainly.
 - **USSD pest reports cannot name the pest.** The web page lets the farmer choose one.
 - **Synthetic data only**, and there is no household registration screen yet.
 - **Docker was not run in the build environment.** The app was verified with uvicorn and the full test suite; the Docker image uses the same install and start commands.
+- Karamojong is read aloud with Sunbird's Ateso voice because no Karamojong voice exists.
+- The fixed greeting and field-condition phrases in Karamojong and Swahili were written by the team and have not been checked by a native speaker.
+- The Swahili option reads the Karamojong translation when one exists; advice is not translated into Swahili.
+- `POST /api/farmer/voice-audio` is not yet restricted to approved advice and its calls are not logged.
+- The voice audio cache is on disk and is lost when the free Render instance restarts.
+- Only the approval API, the draft queue, drafting and follow-ups require a signed-in officer. Other officer screens and APIs (for example `/log`, `/api/logs`, recording a visit, checking a farmer report and marking a visit done) are still open, and those three saving actions take the officer's id from the request.
 
 ## Roadmap
 

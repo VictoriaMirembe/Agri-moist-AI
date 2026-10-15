@@ -53,12 +53,14 @@ def seeded_session(test_db):
 @pytest.fixture()
 def client(test_db):
     """A TestClient whose app lifespan creates and seeds the same temp database
-    (test_db already pointed DATABASE_URL and the engine at it)."""
+    (test_db already pointed DATABASE_URL and the engine at it), signed in as
+    officer 1 through the normal sign-in route (a signed session cookie)."""
     from fastapi.testclient import TestClient
 
     from backend.main import app
 
-    with TestClient(app, cookies={"officer_role": "officer"}) as c:
+    with TestClient(app) as c:
+        assert c.post("/api/auth/login", json={"officer_id": 1}).status_code == 200
         yield c
 
 

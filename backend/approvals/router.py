@@ -1,11 +1,12 @@
 # The approval gate. This is the ONLY module in the whole app allowed to set an
 # advice status to approved or edited_and_approved - see docs/API_CONTRACT.md.
-# A rejection always needs a reason; approving or editing always needs an officer id,
-# and only a draft that is pending_review (never blocked, drafted, or already
-# decided) can be acted on.
+# Every route needs a signed-in officer (signed session, backend/officer/auth.py), and
+# the deciding officer is always the one in that session - an officer_id in the
+# request body is ignored. A rejection always needs a reason, and only a draft that is
+# pending_review (never blocked, drafted, or already decided) can be acted on.
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, field_validator
 from sqlmodel import select
 
@@ -14,16 +15,19 @@ from backend.core.config import settings
 from backend.core.database import session_scope
 from backend.db.models import Advice, AdviceSource, Approval, Officer, Run
 from backend.logging.tool_log import run_logged
+from backend.officer.auth import require_officer, signed_in_officer_id
 
-router = APIRouter(prefix="/api/approvals", tags=["approvals"])
+router = APIRouter(prefix="/api/approvals", tags=["approvals"], dependencies=[Depends(require_officer)])
 
 
+# officer_id is still accepted in each body so older clients keep working, but it is
+# ignored: the deciding officer always comes from the signed session.
 class ApproveRequest(BaseModel):
-    officer_id: int
+    officer_id: int | None = None
 
 
 class EditRequest(BaseModel):
-    officer_id: int
+    officer_id: int | None = None
     final_text: str
 
     @field_validator("final_text")
@@ -35,7 +39,7 @@ class EditRequest(BaseModel):
 
 
 class RejectRequest(BaseModel):
-    officer_id: int
+    officer_id: int | None = None
     reason: str
 
     @field_validator("reason")
@@ -89,10 +93,12 @@ def _pending_or_409(session, advice_id: int) -> Advice:
     return advice
 
 
-def _officer_or_400(session, officer_id: int) -> Officer:
-    officer = session.get(Officer, officer_id)
+def _session_officer(session, request: Request) -> Officer:
+    """The signed-in officer (require_officer has already checked there is one)."""
+    officer_id = signed_in_officer_id(request)
+    officer = session.get(Officer, officer_id) if officer_id is not None else None
     if officer is None:
-        raise HTTPException(400, f"No officer with id {officer_id}")
+        raise HTTPException(403, "Access denied: Officers only.")
     return officer
 
 
@@ -127,10 +133,10 @@ def _log_decision(session, advice: Advice, officer: Officer, decision: str, inpu
 
 
 @router.post("/{advice_id}/approve")
-def approve(advice_id: int, body: ApproveRequest):
+def approve(advice_id: int, request: Request, body: ApproveRequest | None = None):
     with session_scope() as session:
         advice = _pending_or_409(session, advice_id)
-        officer = _officer_or_400(session, body.officer_id)
+        officer = _session_officer(session, request)
         advice.status = "approved"
         advice.final_text = advice.draft_text
         session.add(advice)
@@ -143,10 +149,10 @@ def approve(advice_id: int, body: ApproveRequest):
 
 
 @router.post("/{advice_id}/edit")
-def edit_and_approve(advice_id: int, body: EditRequest):
+def edit_and_approve(advice_id: int, body: EditRequest, request: Request):
     with session_scope() as session:
         advice = _pending_or_409(session, advice_id)
-        officer = _officer_or_400(session, body.officer_id)
+        officer = _session_officer(session, request)
         advice.status = "edited_and_approved"
         advice.final_text = body.final_text
         session.add(advice)
@@ -162,10 +168,10 @@ def edit_and_approve(advice_id: int, body: EditRequest):
 
 
 @router.post("/{advice_id}/reject")
-def reject(advice_id: int, body: RejectRequest):
+def reject(advice_id: int, body: RejectRequest, request: Request):
     with session_scope() as session:
         advice = _pending_or_409(session, advice_id)
-        officer = _officer_or_400(session, body.officer_id)
+        officer = _session_officer(session, request)
         advice.status = "rejected"
         session.add(advice)
         session.add(

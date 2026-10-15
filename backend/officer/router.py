@@ -176,7 +176,7 @@ def group_detail(group_id: int):
 # ---------------------------------------------------------------------------
 # Agent runs
 # ---------------------------------------------------------------------------
-@router.post("/groups/{group_id}/draft")
+@router.post("/groups/{group_id}/draft", dependencies=[Depends(require_officer)])
 async def start_draft(group_id: int):
     with session_scope() as session:
         households = session.exec(select(Household).where(Household.group_id == group_id)).all()
@@ -512,26 +512,29 @@ def pending_summary():
 # Extension Officer Authentication (Session & Cookie)
 # ---------------------------------------------------------------------------
 class OfficerLoginRequest(BaseModel):
-    officer_id: int | None = 1
+    officer_id: int
     role: str = "officer"
 
 
 @router.post("/auth/login")
-def login_officer(request: Request, response: Response, body: OfficerLoginRequest | None = None):
-    """Authenticate an extension officer and set server-side session and cookie."""
-    officer_id = body.officer_id if (body and body.officer_id) else 1
-    role = body.role if (body and body.role) else "officer"
+def login_officer(request: Request, body: OfficerLoginRequest):
+    """Sign in as an existing extension officer - the same check as the /officer/login
+    form - and store it in the signed server-side session. Only the "officer" role
+    exists; any other role, or an unknown officer id, is refused."""
+    if body.role != "officer":
+        raise HTTPException(400, "Only officers can sign in here.")
+    officer_id = body.officer_id
+    role = "officer"
 
     with session_scope() as session:
         officer = session.get(Officer, officer_id)
-        officer_name = officer.name if officer else "Extension Officer"
+        if officer is None:
+            raise HTTPException(400, f"No officer with id {officer_id}")
+        officer_name = officer.name
 
-    if "session" in request.scope:
-        request.session["role"] = role
-        request.session["officer_id"] = officer_id
-        request.session["officer_name"] = officer_name
-
-    response.set_cookie(key="officer_role", value=role, max_age=86400 * 7, httponly=False, samesite="lax")
+    request.session["role"] = role
+    request.session["officer_id"] = officer_id
+    request.session["officer_name"] = officer_name
     return {
         "status": "authenticated",
         "role": role,
@@ -553,10 +556,8 @@ def logout_officer(request: Request, response: Response):
 
 @router.get("/auth/me")
 def current_officer(request: Request):
-    """Return currently authenticated officer from server session or cookie."""
+    """Return the officer signed in through the signed server-side session."""
     user_role = request.session.get("role") if "session" in request.scope else None
-    if not user_role:
-        user_role = request.cookies.get("officer_role") or request.cookies.get("role")
     officer_id = request.session.get("officer_id") if "session" in request.scope else None
     officer_name = request.session.get("officer_name") if "session" in request.scope else None
 
