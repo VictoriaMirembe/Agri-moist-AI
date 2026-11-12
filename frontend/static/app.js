@@ -174,6 +174,7 @@ const STATUS_WORDS = {
   edited_and_approved: "Approved with edits",
   rejected: "Rejected",
   blocked: "Blocked: a fact has no source",
+  expired: "Expired: please re-draft",
   drafted: "Draft ready for approval",
   flagged: "Sent for a visit instead",
   failed: "Did not finish",

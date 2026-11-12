@@ -53,6 +53,7 @@ STATUS_WORDS = {
     "edited_and_approved": "Approved with edits",
     "rejected": "Rejected",
     "blocked": "Blocked: a fact has no source",
+    "expired": "Expired: please re-draft",
     "drafted": "Draft ready for approval",
     "flagged": "Sent for a visit instead",
     "failed": "Did not finish",
@@ -70,6 +71,7 @@ CHANNEL_WORDS = {
     "assistant-flag": "AI assistant",
     "assistant-followup": "AI assistant",
     "officer": "Officer",
+    "system": "System",
     "mcp-server-time": "Time server (borrowed MCP)",
     "seed-data": "Demo data",
 }
@@ -87,6 +89,7 @@ TOOL_WORDS = {
     "approve_advice": "Approved advice",
     "edit_and_approve_advice": "Edited and approved advice",
     "reject_advice": "Rejected advice",
+    "expire_advice": "Draft expired before approval",
     "mark_report_checked": "Checked a farmer message",
     "mark_flag_visited": "Marked a visit done",
     "record_followup": "Farmer answered \"did it help?\"",

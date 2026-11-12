@@ -43,6 +43,7 @@ from backend.db.models import (
 )
 from backend.agent import model_client
 from backend.logging.tool_log import run_logged
+from backend.officer.ussd import officer_ussd_reply
 from backend.tools import agrimoist_tools as impl
 from backend.tools.errors import ToolError
 
@@ -496,6 +497,9 @@ def farmer_followup(body: FollowupBody):
 # POST /ussd/africastalking/events  - point the AT events callback here
 # POST /ussd                        - same menu for the in-app simulator; also takes JSON
 #
+# A session dialled on USSD_OFFICER_SERVICE_CODE gets the officer menu instead
+# (backend/officer/ussd.py: sign in with a PIN, approve or reject drafts).
+#
 # Africa's Talking does not sign callbacks, so when USSD_CALLBACK_TOKEN is set the
 # two /ussd/africastalking URLs only answer requests carrying ?token=<that value>.
 # Put the token in the callback URLs on the AT dashboard. A serviceCode that is
@@ -601,9 +605,21 @@ def _ussd_reply(body: UssdRequest) -> str:
         return reply
 
 
+def _is_officer_code(service_code: str | None) -> bool:
+    """True when the session was dialled on the officer code (USSD_OFFICER_SERVICE_CODE).
+    The farmer code always means the farmer menu, even if both were set the same."""
+    officer_code = settings.ussd_officer_service_code
+    if not service_code or not officer_code:
+        return False
+    dialled = _normalise_code(service_code)
+    return dialled == _normalise_code(officer_code) and dialled != _normalise_code(settings.ussd_service_code or "")
+
+
 @router.post("/ussd", response_class=PlainTextResponse)
 async def ussd(request: Request):
     body = await _read_ussd_request(request)
+    if _is_officer_code(body.service_code):
+        return await run_in_threadpool(officer_ussd_reply, body.session_id, body.text, body.phone)
     return await run_in_threadpool(_ussd_reply, body)
 
 
@@ -611,6 +627,8 @@ async def ussd(request: Request):
 async def ussd_africastalking(request: Request):
     _check_callback_token(request)
     body = await _read_ussd_request(request)
+    if _is_officer_code(body.service_code):
+        return await run_in_threadpool(officer_ussd_reply, body.session_id, body.text, body.phone)
     expected_code = settings.ussd_service_code
     if body.service_code and expected_code and _normalise_code(body.service_code) != _normalise_code(expected_code):
         logger.warning(

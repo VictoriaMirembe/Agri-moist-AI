@@ -11,7 +11,7 @@ from sqlmodel import select
 
 from backend.core.config import settings
 from backend.core.database import session_scope
-from backend.db.models import Contact, Household
+from backend.db.models import Contact, Household, Officer
 
 TEMPLATES_DIR = Path(__file__).resolve().parent.parent.parent / "frontend" / "farmer" / "templates"
 templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
@@ -67,8 +67,15 @@ def ussd_simulator(request: Request, phone: str = ""):
         phones = [
             {"phone": c.phone, "name": c.name, "household_code": h.code, "group_id": h.group_id} for c, h in rows
         ]
+        officers = [{"id": o.id, "name": o.name} for o in session.exec(select(Officer).order_by(Officer.id)).all()]
     return templates.TemplateResponse(
         request,
         "ussd.html",
-        {"service_code": settings.ussd_service_code, "phone": phone or (phones[0]["phone"] if phones else ""), "phones": phones},
+        {
+            "service_code": settings.ussd_service_code,
+            "officer_service_code": settings.ussd_officer_service_code,
+            "officers": officers,
+            "phone": phone or (phones[0]["phone"] if phones else ""),
+            "phones": phones,
+        },
     )

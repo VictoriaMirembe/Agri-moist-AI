@@ -1,14 +1,21 @@
 # The approval gate. This is the ONLY module in the whole app allowed to set an
 # advice status to approved or edited_and_approved - see docs/API_CONTRACT.md.
-# Every route needs a signed-in officer (signed session, backend/officer/auth.py), and
+# Every web route needs a signed-in officer (signed session, backend/officer/auth.py), and
 # the deciding officer is always the one in that session - an officer_id in the
 # request body is ignored. A rejection always needs a reason, and only a draft that is
-# pending_review (never blocked, drafted, or already decided) can be acted on.
+# pending_review (never blocked, drafted, expired or already decided) can be acted on.
+#
+# Every channel decides through the same two functions here: load_decidable (may this
+# draft still be decided?) and apply_decision (decide it, once). The web routes below
+# and the officer USSD menu (backend/officer/ussd.py) both call them, so a rule added
+# here - such as draft expiry - holds on every channel and cannot be skipped.
 from __future__ import annotations
+
+from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, field_validator
-from sqlmodel import select
+from sqlmodel import select, update
 
 from backend.agent.model_client import translate_text
 from backend.core.config import settings
@@ -74,23 +81,74 @@ def _serialize(session, advice: Advice) -> dict:
     }
 
 
-@router.get("")
-def list_approvals(status: str | None = None):
-    with session_scope() as session:
-        query = select(Advice)
-        if status:
-            query = query.where(Advice.status == status)
-        advices = session.exec(query.order_by(Advice.created_at.desc())).all()
-        return [_serialize(session, a) for a in advices]
+EXPIRED_MESSAGE = "Expired: please re-draft"
+DECISION_STATUS = {"approve": "approved", "edit_and_approve": "edited_and_approved", "reject": "rejected"}
+
+
+class GateRefusal(Exception):
+    """The gate would not act. `advice_status` is the draft's current status (None if
+    there is no such draft), so a caller can show it instead of acting again."""
+
+    def __init__(self, status_code: int, detail: str, advice_status: str | None = None):
+        super().__init__(detail)
+        self.status_code = status_code
+        self.detail = detail
+        self.advice_status = advice_status
+
+
+def _expiry_cutoff() -> datetime:
+    """Drafts created at or before this moment (UTC) are too old to approve."""
+    return datetime.now(timezone.utc) - timedelta(hours=settings.draft_expiry_hours)
+
+
+def expire_stale_drafts(session) -> int:
+    """Move every pending_review draft older than DRAFT_EXPIRY_HOURS to 'expired',
+    and log each one. Runs before every decision and every pending list, so no
+    channel can show or approve advice written for weather and field facts that
+    have since changed. Returns how many drafts expired."""
+    stale = session.exec(
+        select(Advice).where(Advice.status == "pending_review", Advice.created_at <= _expiry_cutoff())
+    ).all()
+    expired = 0
+    for advice in stale:
+        # Only if it is still pending: a decision made a moment ago is never undone.
+        changed = session.exec(
+            update(Advice).where(Advice.id == advice.id, Advice.status == "pending_review").values(status="expired")
+        ).rowcount
+        session.commit()
+        if changed:
+            expired += 1
+            run_logged(
+                session,
+                tool="expire_advice",
+                inputs={"advice_id": advice.id, "expiry_hours": settings.draft_expiry_hours},
+                actor="system",
+                source="system",
+                run_id=advice.run_id,
+                func=lambda: {"id": advice.id, "status": "expired"},
+            )
+    return expired
+
+
+def load_decidable(session, advice_id: int) -> Advice:
+    """The draft, if it may still be decided. Otherwise GateRefusal with its current
+    status: unknown (404), expired, blocked or already decided (409)."""
+    expire_stale_drafts(session)
+    advice = session.get(Advice, advice_id)
+    if advice is None:
+        raise GateRefusal(404, "No such advice")
+    if advice.status == "expired":
+        raise GateRefusal(409, EXPIRED_MESSAGE, advice.status)
+    if advice.status != "pending_review":
+        raise GateRefusal(409, f"Advice is '{advice.status}', not pending_review; nothing changed", advice.status)
+    return advice
 
 
 def _pending_or_409(session, advice_id: int) -> Advice:
-    advice = session.get(Advice, advice_id)
-    if advice is None:
-        raise HTTPException(404, "No such advice")
-    if advice.status != "pending_review":
-        raise HTTPException(409, f"Advice is '{advice.status}', not pending_review; nothing changed")
-    return advice
+    try:
+        return load_decidable(session, advice_id)
+    except GateRefusal as refusal:
+        raise HTTPException(refusal.status_code, refusal.detail) from refusal
 
 
 def _session_officer(session, request: Request) -> Officer:
@@ -100,22 +158,6 @@ def _session_officer(session, request: Request) -> Officer:
     if officer is None:
         raise HTTPException(403, "Access denied: Officers only.")
     return officer
-
-
-def _translate_and_store(session, advice: Advice) -> dict:
-    """Translate the final, approved text for farmers. Runs only after approval
-    (advice.translated_text is set after approval only). Any
-    translation failure falls back to showing the English text - never blocks
-    the approval itself."""
-    result = translate_text(advice.final_text or "", settings.farmer_language)
-    advice.translated_text = result["translated_text"]
-    session.add(advice)
-    # A run's cost is everything AI spent on that advice: drafting, then translating.
-    run = session.get(Run, advice.run_id) if advice.run_id else None
-    if run is not None and result.get("cost"):
-        run.cost = round((run.cost or 0.0) + result["cost"], 6)
-        session.add(run)
-    return {"model": result["model"], "cost": result.get("cost", 0.0)}
 
 
 def _log_decision(session, advice: Advice, officer: Officer, decision: str, inputs: dict, outputs: dict) -> None:
@@ -132,20 +174,91 @@ def _log_decision(session, advice: Advice, officer: Officer, decision: str, inpu
     )
 
 
+def apply_decision(
+    session,
+    advice: Advice,
+    officer: Officer,
+    decision: str,  # approve, edit_and_approve or reject
+    *,
+    channel: str,  # web or ussd
+    reason: str | None = None,
+    final_text: str | None = None,
+) -> dict:
+    """Decide a draft that load_decidable returned. The one place a decision is made.
+
+    The status change is a single conditional UPDATE (only while the draft is still
+    pending_review and not expired), so two requests for the same draft - a double
+    tap, a gateway retry, the web and a phone at once - can never both act. The
+    loser gets GateRefusal carrying the status the winner set."""
+    new_status = DECISION_STATUS[decision]
+    values: dict = {"status": new_status}
+    translation = None
+    if decision != "reject":
+        # Translate the final, approved text for farmers. Any translation failure
+        # falls back to showing the English text - it never blocks the approval.
+        values["final_text"] = final_text if decision == "edit_and_approve" else advice.draft_text
+        translation = translate_text(values["final_text"] or "", settings.farmer_language)
+        values["translated_text"] = translation["translated_text"]
+
+    claimed = session.exec(
+        update(Advice)
+        .where(Advice.id == advice.id, Advice.status == "pending_review", Advice.created_at > _expiry_cutoff())
+        .values(**values)
+    ).rowcount
+    if not claimed:
+        session.rollback()
+        session.refresh(advice)
+        if advice.status == "pending_review":  # it passed the expiry time just now
+            raise GateRefusal(409, EXPIRED_MESSAGE, "expired")
+        raise GateRefusal(409, f"Advice is '{advice.status}', not pending_review; nothing changed", advice.status)
+
+    # A run's cost is everything AI spent on that advice: drafting, then translating.
+    run = session.get(Run, advice.run_id) if advice.run_id else None
+    if run is not None and translation and translation.get("cost"):
+        run.cost = round((run.cost or 0.0) + translation["cost"], 6)
+        session.add(run)
+    session.add(Approval(advice_id=advice.id, officer_id=officer.id, decision=new_status, reason=reason))
+    session.commit()
+    session.refresh(advice)
+
+    result = {"id": advice.id, "status": advice.status, "officer": officer.name}
+    inputs: dict = {"channel": channel}
+    outputs = dict(result)
+    if decision == "edit_and_approve":
+        inputs["final_text"] = final_text
+    if decision == "reject":
+        inputs["reason"] = reason
+    if translation is not None:
+        result["translation_model"] = translation["model"]
+        outputs = {**result, "translation_cost": translation.get("cost", 0.0)}
+    _log_decision(session, advice, officer, decision, inputs, outputs)
+    return result
+
+
+def _decide_or_http(session, advice: Advice, officer: Officer, decision: str, **kwargs) -> dict:
+    try:
+        return apply_decision(session, advice, officer, decision, channel="web", **kwargs)
+    except GateRefusal as refusal:
+        raise HTTPException(refusal.status_code, refusal.detail) from refusal
+
+
+@router.get("")
+def list_approvals(status: str | None = None):
+    with session_scope() as session:
+        expire_stale_drafts(session)
+        query = select(Advice)
+        if status:
+            query = query.where(Advice.status == status)
+        advices = session.exec(query.order_by(Advice.created_at.desc())).all()
+        return [_serialize(session, a) for a in advices]
+
+
 @router.post("/{advice_id}/approve")
 def approve(advice_id: int, request: Request, body: ApproveRequest | None = None):
     with session_scope() as session:
         advice = _pending_or_409(session, advice_id)
         officer = _session_officer(session, request)
-        advice.status = "approved"
-        advice.final_text = advice.draft_text
-        session.add(advice)
-        translation = _translate_and_store(session, advice)
-        session.add(Approval(advice_id=advice.id, officer_id=officer.id, decision="approved"))
-        session.commit()
-        result = {"id": advice.id, "status": advice.status, "officer": officer.name, "translation_model": translation["model"]}
-        _log_decision(session, advice, officer, "approve", {}, {**result, "translation_cost": translation["cost"]})
-        return result
+        return _decide_or_http(session, advice, officer, "approve")
 
 
 @router.post("/{advice_id}/edit")
@@ -153,18 +266,7 @@ def edit_and_approve(advice_id: int, body: EditRequest, request: Request):
     with session_scope() as session:
         advice = _pending_or_409(session, advice_id)
         officer = _session_officer(session, request)
-        advice.status = "edited_and_approved"
-        advice.final_text = body.final_text
-        session.add(advice)
-        translation = _translate_and_store(session, advice)
-        session.add(Approval(advice_id=advice.id, officer_id=officer.id, decision="edited_and_approved"))
-        session.commit()
-        result = {"id": advice.id, "status": advice.status, "officer": officer.name, "translation_model": translation["model"]}
-        _log_decision(
-            session, advice, officer, "edit_and_approve", {"final_text": body.final_text},
-            {**result, "translation_cost": translation["cost"]},
-        )
-        return result
+        return _decide_or_http(session, advice, officer, "edit_and_approve", final_text=body.final_text)
 
 
 @router.post("/{advice_id}/reject")
@@ -172,12 +274,4 @@ def reject(advice_id: int, body: RejectRequest, request: Request):
     with session_scope() as session:
         advice = _pending_or_409(session, advice_id)
         officer = _session_officer(session, request)
-        advice.status = "rejected"
-        session.add(advice)
-        session.add(
-            Approval(advice_id=advice.id, officer_id=officer.id, decision="rejected", reason=body.reason)
-        )
-        session.commit()
-        result = {"id": advice.id, "status": advice.status, "officer": officer.name}
-        _log_decision(session, advice, officer, "reject", {"reason": body.reason}, result)
-        return result
+        return _decide_or_http(session, advice, officer, "reject", reason=body.reason)

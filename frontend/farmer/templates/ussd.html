@@ -19,6 +19,7 @@
     </div>
     <div class="ussd-calls">
       <button class="ussd-call" id="dial-btn" type="button">Dial {{ service_code }}</button>
+      {% if officer_service_code %}<button class="ussd-call" id="officer-dial-btn" type="button" style="margin-top:0.4rem;background:#3a4048;">Officer: dial {{ officer_service_code }}</button>{% endif %}
     </div>
     <div class="keypad" id="keypad">
       <button type="button" data-k="1">1</button><button type="button" data-k="2">2</button><button type="button" data-k="3">3</button>
@@ -46,6 +47,21 @@
       <p><a id="sent-to-link" href="/">Open the officer screen</a> or <a id="farm-link" href="/farmer">see it on the farmer page</a>.</p>
     </div>
 
+    {% if officer_service_code %}
+    <details class="ussd-fold">
+      <summary>Extension officers: approve by phone</summary>
+      <p>Officers dial <strong class="ussd-code">{{ officer_service_code }}</strong> to approve or reject drafts with no
+      web app. Enter your officer id ({% for o in officers %}{{ o.id }} = {{ o.name }}{% if not loop.last %}, {% endif %}{% endfor %}),
+      then your 4-digit PIN (the demo PINs are in the README).</p>
+      <pre>Officer id &gt; PIN &gt; up to 3 drafts waiting, newest first
+Pick a draft &gt; 1 Approve
+               2 Reject &gt; 1 Facts look wrong  2 Does not fit this group
+                          3 Wording is unclear  4 Out of date
+               0 Back
+A draft waiting too long shows "Expired: please re-draft".
+Editing a draft stays on the web.</pre>
+    </details>
+    {% endif %}
     <details class="ussd-fold">
       <summary>Menu map</summary>
       <pre>1  My advice                      (approved advice only)
@@ -66,7 +82,9 @@
 </div>
 
 <script>
-const SERVICE_CODE = {{ service_code | tojson }};
+const FARMER_CODE = {{ service_code | tojson }};
+const OFFICER_CODE = {{ officer_service_code | tojson }};
+let SERVICE_CODE = FARMER_CODE; // the code the current session was dialled on
 const NETWORK_CODE = "99999"; // Africa's Talking sandbox network code
 const ENDPOINT = "/ussd"; // same menu as /ussd/africastalking, without the gateway token check
 let sessionId = null;
@@ -121,8 +139,14 @@ async function send() {
     networkCode: NETWORK_CODE,
     text: typed.join("*"),
   });
+  // Shown on screen, so an officer's PIN (the second thing typed on the officer code)
+  // is masked here. The request itself still carries it.
+  const shown = new URLSearchParams(params);
+  if (SERVICE_CODE === OFFICER_CODE && typed.length > 1) {
+    shown.set("text", typed.map((value, i) => (i === 1 ? "****" : value)).join("*"));
+  }
   document.getElementById("last-request").textContent =
-    "POST " + ENDPOINT + "\nContent-Type: application/x-www-form-urlencoded\n\n" + params.toString();
+    "POST " + ENDPOINT + "\nContent-Type: application/x-www-form-urlencoded\n\n" + shown.toString();
   let reply;
   try {
     const res = await fetch(ENDPOINT, {
@@ -154,11 +178,15 @@ function submitReply() {
   send();
 }
 
-document.getElementById("dial-btn").addEventListener("click", () => {
+function dial(code) {
+  SERVICE_CODE = code;
   sessionId = "ATUid_sim_" + crypto.randomUUID().replace(/-/g, "");
   typed = [];
   send();
-});
+}
+document.getElementById("dial-btn").addEventListener("click", () => dial(FARMER_CODE));
+const officerDial = document.getElementById("officer-dial-btn");
+if (officerDial) officerDial.addEventListener("click", () => dial(OFFICER_CODE));
 
 document.getElementById("reply").addEventListener("keydown", (e) => {
   if (e.key === "Enter") submitReply();

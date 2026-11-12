@@ -295,6 +295,25 @@ farmer's page, without a reload.
 retries once, then writes *"weather missing, check before approving"* into the draft
 instead of inventing a rain figure.
 
+## Approving by phone (officer USSD)
+
+An extension officer can approve or reject drafts from a basic phone, with no web app.
+In the simulator (`/ussd`) press **Officer: dial `*384*5952#`**, then enter the officer id and PIN.
+
+| Officer | Officer id | Demo PIN |
+|---|---|---|
+| Among Betty | `1` | `1234` |
+| Lomuria Peter | `2` | `5678` |
+
+These are demo PINs seeded by `backend/db/seed.py`; change them before any real use. Only a
+salted scrypt hash of each PIN is stored (`backend/officer/pins.py`). Three wrong PINs in a
+row lock that officer's USSD sign-in for 15 minutes.
+
+- The menu lists up to 3 drafts waiting, newest first. Pick one, then `1` Approve, `2` Reject (choose a reason from a fixed list) or `0` Back. Editing stays on the web.
+- USSD calls the same approval gate as the web (`load_decidable` and `apply_decision` in `backend/approvals/router.py`). The decision records the officer who signed in and is logged with `channel` `ussd` (web decisions log `web`).
+- **Expiry.** A draft waiting longer than `DRAFT_EXPIRY_HOURS` (default 72) becomes `expired` and cannot be approved on any channel; both show "Expired: please re-draft". The check lives in the gate, so no channel can skip it.
+- **Decide once.** A draft that is already decided is never acted on again: USSD answers with its current status, the web answers 409 as before. This also covers a gateway resending a request on a weak network.
+
 ## Safety guarantees
 
 These rules are enforced in code, not just stated in the prompt.
