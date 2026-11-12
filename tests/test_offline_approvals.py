@@ -67,7 +67,31 @@ def _approvals(advice_id: int) -> list:
 
 
 def _decision_logs(client, tool: str) -> list[dict]:
-    return [row for row in client.get("/api/logs").json() if row["tool"] == tool]
+    """The tool_log rows for `tool`, read from GET /api/logs.
+
+    /api/logs is officer-only (403 without a signed session), and `client` is often the
+    `phone` client, which must stay signed out so the USSD tests prove the PIN is the
+    only sign-in. So the logs are read through a separate client that signs in as an
+    officer the normal way (the demo password), and `client` itself is left untouched.
+    """
+    from fastapi.testclient import TestClient
+
+    from backend.core.config import settings
+    from backend.main import app
+
+    reader = TestClient(app)  # no `with`: the app is already started by the test's client
+    try:
+        login = reader.post(
+            "/api/auth/login", json={"officer_id": 1, "password": settings.officer_demo_password}
+        )
+        assert login.status_code == 200, f"Officer sign-in for reading /api/logs failed: {login.status_code} {login.text}"
+        r = reader.get("/api/logs")
+    finally:
+        reader.close()
+    body = r.json()
+    if r.status_code != 200 or not isinstance(body, list):
+        pytest.fail(f"GET /api/logs should return a list of log rows, got HTTP {r.status_code}: {body!r}")
+    return [row for row in body if row["tool"] == tool]
 
 
 def _make_old(advice_id: int, hours: float) -> None:
