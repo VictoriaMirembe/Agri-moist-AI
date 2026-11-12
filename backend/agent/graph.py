@@ -17,6 +17,7 @@ from backend.agent.model_client import draft_advice_text
 from backend.core.database import session_scope
 from backend.db.models import District, Household, Run, Village, VisitFlag
 from backend.logging.tool_log import run_logged
+from backend.tools.agrimoist_tools import soil_reading_is_stale
 from backend.tools.errors import ToolError
 
 EmitFn = Callable[[int, dict[str, Any]], Awaitable[None]]
@@ -38,6 +39,8 @@ class AgentState(TypedDict, total=False):
     pest_reports_error: str | None
     weather: dict | None
     weather_error: str | None
+    soil_moisture: dict | None
+    soil_moisture_error: str | None
     now_info: dict | None
     now_error: str | None
     crop_calendars: dict[str, dict]
@@ -141,6 +144,7 @@ async def gather_node(state: AgentState) -> dict:
     weather, w_err = await _call_with_retry(
         client, run_id, emit_fn, "get_weather", latitude=state["village_lat"], longitude=state["village_lon"]
     )
+    soil_moisture, sm_err = await _call_with_retry(client, run_id, emit_fn, "get_soil_moisture", group_id=group_id)
 
     await emit_fn(run_id, {"type": "tool_call", "tool": "get_current_time", "inputs": {"timezone": "Africa/Kampala"}})
     try:
@@ -175,12 +179,73 @@ async def gather_node(state: AgentState) -> dict:
         "pest_reports_error": pr_err,
         "weather": weather,
         "weather_error": w_err,
+        "soil_moisture": soil_moisture,
+        "soil_moisture_error": sm_err,
         "now_info": now_info,
         "now_error": now_err,
         "crops": crops,
         "crop_calendars": crop_calendars,
         "crop_calendar_errors": calendar_errors,
     }
+
+
+def split_soil_readings(soil: dict | None, now: datetime | None = None) -> tuple[list[dict], list[dict]]:
+    """(current, stale) readings from get_soil_moisture. The age is checked again here
+    from read_at, not only taken from the tool's `stale` flag, because time passes
+    between reading and drafting. Stale readings are never used as current."""
+    current, stale = [], []
+    for reading in (soil or {}).get("readings", []):
+        read_at = reading.get("read_at")
+        if reading.get("stale") or not read_at or soil_reading_is_stale(read_at, now):
+            stale.append(reading)
+        else:
+            current.append(reading)
+    return current, stale
+
+
+def _soil_facts_and_sources(state: AgentState) -> tuple[dict, list[dict[str, str]]]:
+    """What the model is told about soil moisture, and the sources that back it. A stale
+    reading's value is left out of the facts entirely, so it cannot be written into the
+    advice as if it were current (and if it were, no source contains that number, so the
+    unsourced-number check would block the draft)."""
+    soil = state.get("soil_moisture")
+    if not soil:
+        error = state.get("soil_moisture_error")
+        return (
+            {"gap": f"soil sensor readings missing after retry: {error}"},
+            [
+                {
+                    "fact": "Soil sensor readings unavailable after one retry",
+                    "source_type": "soil_sensor",
+                    "source_ref": f"unavailable: {error}",
+                }
+            ],
+        )
+    current, stale = split_soil_readings(soil)
+    facts = {
+        "source": f"{soil.get('source', 'simulated sensor')} (simulated, not real hardware)",
+        "current_readings": [{"household_code": r["household_code"], "moisture_pct": r["moisture_pct"]} for r in current],
+        "stale_readings_not_used": [
+            {"household_code": r["household_code"], "note": "out of date; not a current reading"} for r in stale
+        ],
+        "plots_without_reading": soil.get("plots_without_reading", []),
+    }
+    sources = [
+        {
+            "fact": f"Soil moisture at {r['household_code']}: {r['moisture_pct']}% ({r['source']}, current reading)",
+            "source_type": "soil_sensor",
+            "source_ref": r["source_ref"],
+        }
+        for r in current
+    ] + [
+        {
+            "fact": f"Soil sensor reading at {r['household_code']} is out of date and was not used",
+            "source_type": "soil_sensor",
+            "source_ref": r["source_ref"],
+        }
+        for r in stale
+    ]
+    return facts, sources
 
 
 _FOOD_WORDS = re.compile(r"\bfood\b", re.IGNORECASE)
@@ -256,6 +321,9 @@ async def draft_or_flag_node(state: AgentState) -> dict:
                 "source_ref": f"unavailable: {state.get('weather_error')}",
             }
         )
+
+    facts["soil_moisture"], soil_sources = _soil_facts_and_sources(state)
+    sources.extend(soil_sources)
 
     field_records = state.get("field_records") or {}
     facts["field_records"] = field_records

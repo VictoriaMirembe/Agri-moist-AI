@@ -19,6 +19,9 @@ class Settings(BaseSettings):
     # Weather. Open-Meteo needs no key.
     open_meteo_base_url: str = "https://api.open-meteo.com/v1/forecast"
     weather_fail: bool = False  # T23: demo/test switch that forces get_weather to fail
+    # Soil moisture comes from a SIMULATED sensor (no hardware). Demo/test switch that
+    # forces get_soil_moisture to fail, to show the retry-then-gap behaviour.
+    soil_sensor_fail: bool = False
 
     # Optional demo/eval override so a specific rain scenario can be rehearsed or
     # evaluated on demand (live weather cannot be forced to "little rain" on

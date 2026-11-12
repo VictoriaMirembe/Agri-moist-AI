@@ -25,6 +25,7 @@ from backend.db.models import (
     Observation,
     Plot,
     PlotHistory,
+    SoilReading,
     VisitFlag,
 )
 from backend.tools.errors import ToolError
@@ -329,6 +330,67 @@ def get_pest_reports(session: Session, *, group_id: int, days: int = 21) -> dict
         for o in rows
     ]
     return {"reports": reports}
+
+
+# ---------------------------------------------------------------------------
+# get_soil_moisture - latest SIMULATED soil-moisture reading for each plot in a group
+# ---------------------------------------------------------------------------
+SOIL_SENSOR_SOURCE = "simulated sensor"
+SOIL_STALE_AFTER_HOURS = 24
+
+
+def _as_utc(dt: datetime) -> datetime:
+    return dt.replace(tzinfo=timezone.utc) if dt.tzinfo is None else dt.astimezone(timezone.utc)
+
+
+def soil_reading_is_stale(read_at: datetime | str, now: datetime | None = None) -> bool:
+    """True when a reading is older than SOIL_STALE_AFTER_HOURS. A stale reading says
+    what the soil WAS, not what it is now, so it must never be used as current."""
+    when = datetime.fromisoformat(read_at) if isinstance(read_at, str) else read_at
+    return (now or datetime.now(timezone.utc)) - _as_utc(when) > timedelta(hours=SOIL_STALE_AFTER_HOURS)
+
+
+def get_soil_moisture(session: Session, *, group_id: int) -> dict[str, Any]:
+    if settings.soil_sensor_fail:
+        raise ToolError(
+            "Soil sensor feed is unavailable right now (demo failure switch is on).",
+            source=SOIL_SENSOR_SOURCE,
+        )
+    households = session.exec(select(Household).where(Household.group_id == group_id)).all()
+    code_by_household = {h.id: h.code for h in households}
+    plots = session.exec(select(Plot).where(Plot.household_id.in_(code_by_household.keys()))).all() if households else []
+    code_by_plot = {p.id: code_by_household[p.household_id] for p in plots}
+
+    latest: dict[int, SoilReading] = {}
+    if plots:
+        rows = session.exec(
+            select(SoilReading)
+            .where(SoilReading.plot_id.in_(code_by_plot.keys()))
+            .order_by(SoilReading.read_at.desc(), SoilReading.id.desc())
+        ).all()
+        for row in rows:
+            latest.setdefault(row.plot_id, row)  # first row per plot is its newest
+
+    now = datetime.now(timezone.utc)
+    readings = [
+        {
+            "household_code": code_by_plot[r.plot_id],
+            "plot_id": r.plot_id,
+            "moisture_pct": r.moisture_pct,
+            "read_at": _as_utc(r.read_at).isoformat(),
+            "stale": soil_reading_is_stale(r.read_at, now),
+            "source": r.source,
+            "demo": r.demo,
+            "source_ref": f"soil_reading:{r.id}",
+        }
+        for r in sorted(latest.values(), key=lambda r: code_by_plot[r.plot_id])
+    ]
+    return {
+        "readings": readings,
+        "plots_without_reading": sorted(code_by_plot[p] for p in code_by_plot if p not in latest),
+        "stale_after_hours": SOIL_STALE_AFTER_HOURS,
+        "source": SOIL_SENSOR_SOURCE,
+    }
 
 
 # ---------------------------------------------------------------------------

@@ -77,7 +77,7 @@ AgriMoist AI gives each officer an AI assistant that does the checking and draft
 The officer keeps the judgement.
 
 1. **Collect.** Officers record field visits. Farmers report pests, rain and crop problems from any phone.
-2. **Check.** The agent gathers plot history, live weather, nearby pest reports and the crop calendar through MCP tools.
+2. **Check.** The agent gathers plot history, live weather, nearby pest reports, soil moisture from a simulated sensor and the crop calendar through MCP tools.
 3. **Draft.** An open-weights model writes advice in which every fact cites its source. Urgent cases are flagged for a visit instead.
 4. **Approve.** A named officer approves, edits or rejects each draft. Nothing reaches a farmer without that approval.
 5. **Follow up.** Farmers read approved advice by USSD or on the web, in English or Ngakarimojong, and say whether it helped.
@@ -98,7 +98,7 @@ The officer keeps the judgement.
 - **Human-in-the-loop approval gate.** Farmers only ever read from a database view that contains approved advice.
 - **Source-checked drafts.** A draft with an unsourced fact, or with a number that appears in none of its sources, is blocked before it reaches the queue.
 - **Graceful degradation.** A failed call to our own MCP tools is retried once and then recorded as a visible gap; a failed borrowed-clock call is recorded as a gap without a retry. The agent never guesses a missing value.
-- **Two MCP servers.** Our own 9-tool AgriMoist server, plus the borrowed reference server `mcp-server-time`, both connected over stdio.
+- **Two MCP servers.** Our own 10-tool AgriMoist server (6 read, 4 write), plus the borrowed reference server `mcp-server-time`, both connected over stdio.
 - **Basic-phone access.** A USSD menu compatible with Africa's Talking, plus an in-browser handset simulator.
 - **Local language.** Approved advice is translated into Ngakarimojong by Sunbird AI. Translations that change any number are rejected.
 - **Voice reader.** Farmers can have their page read aloud in English, Swahili or Karamojong, using Sunbird AI's Ugandan voices. Speech is generated in short pieces and prepared in the background when the page opens. Each piece is generated once, stored by the app, and kept by the phone, so listening again uses no data.
@@ -122,7 +122,7 @@ flowchart LR
     end
 
     subgraph MCP["MCP servers (stdio)"]
-        M1[AgriMoist server<br/>9 tools]
+        M1[AgriMoist server<br/>10 tools]
         M2[mcp-server-time]
     end
 
@@ -260,6 +260,7 @@ All settings are read from `.env`. See [`.env.example`](.env.example) for the fu
 | `USSD_SERVICE_CODE` | Short code shown in the simulator | `*384*5951#` |
 | `USSD_CALLBACK_TOKEN` | Shared secret required on the Africa's Talking callback URLs | blank |
 | `WEATHER_FAIL` | `1` forces `get_weather` to fail, to demonstrate the retry-and-gap behaviour | `0` |
+| `SOIL_SENSOR_FAIL` | `1` forces `get_soil_moisture` (the simulated soil sensor) to fail, to demonstrate the retry-and-gap behaviour | `0` |
 | `WEATHER_OVERRIDE_PAST_MM` / `WEATHER_OVERRIDE_NEXT_MM` | Forces a rain scenario for demos and evals. Always labelled `demo-override`, never shown as a live reading. | unset |
 
 Open-Meteo needs no key. API keys: [Groq](https://console.groq.com/keys) · [Sunbird AI](https://api.sunbird.ai).
@@ -332,7 +333,7 @@ These rules are enforced in code, not just stated in the prompt.
 ## MCP integration
 
 Our tool server (`backend/mcp_server/server.py`) is a standard stdio MCP server. It
-exposes nine tools: five that only read and four that write. None of them can contact a
+exposes ten tools: six that only read and four that write. None of them can contact a
 farmer.
 
 | Tool | Type | Purpose |
@@ -342,6 +343,7 @@ farmer.
 | `get_crop_calendar` | Read | Planting and harvest windows for a crop in its agroclimatic zone |
 | `get_weather` | Read | The past 7 days' rainfall and the 7-day forecast (Open-Meteo) |
 | `get_pest_reports` | Read | Nearby pest sightings from visits and farmer reports |
+| `get_soil_moisture` | Read | Latest soil-moisture reading per plot from a **simulated** sensor (no real hardware), with its time; readings older than 24 hours are marked stale |
 | `record_observation` | Write | Saves a field visit or farmer report, tagged by source |
 | `draft_advice` | Write | Queues sourced advice for approval; blocks it if any fact is unsourced |
 | `flag_for_visit` | Write | Flags a household group for an urgent officer visit |
@@ -462,11 +464,12 @@ about $0.00006.
 | Rainfall | [Open-Meteo](https://open-meteo.com) | Model forecast, not ground measurement |
 | Crop calendar | [FEWS NET Karamoja Livelihood Zones report](https://fews.net/sites/default/files/documents/reports/Karamoja%20Final_LHZ%20Report.pdf) | Sorghum and maize only; seasonal windows |
 | Pest reports | Derived from visit and farmer-report records | Only as current as the last record |
+| Soil moisture | **Simulated** sensor readings (`SoilReading` table); the seeded ones are demo data (`backend/db/seed.py`) | No real sensor hardware. A reading older than 24 hours is marked stale and never used as current |
 
 ## Testing
 
 ```bash
-pytest                              # 178 tests
+pytest                              # 224 tests
 docker compose run app pytest       # inside Docker
 python scripts/run_evals.py         # 14-task evaluation (uses the real model if a key is set)
 ```
@@ -484,7 +487,7 @@ backend/
   db/             SQLModel models and synthetic seed data
   farmer/         Farmer web API, USSD handler, voice endpoints
   logging/        Audit log
-  mcp_server/     AgriMoist MCP server (9 tools)
+  mcp_server/     AgriMoist MCP server (10 tools)
   officer/        Officer pages, API and sign-in
   tools/          Tool implementations shared by the MCP server
 frontend/
@@ -510,13 +513,14 @@ This is a hackathon build. We state its limits plainly.
 - **USSD needs a public URL** set in the Africa's Talking dashboard to go live. No SMS is sent in this build.
 - **USSD pest reports cannot name the pest.** The web page lets the farmer choose one.
 - **Synthetic data only**, and there is no household registration screen yet.
+- **The soil-moisture sensor is simulated.** There is no sensor hardware; every reading is labelled `simulated sensor`, and the seeded ones are demo data. Demo readings are timed when the database is first seeded, so on an old database they will all show as stale.
 - **Docker was not run in the build environment.** The app was verified with uvicorn and the full test suite; the Docker image uses the same install and start commands.
 - Karamojong is read aloud with Sunbird's Ateso voice because no Karamojong voice exists.
 - The fixed greeting and field-condition phrases in Karamojong and Swahili were written by the team and have not been checked by a native speaker.
 - The Swahili option reads the Karamojong translation when one exists; advice is not translated into Swahili.
 - `POST /api/farmer/voice-audio` is not yet restricted to approved advice and its calls are not logged.
 - The voice audio cache is on disk and is lost when the free Render instance restarts.
-- Only the approval API, the draft queue, drafting and follow-ups require a signed-in officer. Other officer screens and APIs (for example `/log`, `/api/logs`, recording a visit, checking a farmer report and marking a visit done) are still open, and those three saving actions take the officer's id from the request.
+- Since commit `654ed7d`, every officer screen and officer API requires a signed-in officer, but recording a visit, checking a farmer report and marking a visit done still take the officer's id from the request body rather than from the signed-in session. The web sign-in is a shared demo login: its password is shown on the sign-in page so judges can try the app. Production would need a password or a one-time code (OTP) for each officer. The officer USSD menu already uses a separate PIN for each officer, with lockout after repeated wrong PINs.
 
 ## Roadmap
 

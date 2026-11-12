@@ -68,6 +68,19 @@ class Plot(SQLModel, table=True):
     size_acres: Optional[float] = None  # may be blank (messy data)
 
 
+class SoilReading(SQLModel, table=True):
+    """A soil-moisture reading for a plot. There is no real sensor hardware: every
+    reading so far comes from a SIMULATED sensor (source "simulated sensor"), and the
+    seeded ones are also marked demo=True. Read by the get_soil_moisture tool."""
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    plot_id: int = Field(foreign_key="plot.id", index=True)
+    moisture_pct: float  # volumetric water content, %
+    read_at: datetime = Field(default_factory=utcnow)
+    source: str = "simulated sensor"
+    demo: bool = False  # True for the made-up readings loaded by backend/db/seed.py
+
+
 class PlotHistory(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     plot_id: int = Field(foreign_key="plot.id")

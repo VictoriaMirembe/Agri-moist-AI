@@ -1,4 +1,4 @@
-{# Household group screen: visits needed, advice history, recent field records and farmer messages, plot history and crop calendar (from GET /api/groups/{id}), and the Draft advice button (POST /api/groups/{id}/draft). #}
+{# Household group screen: visits needed, advice history, simulated soil-sensor readings, recent field records and farmer messages, plot history and crop calendar (from GET /api/groups/{id}), and the Draft advice button (POST /api/groups/{id}/draft). #}
 {% extends "base.html" %}
 {% block title %}Group {{ group_id }}{% endblock %}
 {% block content %}
@@ -57,6 +57,12 @@
   {% endif %}
 </section>
 
+<section class="o-panel" id="soil-panel">
+  <h2>Soil moisture (simulated sensor)</h2>
+  <p class="muted">Latest reading for each plot. These come from a simulated sensor, not real hardware. A reading older than 24 hours is marked stale and the assistant does not use it as current.</p>
+  <div id="soil-moisture" class="muted">Loading...</div>
+</section>
+
 <section class="o-panel">
   <h2>Recent visits and farmer messages</h2>
   <div id="field-records" class="muted">Loading...</div>
@@ -84,6 +90,17 @@ async function loadDetail() {
       fr.map(r => `<tr><td>${escapeHTML(r.household_code)}</td><td>${escapeHTML(plainChannel(r.source))}</td><td>${escapeHTML(formatWhen(r.observed_on))}</td><td>${escapeHTML(r.soil_wetness||'-')}</td><td>${escapeHTML(r.rain_last_7_days||'-')}</td><td>${escapeHTML(r.pest_seen||'-')}</td><td>${escapeHTML(r.crop_condition||'-')}</td><td>${escapeHTML(r.food_left||'-')}</td><td>${statusPill(r.checked)}</td></tr>`).join("") +
       "</tbody></table></div>"
     ) : "<p class='muted'>No recent records.</p>";
+
+    const soil = data.soil_moisture || {readings: [], plots_without_reading: []};
+    const noReading = soil.plots_without_reading.length
+      ? `<p class="muted">No sensor reading yet: ${soil.plots_without_reading.map(escapeHTML).join(", ")}</p>` : "";
+    document.getElementById("soil-moisture").innerHTML = soil.error
+      ? `<p class="gap">Sensor readings unavailable: ${escapeHTML(soil.error)}</p>`
+      : (soil.readings.length ? (
+        "<div class='table-wrap'><table class='o-table'><thead><tr><th>Household</th><th>Moisture</th><th>Read</th><th>Status</th><th>Source</th></tr></thead><tbody>" +
+        soil.readings.map(r => `<tr><td>${escapeHTML(r.household_code)}</td><td>${escapeHTML(r.moisture_pct)}%</td><td>${escapeHTML(formatWhen(r.read_at))}</td><td>${r.stale ? '<span class="pill amber">Stale</span>' : '<span class="pill green">Current</span>'}</td><td>${escapeHTML(r.source)}${r.demo ? " (demo data)" : ""}</td></tr>`).join("") +
+        "</tbody></table></div>"
+      ) : "<p class='muted'>No sensor readings for this group.</p>") + noReading;
 
     const ph = data.plot_history.history;
     document.getElementById("plot-history").innerHTML = ph.length ? (

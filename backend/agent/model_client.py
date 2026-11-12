@@ -53,6 +53,8 @@ DRAFT_SYSTEM_PROMPT = (
     "copied exactly - a draft with any other number is blocked before review. "
     "Start with the rain and soil-moisture signal (recent rain, the forecast and soil "
     "wetness) and what it means for watering; only then cover pests and planting. "
+    "Soil sensor readings come from a simulated sensor; use only current_readings, and "
+    "never give a value for a reading listed as stale (out of date). "
     "Never put internal ids or field names in the advice or the why text - no "
     "'observation:12', 'plant_to', 'planting_window_closed_this_year', "
     "'pest_reports_list' or source references; the officer already sees the sources. "
@@ -115,8 +117,21 @@ def _stub_draft(facts: dict[str, Any]) -> dict[str, Any]:
         else:
             lines.append(f"Rain has been light to moderate recently ({past}mm past week, {upcoming}mm forecast); watch soil before watering.")
 
+    soil = facts.get("soil_moisture") or {}
+    sensor_current = soil.get("current_readings") or []
+    if "gap" in soil:
+        lines.append("Soil sensor readings are missing after a retry - check the soil before approving this advice.")
+    else:
+        dry_sensor = [r for r in sensor_current if r["moisture_pct"] < 15]
+        if dry_sensor:
+            plots = ", ".join(f"{r['household_code']} ({r['moisture_pct']}%)" for r in dry_sensor)
+            lines.append(f"The simulated soil sensor shows dry soil at {plots}.")
+        stale_codes = [r["household_code"] for r in soil.get("stale_readings_not_used") or []]
+        if stale_codes:
+            lines.append(f"The sensor reading for {', '.join(stale_codes)} is out of date, so it was not used.")
+
     field_records = (facts.get("field_records") or {}).get("records", [])
-    dry_recent = [r["household_code"] for r in field_records if r.get("soil_wetness") == "dry"]
+    dry_recent =[r["household_code"] for r in field_records if r.get("soil_wetness") == "dry"]
     if dry_recent:
         lines.append(f"Soil was dry at the last visit for: {', '.join(sorted(set(dry_recent)))}.")
 
@@ -138,6 +153,7 @@ def _stub_draft(facts: dict[str, Any]) -> dict[str, Any]:
                 s
                 for s in [
                     "the rain forecast" if weather else None,
+                    "simulated soil sensor readings" if sensor_current else None,
                     "recent visit records" if field_records else None,
                     "pest reports" if pest_names else None,
                     "the crop calendar" if facts.get("crop_calendar") else None,

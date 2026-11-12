@@ -4,8 +4,8 @@
 
 An AI agent for an agricultural extension office in Karamoja, Uganda, that drafts
 sourced advice for a group of farming households from visit records, farmer reports,
-weather and the crop calendar. A named officer approves every draft before anything
-reaches a farmer.
+weather, simulated soil-moisture sensor readings and the crop calendar. A named
+officer approves every draft before anything reaches a farmer.
 
 ## 2. Agent shape
 
@@ -32,7 +32,7 @@ flowchart LR
 
 | | Server | Tools |
 |---|---|---|
-| **Built** | `backend/mcp_server/server.py` | **Read only:** `get_field_records`, `get_plot_history`, `get_crop_calendar`, `get_weather`, `get_pest_reports`. **Saves a record:** `record_observation`. **Acts:** `draft_advice`, `flag_for_visit`, `schedule_followup` |
+| **Built** | `backend/mcp_server/server.py` | **Read only (6):** `get_field_records`, `get_plot_history`, `get_crop_calendar`, `get_weather`, `get_pest_reports`, `get_soil_moisture`. **Saves a record:** `record_observation`. **Acts:** `draft_advice`, `flag_for_visit`, `schedule_followup` (4 that write) |
 | **Borrowed** | `mcp-server-time` (official MCP reference server) | `get_current_time` for Africa/Kampala |
 
 The agent calls both servers over the real MCP protocol, not as direct Python function
@@ -53,6 +53,14 @@ problem where borrowing beats writing.
 recognise (read the visits, check the weather, flag a visit, book a follow-up). No
 tool can send anything to a farmer, order inputs or request credit; the strongest a
 tool can do is put a draft in the officer's queue.
+
+**Soil moisture is simulated.** There is no sensor hardware. `get_soil_moisture` reads
+the `SoilReading` table, whose readings are labelled `simulated sensor`; the ones in
+the demo seed are also marked `demo`. A reading older than 24 hours is `stale`: the
+agent checks the age again itself (`split_soil_readings` in `backend/agent/graph.py`),
+never passes a stale value to the model, and lists it in the sources only as "out of
+date and not used". Current readings are cited as `soil_sensor` sources, so the
+unsourced-number check covers any moisture figure in a draft.
 
 ## 4. Model
 

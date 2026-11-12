@@ -14,11 +14,12 @@ invoked (MCP, the API, or the agent).
 | `get_crop_calendar` | Reads | `zone, crop` | `{plant_from, plant_to, harvest_from, harvest_to, planting_window_open_today, planting_window_closed_this_year, source_ref}` | `source_ref` is the crop calendar's own `source_url` |
 | `get_weather` | Reads | `latitude, longitude` | `{past_7_days_rain_mm, next_7_days_rain_mm, source_ref}` | Open-Meteo request URL |
 | `get_pest_reports` | Reads | `group_id, days=21` | `{reports[]}` | `database:observations` |
+| `get_soil_moisture` | Reads | `group_id` | `{readings[], plots_without_reading[], stale_after_hours, source}`; each reading has `household_code, plot_id, moisture_pct, read_at, stale, source, demo, source_ref` | `simulated-soil-sensor`. Readings are **simulated** (no hardware); `stale` = older than 24 hours |
 | `draft_advice` | Writes | `group_id, draft_text, why_text, sources[], language="English"` | `{advice_id, status, blocked_reason}` | `sources[]` must each carry `fact, source_type, source_ref`; any missing one blocks the draft |
 | `flag_for_visit` | Writes | `group_id, reason` | `{flag_id, group_id, reason, status}` | `assistant-flag` |
 | `schedule_followup` | Writes | `advice_id, due_on` | `{followup_id, advice_id, due_on}` | `assistant-followup` |
 
-All nine tools take an optional `run_id` so calls made during an agent run are tied to
+All ten tools take an optional `run_id` so calls made during an agent run are tied to
 that run's log rows and cost.
 
 ## Borrowed MCP server

@@ -159,6 +159,12 @@ def group_detail(group_id: int):
             select(Advice).where(Advice.group_id == group_id).order_by(Advice.created_at.desc())
         ).first()
 
+        # Latest SIMULATED sensor reading per plot, with a stale flag (older than 24h).
+        try:
+            soil_moisture = impl.get_soil_moisture(session, group_id=group_id)
+        except ToolError as exc:
+            soil_moisture = {"readings": [], "plots_without_reading": [], "error": str(exc)}
+
         return {
             "group_id": group_id,
             "village": village.name if village else None,
@@ -167,6 +173,7 @@ def group_detail(group_id: int):
             "field_records": field_records,
             "plot_history": plot_history,
             "crop_calendar": calendars,
+            "soil_moisture": soil_moisture,
             "last_advice": (
                 {"id": last_advice.id, "status": last_advice.status, "created_at": last_advice.created_at.isoformat()}
                 if last_advice

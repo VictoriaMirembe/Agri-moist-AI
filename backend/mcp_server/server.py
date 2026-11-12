@@ -1,7 +1,8 @@
 # AgriMoist AI's own MCP server (built by us, not borrowed). See docs/TOOL_CONTRACT.md.
 #
-# Nine tools, one job each. Four change data (record_observation, draft_advice,
-# flag_for_visit, schedule_followup); none of them can send anything to a farmer or
+# Ten tools, one job each: six read, four change data (record_observation, draft_advice,
+# flag_for_visit, schedule_followup). get_soil_moisture reads a SIMULATED soil sensor -
+# there is no real sensor hardware yet. None of them can send anything to a farmer or
 # place an order - see README "Safety rules". Every call is logged by backend.logging.tool_log,
 # through the same database file the web app uses.
 #
@@ -150,6 +151,23 @@ def get_pest_reports(group_id: int, days: int = 21, run_id: int | None = None) -
             source="database:observations",
             run_id=run_id,
             func=lambda: impl.get_pest_reports(session, group_id=group_id, days=days),
+        )
+
+
+@mcp.tool()
+def get_soil_moisture(group_id: int, run_id: int | None = None) -> dict:
+    """Read the latest soil-moisture reading (volumetric %) for each plot in a household
+    group, with its time and source label. Readings come from a SIMULATED sensor, not
+    real hardware. A reading older than 24 hours is marked stale=true: it is not current."""
+    with session_scope() as session:
+        return run_logged(
+            session,
+            tool="get_soil_moisture",
+            inputs={"group_id": group_id},
+            actor="assistant",
+            source="simulated-soil-sensor",
+            run_id=run_id,
+            func=lambda: impl.get_soil_moisture(session, group_id=group_id),
         )
 
 

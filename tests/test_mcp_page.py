@@ -8,6 +8,7 @@ AGRIMOIST_TOOLS = {
     "get_crop_calendar",
     "get_weather",
     "get_pest_reports",
+    "get_soil_moisture",
     "draft_advice",
     "flag_for_visit",
     "schedule_followup",

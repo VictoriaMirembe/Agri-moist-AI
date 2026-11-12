@@ -26,6 +26,7 @@ from backend.db.models import (
     Plot,
     PlotHistory,
     Run,
+    SoilReading,
     Village,
     VisitFlag,
 )
@@ -56,6 +57,44 @@ def seed_officer_pins(session: Session) -> None:
     session.commit()
 
 
+# DEMO soil-moisture readings from a SIMULATED sensor (there is no real hardware):
+# household code -> [(hours ago, volumetric moisture %)], oldest first. Group 3 has a
+# moist plot (H-007), a stale one (H-008, last read 30 hours ago), a dry one (H-009,
+# below 15%) and one with no reading at all (H-010).
+DEMO_SOIL_READINGS = {
+    "H-001": [(3, 26.5)],
+    "H-002": [(2, 12.8)],
+    "H-004": [(1, 38.9)],
+    "H-005": [(5, 9.6)],
+    "H-007": [(27, 22.0), (3, 28.4)],
+    "H-008": [(30, 31.0)],
+    "H-009": [(2, 11.2)],
+}
+
+
+def seed_soil_readings(session: Session) -> None:
+    """Add the demo sensor readings, marked demo=True and source "simulated sensor".
+    Runs on every start, so a database seeded before the sensor existed gets them too.
+    A plot that already has any reading is left alone: nothing is ever overwritten."""
+    for code, readings in DEMO_SOIL_READINGS.items():
+        plot = session.exec(
+            select(Plot).join(Household, Plot.household_id == Household.id).where(Household.code == code)
+        ).first()
+        if plot is None or session.exec(select(SoilReading).where(SoilReading.plot_id == plot.id)).first():
+            continue
+        for hours_ago, pct in readings:
+            session.add(
+                SoilReading(
+                    plot_id=plot.id,
+                    moisture_pct=pct,
+                    read_at=_now() - timedelta(hours=hours_ago),
+                    source="simulated sensor",
+                    demo=True,
+                )
+            )
+    session.commit()
+
+
 def already_seeded(session: Session) -> bool:
     return session.exec(select(District)).first() is not None
 
@@ -70,6 +109,7 @@ def seed(session: Session) -> None:
             session.add(demo_contact)
             session.commit()
         seed_officer_pins(session)
+        seed_soil_readings(session)
         return
 
     district = District(name="Napak", agroclimatic_zone="Karamoja agro-pastoral")
@@ -412,3 +452,4 @@ def seed(session: Session) -> None:
 
     session.commit()
     seed_officer_pins(session)
+    seed_soil_readings(session)
