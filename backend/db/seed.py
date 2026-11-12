@@ -10,6 +10,7 @@ from pathlib import Path
 
 from sqlmodel import Session, select
 
+from backend.officer.pins import hash_pin
 from backend.db.models import (
     Advice,
     AdviceSource,
@@ -21,6 +22,7 @@ from backend.db.models import (
     Household,
     Observation,
     Officer,
+    OfficerPin,
     Plot,
     PlotHistory,
     Run,
@@ -39,6 +41,21 @@ def _days_ago(n: int) -> datetime:
     return _now() - timedelta(days=n)
 
 
+# Demo PINs for the officer USSD menu, by officer id (documented in the README).
+# Only their scrypt hashes are stored. Change them before any real use.
+DEMO_OFFICER_PINS = {1: "1234", 2: "5678"}
+
+
+def seed_officer_pins(session: Session) -> None:
+    """Give each seeded officer a demo USSD PIN if they have none yet. Runs on every
+    start, so a database seeded before the officer USSD menu existed gets them too;
+    a PIN that is already set is never overwritten."""
+    for officer_id, pin in DEMO_OFFICER_PINS.items():
+        if session.get(Officer, officer_id) is not None and session.get(OfficerPin, officer_id) is None:
+            session.add(OfficerPin(officer_id=officer_id, pin_hash=hash_pin(pin)))
+    session.commit()
+
+
 def already_seeded(session: Session) -> bool:
     return session.exec(select(District)).first() is not None
 
@@ -52,6 +69,7 @@ def seed(session: Session) -> None:
             demo_contact.name = "Maria Akol"
             session.add(demo_contact)
             session.commit()
+        seed_officer_pins(session)
         return
 
     district = District(name="Napak", agroclimatic_zone="Karamoja agro-pastoral")
@@ -393,3 +411,4 @@ def seed(session: Session) -> None:
     )
 
     session.commit()
+    seed_officer_pins(session)

@@ -44,6 +44,18 @@ class Settings(BaseSettings):
     # no check, which is fine on localhost but not on a public host.
     ussd_callback_token: str = ""
 
+    # Officer USSD menu (approve or reject drafts from a basic phone). Its own code,
+    # so farmers dialling the farmer code never see it.
+    ussd_officer_service_code: str = "*384*5952#"
+    # Wrong PINs allowed in a row before the officer's USSD sign-in is locked, and
+    # for how long.
+    ussd_pin_max_attempts: int = 3
+    ussd_pin_lock_minutes: int = 15
+
+    # A draft waiting longer than this becomes "expired" and cannot be approved on
+    # any channel: the weather and field facts behind it are too old.
+    draft_expiry_hours: int = 72
+
     # Signs officer session cookies. Blank = a random key each start (see backend/main.py).
     session_secret: str = ""
     # Shared demo password for the officer sign-in page (shown on that page, like the

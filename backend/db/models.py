@@ -51,6 +51,17 @@ class Officer(SQLModel, table=True):
     role: str = "extension officer"
 
 
+class OfficerPin(SQLModel, table=True):
+    """An officer's USSD PIN, kept only as a salted scrypt hash (see
+    backend/officer/pins.py), with the wrong-PIN counter. A new table so the
+    existing officer columns stay exactly as they were."""
+
+    officer_id: int = Field(primary_key=True, foreign_key="officer.id")
+    pin_hash: str
+    failed_attempts: int = 0
+    locked_until: Optional[datetime] = None
+
+
 class Plot(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     household_id: int = Field(foreign_key="household.id")
