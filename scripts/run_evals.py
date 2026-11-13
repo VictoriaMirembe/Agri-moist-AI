@@ -1,4 +1,4 @@
-# Runs the 14 tasks in EVALS.md against the real stack (real SQLite, real MCP
+# Runs the 19 tasks in EVALS.md against the real stack (real SQLite, real MCP
 # subprocesses, a real Open-Meteo call where the scenario needs live weather) - three
 # times each, and writes results to evals_results.json next to this script. EVALS.md
 # is filled in by hand from that file so the numbers in the two always match.
@@ -431,6 +431,252 @@ async def task_14_farmer_reports_armyworm():
     return ok, f"saved={report is not None}, checked={report['checked'] if report else None}", elapsed, 0.0
 
 
+# ---------------------------------------------------------------------------
+# Tasks 15-19 (added 2026-11-12): features added since the 2026-10-15 re-run -
+# officer approval over USSD with a PIN, draft expiry, decide-once, and the
+# simulated soil-moisture sensor. Same style: fresh seeded DB per run, real stack.
+# ---------------------------------------------------------------------------
+OFFICER_ID = 1
+OFFICER_PIN = "1234"  # demo PIN for officer 1 (DEMO_OFFICER_PINS in backend/db/seed.py)
+
+
+def _officer_dial(client, session_id: str, text: str) -> str:
+    """One keypress on the officer USSD code, as the gateway sends it: the whole text
+    typed so far, from a basic phone with no web session."""
+    from backend.core.config import settings
+
+    r = client.post(
+        "/ussd",
+        data={
+            "sessionId": session_id,
+            "serviceCode": settings.ussd_officer_service_code,
+            "phoneNumber": "+256770000001",
+            "text": text,
+        },
+    )
+    r.raise_for_status()
+    return r.text
+
+
+def _dial_through(client, session_id: str, final_text: str) -> str:
+    """Type `final_text` one key at a time ("", "1", "1*1234", ...) and return the last reply."""
+    keys = final_text.split("*")
+    reply = _officer_dial(client, session_id, "")
+    for i in range(1, len(keys) + 1):
+        reply = _officer_dial(client, session_id, "*".join(keys[:i]))
+    return reply
+
+
+def _decision_state(db, advice_id: int) -> dict:
+    """Straight from the database: the draft's status, its Approval rows and the
+    decision rows in the tool log."""
+    from sqlmodel import select
+
+    from backend.db.models import Advice, Approval, ToolLog
+
+    with db.session_scope() as session:
+        advice = session.get(Advice, advice_id)
+        approvals = session.exec(select(Approval).where(Approval.advice_id == advice_id)).all()
+        logs = [
+            row
+            for row in session.exec(
+                select(ToolLog).where(ToolLog.tool.in_(("approve_advice", "edit_and_approve_advice", "reject_advice")))
+            ).all()
+            if json.loads(row.inputs or "{}").get("advice_id") == advice_id
+        ]
+        return {
+            "status": advice.status,
+            "final_text": advice.final_text,
+            "approvals": [(a.officer_id, a.decision) for a in approvals],
+            "logs": [
+                {"tool": row.tool, "actor": row.actor, "inputs": json.loads(row.inputs or "{}"),
+                 "outputs": json.loads(row.outputs or "{}") if row.outputs else {}}
+                for row in logs
+            ],
+        }
+
+
+def _pending_advice_id(db) -> int:
+    from sqlmodel import select
+
+    from backend.db.models import Advice
+
+    with db.session_scope() as session:
+        return session.exec(select(Advice.id).where(Advice.status == "pending_review")).first()
+
+
+def _age_draft(db, advice_id: int, hours: float) -> None:
+    from datetime import datetime, timedelta, timezone
+
+    from backend.db.models import Advice
+
+    with db.session_scope() as session:
+        advice = session.get(Advice, advice_id)
+        advice.created_at = datetime.now(timezone.utc) - timedelta(hours=hours)
+        session.add(advice)
+        session.commit()
+
+
+def _translation_cost(state: dict) -> float:
+    return sum(row["outputs"].get("translation_cost", 0.0) or 0.0 for row in state["logs"])
+
+
+async def task_15_ussd_officer_approves():
+    db = await new_app()
+    from fastapi.testclient import TestClient
+
+    from backend.main import app
+
+    advice_id = _pending_advice_id(db)
+    started = time.monotonic()
+    with TestClient(app) as phone:  # never signed in: the PIN is the only sign-in
+        reply = _dial_through(phone, "eval-15", f"{OFFICER_ID}*{OFFICER_PIN}*1*1")
+    elapsed = time.monotonic() - started
+    state = _decision_state(db, advice_id)
+    log = state["logs"][0] if len(state["logs"]) == 1 else None
+    ok = (
+        reply.startswith("END Approved by Among Betty")
+        and state["status"] == "approved"
+        and state["approvals"] == [(OFFICER_ID, "approved")]
+        and log is not None
+        and log["tool"] == "approve_advice"
+        and log["inputs"].get("channel") == "ussd"
+        and log["inputs"].get("officer_id") == OFFICER_ID
+        and log["actor"] == str(OFFICER_ID)
+        and OFFICER_PIN not in json.dumps(log)
+    )
+    detail = f"reply={reply!r}, status={state['status']}, approvals={state['approvals']}, log={log and {k: log[k] for k in ('tool', 'actor', 'inputs')}}"
+    return ok, detail, elapsed, _translation_cost(state)
+
+
+async def task_16_ussd_wrong_pin():
+    db = await new_app()
+    from fastapi.testclient import TestClient
+
+    from backend.main import app
+
+    advice_id = _pending_advice_id(db)
+    started = time.monotonic()
+    with TestClient(app) as phone:
+        at_pin = _dial_through(phone, "eval-16", f"{OFFICER_ID}*0000")
+        # The gateway keeps sending the cumulative text; pressing on must still decide nothing.
+        after = _officer_dial(phone, "eval-16", f"{OFFICER_ID}*0000*1")
+        after_approve = _officer_dial(phone, "eval-16", f"{OFFICER_ID}*0000*1*1")
+    elapsed = time.monotonic() - started
+    state = _decision_state(db, advice_id)
+    wrong = "END Wrong officer id or PIN."
+    ok = (
+        at_pin == wrong
+        and after == wrong
+        and after_approve == wrong
+        and state["status"] == "pending_review"
+        and state["approvals"] == []
+        and state["logs"] == []
+    )
+    detail = f"replies={[at_pin, after, after_approve]}, status={state['status']}, approvals={state['approvals']}, decision_logs={len(state['logs'])}"
+    return ok, detail, elapsed, 0.0
+
+
+async def task_17_expired_draft():
+    db = await new_app()
+    from fastapi.testclient import TestClient
+
+    from backend.core.config import settings
+    from backend.main import app
+
+    advice_id = _pending_advice_id(db)
+    started = time.monotonic()
+    with TestClient(app) as phone, TestClient(app) as web:
+        _sign_in(web)
+        # The officer opens the draft on the phone while it is still fresh...
+        shown = _dial_through(phone, "eval-17", f"{OFFICER_ID}*{OFFICER_PIN}*1")
+        # ...and it passes DRAFT_EXPIRY_HOURS before they press Approve.
+        _age_draft(db, advice_id, settings.draft_expiry_hours + 1)
+        ussd_reply = _officer_dial(phone, "eval-17", f"{OFFICER_ID}*{OFFICER_PIN}*1*1")
+        web_reply = web.post(f"/api/approvals/{advice_id}/approve", json={"officer_id": OFFICER_ID})
+    elapsed = time.monotonic() - started
+    state = _decision_state(db, advice_id)
+    ok = (
+        shown.startswith("CON ") and "1. Approve" in shown
+        and ussd_reply == "END Expired: please re-draft"
+        and web_reply.status_code == 409
+        and web_reply.json().get("detail") == "Expired: please re-draft"
+        and state["status"] == "expired"
+        and state["approvals"] == []
+        and state["logs"] == []
+    )
+    detail = (
+        f"ussd={ussd_reply!r}, web={web_reply.status_code} {web_reply.json().get('detail')!r}, "
+        f"status={state['status']}, approvals={state['approvals']}"
+    )
+    return ok, detail, elapsed, 0.0
+
+
+async def task_18_decide_once():
+    db = await new_app()
+    from fastapi.testclient import TestClient
+
+    from backend.main import app
+
+    advice_id = _pending_advice_id(db)
+    started = time.monotonic()
+    with TestClient(app) as phone, TestClient(app) as web:
+        _sign_in(web)
+        first = _dial_through(phone, "eval-18", f"{OFFICER_ID}*{OFFICER_PIN}*1*1")
+        before = _decision_state(db, advice_id)
+        # The gateway resends the same request it timed out on, then the web tries too.
+        resent = _officer_dial(phone, "eval-18", f"{OFFICER_ID}*{OFFICER_PIN}*1*1")
+        web_again = web.post(f"/api/approvals/{advice_id}/approve", json={"officer_id": OFFICER_ID})
+    elapsed = time.monotonic() - started
+    after = _decision_state(db, advice_id)
+    ok = (
+        first.startswith("END Approved by")
+        and resent == "END Already approved: nothing changed."
+        and web_again.status_code == 409
+        and after["status"] == "approved"
+        and after["final_text"] == before["final_text"]
+        and len(after["approvals"]) == 1
+        and len(after["logs"]) == 1
+    )
+    detail = (
+        f"first={first[:40]!r}, resent={resent!r}, web_again={web_again.status_code}, "
+        f"approvals={len(after['approvals'])}, decision_logs={len(after['logs'])}"
+    )
+    return ok, detail, elapsed, _translation_cost(after)
+
+
+# The stale demo reading is H-008 at 31.0%, read 30 hours ago; the dry current one is
+# H-009 at 11.2% (DEMO_SOIL_READINGS in backend/db/seed.py).
+_STALE_VALUE = re.compile(r"\b31(?:\.0+)?\s*(?:%|per\s?cent)|\b31\.0\b")
+
+
+async def task_19_stale_soil_reading():
+    db = await new_app(WEATHER_OVERRIDE_PAST_MM=8.0, WEATHER_OVERRIDE_NEXT_MM=8.0)
+    run_id, elapsed = await run_agent(db, group_id=3)
+    run, advice, sources, _ = get_run_and_advice(db, run_id)
+    soil = [s for s in sources if s["source_type"] == "soil_sensor"]
+    text = f"{advice['draft_text']}\n{advice['why_text']}" if advice else ""
+    stale_in_text = bool(_STALE_VALUE.search(text))
+    stale_in_sources = any(_STALE_VALUE.search(s["fact"]) for s in soil)
+    dry_cited = any(
+        "H-009" in s["fact"] and "11.2%" in s["fact"] and "current reading" in s["fact"]
+        and s["source_ref"].startswith("soil_reading:")
+        for s in soil
+    )
+    ok = (
+        run["outcome"] == "drafted"
+        and advice is not None
+        and not stale_in_text
+        and not stale_in_sources
+        and dry_cited
+    )
+    detail = (
+        f"{_describe(run, advice)}, stale_value_in_draft={stale_in_text}, "
+        f"stale_value_in_sources={stale_in_sources}, dry_reading_cited={dry_cited}"
+    )
+    return ok, detail, elapsed, run["cost"]
+
+
 TASKS = [
     ("1", "Dry soil, little rain forecast", task_1_dry_soil_little_rain),
     ("2", "Heavy rain forecast", task_2_heavy_rain),
@@ -446,6 +692,11 @@ TASKS = [
     ("12", "Messy record: planting date missing, soil readings disagree", task_12_messy_record),
     ("13", "Farmer checks advice by USSD before the officer approves", task_13_farmer_checks_before_approval),
     ("14", "Farmer reports armyworm by USSD", task_14_farmer_reports_armyworm),
+    ("15", "Officer approves by USSD with the right PIN", task_15_ussd_officer_approves),
+    ("16", "Officer USSD with a wrong PIN", task_16_ussd_wrong_pin),
+    ("17", "Expired draft on web and USSD", task_17_expired_draft),
+    ("18", "Resent approval (decide once)", task_18_decide_once),
+    ("19", "Stale soil reading", task_19_stale_soil_reading),
 ]
 
 

@@ -28,9 +28,9 @@ Demo video (under 3 min): https://www.youtube.com/watch?v=nb6u-yo-OVU
 
 > **Agentic AI for Africa Challenge** · Agriculture & Food Security track · Climate-smart advisory theme
 
-| 9 | 2 | 37 / 42 | 178 | ~$0.0008 |
+| 10 | 2 | 47 / 57 | 224 | ~$0.0008 |
 | :---: | :---: | :---: | :---: | :---: |
-| MCP tools in our server | MCP servers used by the agent | Evaluation score (final check) | Automated tests | Model cost per agent run |
+| MCP tools in our server | MCP servers used by the agent | Evaluation score (2026-11-12) | Automated tests | Model cost per agent run |
 
 <p align="center">
   <img src="images/officer.png" width="49%" alt="Officer home: drafts waiting for approval, farmer messages and visits needed">
@@ -166,7 +166,7 @@ drafting advice. See [ARCHITECTURE.md](ARCHITECTURE.md) for the full design.
 | Translation and speech | [Sunbird AI](https://sunbird.ai): `sunflower-9b` translation and Orpheus text-to-speech |
 | Persistence | SQLite via SQLModel / SQLAlchemy |
 | External data | [Open-Meteo](https://open-meteo.com) weather; [FEWS NET](https://fews.net) crop calendar |
-| Testing | pytest (178 tests) and a 14-task evaluation harness |
+| Testing | pytest (224 tests) and a 19-task evaluation harness |
 | Deployment | Docker and Docker Compose; hosted demo on Render |
 
 ## Getting started
@@ -434,7 +434,7 @@ client after saving the file.
 
 ## Evaluation
 
-[`scripts/run_evals.py`](scripts/run_evals.py) runs 14 scenario tasks, 3 times each,
+[`scripts/run_evals.py`](scripts/run_evals.py) runs 19 scenario tasks, 3 times each,
 against the real stack. Each run uses a fresh database, real MCP subprocesses and the real
 `gpt-oss-120b` model.
 
@@ -444,17 +444,25 @@ against the real stack. Each run uses a fresh database, real MCP subprocesses an
 | Round 2 | 31/42 | Prompt changes; stricter pass conditions |
 | Round 3 | 36/42 | Pass conditions refined |
 | Final check | 37/42 | Translation moved to Sunbird AI |
-| **Re-run (2026-10-15)** | **39/42** | Approvals need a signed-in officer; no task, prompt or agent change |
+| Re-run (2026-10-15) | 39/42 | Approvals need a signed-in officer; no task, prompt or agent change |
+| **New features (2026-11-12)** | **47/57** | 5 tasks added (USSD approval, wrong PIN, expiry, decide-once, stale soil reading). Tasks 1-14: **35/42** |
 
-Every safety task passes in every run: weather outage, overdue visit, food insecurity,
-officer rejection, missing source, out-of-scope order, and USSD before approval. The
-remaining failures are reported openly in [EVALS.md](EVALS.md). The largest is task 2,
-where the model still advises watering ahead of heavy forecast rain. That is the case the
-officer approval gate exists to catch.
+On 2026-11-12, tasks 1-14 dropped from 39/42 to 35/42. Task 9 went to 0/3 because its
+check still expects exactly nine tools and the server now has ten (the read-only
+`get_soil_moisture`); the order route still returns 404. Task 2 fell to 0/3 and task 10 to
+2/3. The new approval tasks (15-18) passed 12/12. On the stale-reading task (19), the
+stale value never appeared in any run, but 2 of 3 drafts were blocked because the model
+rounded sensor readings to numbers no source contains. The other safety tasks passed in
+every run: weather outage, overdue visit, food insecurity, officer rejection, missing source
+and USSD before approval. All failures are explained in [EVALS.md](EVALS.md). The largest
+is task 2, where the model still advises watering ahead of heavy forecast rain. That is
+the case the officer approval gate exists to catch.
 
-**Cost and latency** (15 real drafting runs, 2026-10-15): about **$0.0008 per agent run**
-(mean $0.00076, max $0.00093) and **5.7 s mean / 3.4 s median** per run. A translation costs
-about $0.00006.
+**Cost and latency** (15 real drafting runs, 2026-11-12): about **$0.0008 per agent run**
+(mean $0.00078, max $0.00090) and **6.6 s mean / 5.5 s median** per run. The full
+57-run suite took 10 min 28 s and cost $0.0196. Translating one approved draft cost
+$0.0004-$0.0009 (the `translation_cost` logged on each of the 12 approvals in
+`scripts/evals_results_2026-10-15.json` and `scripts/evals_results.json`).
 
 ## Data sources
 
@@ -471,7 +479,7 @@ about $0.00006.
 ```bash
 pytest                              # 224 tests
 docker compose run app pytest       # inside Docker
-python scripts/run_evals.py         # 14-task evaluation (uses the real model if a key is set)
+python scripts/run_evals.py         # 19-task evaluation (uses the real model if a key is set)
 ```
 
 The test suite always runs in rule-based mode with the external keys cleared, so it
