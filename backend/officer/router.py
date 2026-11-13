@@ -246,7 +246,17 @@ async def run_events(run_id: int):
                         ),
                     }
                 run = session.get(Run, run_id)
-            yield {"event": "run_finished", "data": json.dumps({"outcome": run.outcome if run else None})}
+                drafts = [row for row in rows if row.tool == "draft_advice" and row.outputs]
+                blocked_reason = None
+                if run is not None and run.outcome == "blocked" and drafts:
+                    try:
+                        blocked_reason = json.loads(drafts[-1].outputs).get("blocked_reason")
+                    except (ValueError, AttributeError):
+                        blocked_reason = None
+            yield {
+                "event": "run_finished",
+                "data": json.dumps({"outcome": run.outcome if run else None, "blocked_reason": blocked_reason}),
+            }
             return
 
         while True:

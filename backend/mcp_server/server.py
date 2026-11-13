@@ -182,8 +182,10 @@ def draft_advice(
 ) -> dict:
     """Write draft advice for a household group into the officer's approval queue.
     `sources` must be a list of {fact, source_type, source_ref} objects, one per claim
-    in the advice. A draft with any fact missing a source is saved as 'blocked' and
-    cannot enter the approval queue - it is never shown to an officer as ready."""
+    in the advice. A draft with any fact missing a source, a number no source contains,
+    or advice to add water while heavy rain is forecast (the weather source's forecast
+    at or above HEAVY_RAIN_THRESHOLD_MM) is saved as 'blocked' and cannot enter the
+    approval queue - it is never shown to an officer as ready."""
     with session_scope() as session:
         return run_logged(
             session,

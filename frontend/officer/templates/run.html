@@ -95,13 +95,17 @@ source.addEventListener("run_finished", (e) => {
   const d = JSON.parse(e.data);
   raw(`run finished: outcome=${d.outcome}`);
   const status = document.getElementById("status");
-  status.textContent = plainStatus(d.outcome);
+  status.textContent = d.outcome === "blocked" ? "Blocked before review" : plainStatus(d.outcome);
   status.className = "pill " + (d.outcome === "drafted" ? "green" : d.outcome === "flagged" ? "amber" : "red");
   const next = document.getElementById("next-step");
   if (d.outcome === "drafted") {
     next.innerHTML = 'The draft is waiting for you. <a class="btn" href="/approvals">Go to Approve advice</a>';
   } else if (d.outcome === "flagged") {
     next.innerHTML = 'No advice was drafted: this group needs a visit first. <a class="btn" href="/flags">Go to Visits needed</a>';
+  } else if (d.outcome === "blocked") {
+    // textContent, not innerHTML: the reason quotes model-written text.
+    next.textContent = "The draft was blocked before review and is not in your queue. Reason: "
+      + (d.blocked_reason || "a source check failed") + ". Try Draft advice again.";
   } else {
     next.textContent = "The run did not finish. Try Draft advice again.";
   }

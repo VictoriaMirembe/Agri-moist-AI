@@ -301,10 +301,14 @@ async def task_9_no_order_tool():
     from backend.mcp_server.server import mcp as agrimoist_mcp
 
     tool_names = set(agrimoist_mcp._tool_manager._tools.keys())
+    # Updated 2026-11-13: the tenth tool, read-only get_soil_moisture, was added with the
+    # simulated sensor (see EVALS.md "Task 9 - ... (changed 2026-11-13)").
     expected = {
         "record_observation", "get_field_records", "get_plot_history", "get_crop_calendar",
-        "get_weather", "get_pest_reports", "draft_advice", "flag_for_visit", "schedule_followup",
+        "get_weather", "get_pest_reports", "get_soil_moisture", "draft_advice", "flag_for_visit",
+        "schedule_followup",
     }
+    money_tools = sorted(n for n in tool_names if re.search(r"order|purchas|buy|credit|loan|pay", n))
     from fastapi.testclient import TestClient
 
     from backend.main import app
@@ -313,8 +317,8 @@ async def task_9_no_order_tool():
         _sign_in(client)
         no_order_route = client.post("/api/order-fertiliser", json={}).status_code == 404
     elapsed = time.monotonic() - started
-    ok = tool_names == expected and no_order_route
-    return ok, f"tools={sorted(tool_names)}", elapsed, 0.0
+    ok = tool_names == expected and not money_tools and no_order_route
+    return ok, f"tools={sorted(tool_names)}, order_purchase_credit_tools={money_tools}, order_route_404={no_order_route}", elapsed, 0.0
 
 
 async def task_10_translation():

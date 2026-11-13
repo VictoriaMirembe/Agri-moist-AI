@@ -22,6 +22,9 @@ class Settings(BaseSettings):
     # Soil moisture comes from a SIMULATED sensor (no hardware). Demo/test switch that
     # forces get_soil_moisture to fail, to show the retry-then-gap behaviour.
     soil_sensor_fail: bool = False
+    # Forecast rain (mm over the next 7 days) at or above which a draft that tells
+    # farmers to add water is blocked before review (rain guard in draft_advice).
+    heavy_rain_threshold_mm: float = 15.0
 
     # Optional demo/eval override so a specific rain scenario can be rehearsed or
     # evaluated on demand (live weather cannot be forced to "little rain" on

@@ -420,6 +420,71 @@ def unsourced_numbers(texts: list[str], sources: list[dict[str, str]]) -> list[s
     return found
 
 
+# ---------------------------------------------------------------------------
+# Rain guard: no "add water" advice when heavy rain is forecast
+# ---------------------------------------------------------------------------
+HEAVY_RAIN_FACT = "Heavy rain is forecast: do not advise watering, even for dry plots."
+
+
+def weather_fact(past_mm: float, next_mm: float) -> str:
+    """The wording of the weather source the agent attaches to every draft. The rain
+    guard reads the forecast back from this exact wording, so both live here."""
+    return f"Rain last 7 days {past_mm}mm, next 7 days forecast {next_mm}mm"
+
+
+_FORECAST_IN_FACT = re.compile(r"next 7 days forecast (\d+(?:\.\d+)?)\s*mm", re.IGNORECASE)
+
+_WATER = r"(?:water(?:ing|ed)?|irrigat\w*)"
+# Phrases that say NOT to add water. Removed before looking for watering advice, so
+# "do not water the crops" or "no extra watering" never count as advice to water.
+_NO_WATERING = re.compile(
+    r"\b(?:do not|don't|don’t|never|not|need not|no need to|no need for|not need to|not need|"
+    r"does not need|do not need|don't need|don’t need|won't need to|will not need to|"
+    r"avoid|stop|skip|pause|hold off(?: on)?|without)\s+"
+    r"(?:any |extra |more |additional |to |add |adding |give |giving |apply |applying )*" + _WATER + r"\b"
+    r"|\bno (?:extra |more |additional )?" + _WATER + r"\b",
+    re.IGNORECASE,
+)
+# Phrases that tell the farmer to add water.
+_ADD_WATERING = re.compile(
+    r"\birrigat\w*"
+    r"|\b(?:add|give|apply|provide|carry|bring|pour)\w*\s+(?:\w+\s+){0,2}?water(?:ing)?\b"
+    r"|\bwater(?:ing)?\s+(?:it|them|the|your|this|that|those|these|dry|young|crops?|plants?|fields?|"
+    r"plots?|seedlings|sorghum|maize|beans|daily|regularly|lightly|now|every|each|twice|once)\b"
+    r"|\bkeep\s+(?:\w+\s+){0,3}?(?:watered|moist|wet)\b"
+    r"|\b(?:be|is|are|get|gets)\s+watered\b"
+    r"|\bneeds?\s+(?:some |extra |more )?water(?:ing)?\b",
+    re.IGNORECASE,
+)
+
+
+def forecast_rain_mm(sources: list[dict[str, str]]) -> float | None:
+    """The forecast rain (mm, next 7 days) from the draft's weather source, or None
+    when the weather was a gap (then the draft already says the rain is unknown)."""
+    for s in sources:
+        if s.get("source_type") == "weather" and not (s.get("source_ref") or "").startswith("unavailable"):
+            match = _FORECAST_IN_FACT.search(s.get("fact") or "")
+            if match:
+                return float(match.group(1))
+    return None
+
+
+def watering_before_heavy_rain(texts: list[str], sources: list[dict[str, str]]) -> tuple[float | None, list[str]]:
+    """(forecast mm, watering phrases found) when the forecast is at or above
+    HEAVY_RAIN_THRESHOLD_MM and the wording tells the farmer to add water; otherwise
+    (forecast mm, []). Checked in code, so it does not depend on the model obeying."""
+    forecast = forecast_rain_mm(sources)
+    if forecast is None or forecast < settings.heavy_rain_threshold_mm:
+        return forecast, []
+    found: list[str] = []
+    for text in texts:
+        for match in _ADD_WATERING.finditer(_NO_WATERING.sub(" ", text or "")):
+            phrase = " ".join(match.group(0).split())
+            if phrase.lower() not in (f.lower() for f in found):
+                found.append(phrase)
+    return forecast, found
+
+
 def draft_advice(
     session: Session,
     *,
@@ -434,7 +499,8 @@ def draft_advice(
         not all(s.get(k) for k in REQUIRED_SOURCE_KEYS) for s in sources
     )
     invented = [] if missing_sources else unsourced_numbers([draft_text, why_text], sources)
-    status = "blocked" if missing_sources or invented else "pending_review"
+    forecast, watering = (None, []) if missing_sources else watering_before_heavy_rain([draft_text], sources)
+    status = "blocked" if missing_sources or invented or watering else "pending_review"
 
     advice = Advice(
         group_id=group_id,
@@ -459,16 +525,21 @@ def draft_advice(
         )
     session.commit()
 
+    reasons = []
+    if missing_sources:
+        reasons.append("a fact has no source")
+    if invented:
+        reasons.append(f"the advice uses numbers no source contains: {', '.join(invented)}")
+    if watering:
+        reasons.append(
+            f"heavy rain is forecast ({forecast:g} mm in the next 7 days, threshold "
+            f"{settings.heavy_rain_threshold_mm:g} mm) but the advice tells farmers to add water: "
+            + ", ".join(f'"{p}"' for p in watering)
+        )
     return {
         "advice_id": advice.id,
         "status": status,
-        "blocked_reason": (
-            "a fact has no source"
-            if missing_sources
-            else f"the advice uses numbers no source contains: {', '.join(invented)}"
-            if invented
-            else None
-        ),
+        "blocked_reason": "; ".join(reasons) or None,
     }
 
 

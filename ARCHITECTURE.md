@@ -24,6 +24,12 @@ flowchart LR
   call to the borrowed clock is not retried; it is recorded as a gap.
 - **Sources:** the `draft_advice` tool sets a draft to `blocked` if any fact has no
   source, or if the wording uses a number that appears in none of the sources.
+- **Rain guard:** `draft_advice` also blocks a draft whose advice tells farmers to add
+  water (water, irrigate, add water, ...) when the forecast in its weather source is at
+  or above `HEAVY_RAIN_THRESHOLD_MM` (15 mm over 7 days). The model is told too
+  ("Heavy rain is forecast: do not advise watering, even for dry plots."), but the
+  block is in code, so it holds even when the model ignores that. The reason is shown
+  on the run page.
 - **Approval gate:** `backend/approvals/router.py` is the only code that sets
   `approved` or `edited_and_approved` (apart from one pre-approved demo seed record). Rejecting needs a reason, and every decision is
   logged with the officer who made it.

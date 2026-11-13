@@ -54,7 +54,11 @@ DRAFT_SYSTEM_PROMPT = (
     "Start with the rain and soil-moisture signal (recent rain, the forecast and soil "
     "wetness) and what it means for watering; only then cover pests and planting. "
     "Soil sensor readings come from a simulated sensor; use only current_readings, and "
-    "never give a value for a reading listed as stale (out of date). "
+    "never give a value for a reading listed as stale (out of date). Quote a sensor "
+    "reading exactly as given, decimal included (write 11.2%, never 'about 11%'): a "
+    "rounded figure matches no source and the draft is blocked. "
+    "If heavy_rain_warning is present, follow it: do not tell farmers to water, "
+    "irrigate or add water, even for dry plots - a draft that does is blocked. "
     "Never put internal ids or field names in the advice or the why text - no "
     "'observation:12', 'plant_to', 'planting_window_closed_this_year', "
     "'pest_reports_list' or source references; the officer already sees the sources. "
@@ -110,7 +114,7 @@ def _stub_draft(facts: dict[str, Any]) -> dict[str, Any]:
     else:
         past = weather.get("past_7_days_rain_mm", 0)
         upcoming = weather.get("next_7_days_rain_mm", 0)
-        if upcoming is not None and upcoming >= 15:
+        if upcoming is not None and upcoming >= settings.heavy_rain_threshold_mm:
             lines.append(f"Heavy rain is forecast ({upcoming}mm over the next 7 days); no extra watering is needed this week.")
         elif past is not None and past < 5:
             lines.append(f"Little rain fell in the last 7 days ({past}mm); water this week if soil is dry.")

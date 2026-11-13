@@ -17,7 +17,8 @@ from backend.agent.model_client import draft_advice_text
 from backend.core.database import session_scope
 from backend.db.models import District, Household, Run, Village, VisitFlag
 from backend.logging.tool_log import run_logged
-from backend.tools.agrimoist_tools import soil_reading_is_stale
+from backend.core.config import settings
+from backend.tools.agrimoist_tools import HEAVY_RAIN_FACT, soil_reading_is_stale, weather_fact
 from backend.tools.errors import ToolError
 
 EmitFn = Callable[[int, dict[str, Any]], Awaitable[None]]
@@ -305,9 +306,12 @@ async def draft_or_flag_node(state: AgentState) -> dict:
     weather = state.get("weather")
     if weather:
         facts["weather"] = weather
+        if (weather.get("next_7_days_rain_mm") or 0) >= settings.heavy_rain_threshold_mm:
+            # Told to the model up front; draft_advice still blocks any watering advice.
+            facts["heavy_rain_warning"] = HEAVY_RAIN_FACT
         sources.append(
             {
-                "fact": f"Rain last 7 days {weather['past_7_days_rain_mm']}mm, next 7 days forecast {weather['next_7_days_rain_mm']}mm",
+                "fact": weather_fact(weather["past_7_days_rain_mm"], weather["next_7_days_rain_mm"]),
                 "source_type": "weather",
                 "source_ref": weather["source_ref"],
             }
@@ -388,14 +392,16 @@ async def draft_or_flag_node(state: AgentState) -> dict:
 
     outcome = "failed"
     advice_id = None
+    blocked_reason = None
     if result:
         advice_id = result.get("advice_id")
         outcome = "drafted" if result.get("status") == "pending_review" else "blocked"
+        blocked_reason = result.get("blocked_reason") if outcome == "blocked" else None
         if advice_id and outcome == "drafted":
             due_on = (date.today() + timedelta(days=14)).isoformat()
             await _call_with_retry(client, run_id, emit_fn, "schedule_followup", advice_id=advice_id, due_on=due_on)
 
-    await emit_fn(run_id, {"type": "run_finished", "outcome": outcome})
+    await emit_fn(run_id, {"type": "run_finished", "outcome": outcome, "blocked_reason": blocked_reason})
     return {
         "outcome": outcome,
         "advice_id": advice_id,

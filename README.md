@@ -28,9 +28,9 @@ Demo video (under 3 min): https://www.youtube.com/watch?v=nb6u-yo-OVU
 
 > **Agentic AI for Africa Challenge** · Agriculture & Food Security track · Climate-smart advisory theme
 
-| 10 | 2 | 47 / 57 | 224 | ~$0.0008 |
+| 10 | 2 | 53 / 57 | 261 | ~$0.0008 |
 | :---: | :---: | :---: | :---: | :---: |
-| MCP tools in our server | MCP servers used by the agent | Evaluation score (2026-11-12) | Automated tests | Model cost per agent run |
+| MCP tools in our server | MCP servers used by the agent | Evaluation score (2026-11-13) | Automated tests | Model cost per agent run |
 
 <p align="center">
   <img src="images/officer.png" width="49%" alt="Officer home: drafts waiting for approval, farmer messages and visits needed">
@@ -166,7 +166,7 @@ drafting advice. See [ARCHITECTURE.md](ARCHITECTURE.md) for the full design.
 | Translation and speech | [Sunbird AI](https://sunbird.ai): `sunflower-9b` translation and Orpheus text-to-speech |
 | Persistence | SQLite via SQLModel / SQLAlchemy |
 | External data | [Open-Meteo](https://open-meteo.com) weather; [FEWS NET](https://fews.net) crop calendar |
-| Testing | pytest (224 tests) and a 19-task evaluation harness |
+| Testing | pytest (261 tests) and a 19-task evaluation harness |
 | Deployment | Docker and Docker Compose; hosted demo on Render |
 
 ## Getting started
@@ -445,7 +445,9 @@ against the real stack. Each run uses a fresh database, real MCP subprocesses an
 | Round 3 | 36/42 | Pass conditions refined |
 | Final check | 37/42 | Translation moved to Sunbird AI |
 | Re-run (2026-10-15) | 39/42 | Approvals need a signed-in officer; no task, prompt or agent change |
-| **New features (2026-11-12)** | **47/57** | 5 tasks added (USSD approval, wrong PIN, expiry, decide-once, stale soil reading). Tasks 1-14: **35/42** |
+| New features (2026-11-12) | 47/57 | 5 tasks added (USSD approval, wrong PIN, expiry, decide-once, stale soil reading). Tasks 1-14: 35/42 |
+| Rain guard, first run (2026-11-13) | 51/57 | Code blocks watering advice before heavy rain; sensor readings quoted exactly; task 9 tool list updated to ten. Tasks 1-14: 36/42 |
+| **Rain guard, final (2026-11-13)** | **53/57** | Guard bug fixed (it blocked "says not to add water"); nothing else changed. Tasks 1-14: **38/42** |
 
 On 2026-11-12, tasks 1-14 dropped from 39/42 to 35/42. Task 9 went to 0/3 because its
 check still expects exactly nine tools and the server now has ten (the read-only
@@ -454,15 +456,27 @@ check still expects exactly nine tools and the server now has ten (the read-only
 stale value never appeared in any run, but 2 of 3 drafts were blocked because the model
 rounded sensor readings to numbers no source contains. The other safety tasks passed in
 every run: weather outage, overdue visit, food insecurity, officer rejection, missing source
-and USSD before approval. All failures are explained in [EVALS.md](EVALS.md). The largest
-is task 2, where the model still advises watering ahead of heavy forecast rain. That is
-the case the officer approval gate exists to catch.
+and USSD before approval. All failures are explained in [EVALS.md](EVALS.md).
 
-**Cost and latency** (15 real drafting runs, 2026-11-12): about **$0.0008 per agent run**
-(mean $0.00078, max $0.00090) and **6.6 s mean / 5.5 s median** per run. The full
-57-run suite took 10 min 28 s and cost $0.0196. Translating one approved draft cost
+On 2026-11-13, after adding a rain guard in code and asking the model to quote sensor
+readings exactly, the score was 51/57 (tasks 1-14: 36/42). Task 9 passed 3/3 with its
+updated tool list, and task 19 passed 3/3 with no rounded readings. Task 2 is still 0/3.
+For the first time, all three drafts said not to water before the heavy rain, but the new
+guard wrongly blocked them: it read "says not to add water" as advice to add water. Task
+11 fell to 1/3 on wording, and task 10 stayed at 2/3.
+
+After that bug was fixed and covered by tests, a final run the same day scored **53/57**
+(tasks 1-14: **38/42**, their best in any round), with no draft blocked. Task 2 rose to
+2/3. All three drafts told farmers not to water before 45 mm of forecast rain, and the
+third failed only because the check does not recognise "says not to add water". Task 11
+stayed at 1/3 on wording, and task 10 at 2/3 (Sunbird changed a number, so the farmer
+saw the approved English). Task 19 passed 3/3, and every other task 3/3.
+
+**Cost and latency** (15 real drafting runs, final 2026-11-13 run): about **$0.0008 per
+agent run** (mean $0.00082, max $0.00099) and **7.0 s mean / 3.8 s median** per run. The
+full 57-run suite took 10 min 32 s and cost $0.0192. Translating one approved draft cost
 $0.0004-$0.0009 (the `translation_cost` logged on each of the 12 approvals in
-`scripts/evals_results_2026-10-15.json` and `scripts/evals_results.json`).
+`scripts/evals_results_2026-10-15.json` and `scripts/evals_results_2026-11-12.json`).
 
 ## Data sources
 
@@ -477,7 +491,7 @@ $0.0004-$0.0009 (the `translation_cost` logged on each of the 12 approvals in
 ## Testing
 
 ```bash
-pytest                              # 224 tests
+pytest                              # 261 tests
 docker compose run app pytest       # inside Docker
 python scripts/run_evals.py         # 19-task evaluation (uses the real model if a key is set)
 ```
