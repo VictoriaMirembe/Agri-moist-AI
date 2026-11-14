@@ -36,6 +36,11 @@ WATERING_ADVICE = [
     "Fields should be watered if they look wilted.",
     "The dry plot needs water this week.",
     "Keep your fields moist this week.",
+    # "rather than" / "instead of" before a NON-watering word: still advice to water.
+    "Water your crops rather than wait for the rain.",
+    "Irrigate now instead of waiting for the rain.",
+    "Water the dry plot instead of waiting.",
+    "Rather than wait, water the dry plot now.",
 ]
 
 NO_WATERING_ADVICE = [
@@ -49,6 +54,10 @@ NO_WATERING_ADVICE = [
     "Heavy rain is forecast at 45.0 mm and a heavy-rain warning says not to add water even if soil looks dry.",
     "A heavy rain forecast is coming, and a heavy-rain warning says not to add water even on dry plots.",
     "Monitor the dry plot but do not irrigate.",
+    # "rather than" / "instead of" directly before the watering word (the full real draft
+    # from task 2 run 3 is tested on its own below).
+    "Wait for the forecast rain rather than irrigate.",
+    "Wait for the heavy rain instead of watering the dry plot.",
     "Check the crop for early signs of pests.",
 ]
 
@@ -87,6 +96,48 @@ def test_advice_not_to_water_passes_before_heavy_rain(seeded_session, text):
     result = _draft(seeded_session, text)
     assert result["status"] == "pending_review", result["blocked_reason"]
     assert result["blocked_reason"] is None
+
+
+# The full draft from the 2026-11-13 irrigation re-run, task 2 run 3, exactly as the model
+# wrote it (narrow no-break spaces included). The guard read "rather than irrigate" as
+# advice to irrigate and blocked it, although it tells farmers to wait for the rain.
+TASK_2_RUN_3_DRAFT = (
+    "Recent rain has been low (5.0\u202fmm) but heavy rain is forecast (45.0\u202fmm) and a heavy\u2011rain "
+    "warning says not to add water. Soil moisture is 28.4\u202f% at one plot and 11.2\u202f% at another, "
+    "showing some dry spots but you should wait for the forecast rain rather than irrigate. Fall armyworm "
+    "has been reported on sorghum; keep a close watch and tell the extension officer for help. The "
+    "planting windows for both maize and sorghum are now closed, so it is too late to start a new crop "
+    "this season; discuss alternative options with the officer."
+)
+
+
+def test_task_2_run_3_draft_rather_than_irrigate_passes(seeded_session):
+    sources = _sources(5.0, 45.0) + [
+        {"fact": "Soil moisture at H-007: 28.4% (simulated sensor, current reading)", "source_type": "soil_sensor",
+         "source_ref": "soil_reading:1"},
+        {"fact": "Soil moisture at H-009: 11.2% (simulated sensor, current reading)", "source_type": "soil_sensor",
+         "source_ref": "soil_reading:2"},
+    ]
+    assert impl.watering_before_heavy_rain([TASK_2_RUN_3_DRAFT], sources) == (45.0, [])
+    result = impl.draft_advice(
+        seeded_session, group_id=3, run_id=None, draft_text=TASK_2_RUN_3_DRAFT,
+        why_text="Based on the rain forecast.", sources=sources,
+    )
+    assert result["status"] == "pending_review", result["blocked_reason"]
+
+
+@pytest.mark.parametrize(
+    "text, phrase",
+    [
+        ("Water your crops rather than wait for the rain.", "Water your"),
+        ("Irrigate now instead of waiting for the rain.", "Irrigate"),
+        ("Wait for the rain rather than irrigate, but water the dry plot today.", "water the"),
+    ],
+)
+def test_rather_than_only_negates_the_watering_word_right_after_it(seeded_session, text, phrase):
+    result = _draft(seeded_session, text)
+    assert result["status"] == "blocked"
+    assert f'"{phrase}"' in result["blocked_reason"]
 
 
 # --- allows watering advice when rain is light ----------------------------------------

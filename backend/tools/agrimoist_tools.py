@@ -442,7 +442,11 @@ _NO_WATERING = re.compile(
     r"does not need|do not need|don't need|don’t need|won't need to|will not need to|"
     r"avoid|stop|skip|pause|hold off(?: on)?|without)\s+"
     r"(?:any |extra |more |additional |to |add |adding |give |giving |apply |applying )*" + _WATER + r"\b"
-    r"|\bno (?:extra |more |additional )?" + _WATER + r"\b",
+    r"|\bno (?:extra |more |additional )?" + _WATER + r"\b"
+    # "wait for the rain rather than irrigate", "instead of watering": only the watering
+    # word directly after the phrase is negated, so "water your crops rather than wait"
+    # and "irrigate now instead of waiting" still count as advice to water.
+    r"|\b(?:rather than|instead of)\s+" + _WATER + r"\b",
     re.IGNORECASE,
 )
 # Phrases that tell the farmer to add water.

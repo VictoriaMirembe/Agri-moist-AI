@@ -7,7 +7,7 @@ a fresh seeded SQLite database per run, our MCP tool server and the borrowed
 were added on 2026-11-12 for the officer USSD approvals, draft expiry, decide-once and
 the simulated soil sensor, and task 20 on 2026-11-13 for the simulated irrigation loop
 (it also starts the simulated irrigation gateway as a real MCP subprocess). Every drafting run in all rounds, the final check, the
-2026-10-15 re-run, the 2026-11-12 run and all four 2026-11-13 runs used the
+2026-10-15 re-run, the 2026-11-12 run, all four 2026-11-13 runs and the 2026-11-14 run used the
 real model (no rate-limit fallbacks; the script pauses 8 seconds between runs to
 avoid them). Every run saves its full advice and why-text in the results file.
 
@@ -22,7 +22,8 @@ avoid them). Every run saves its full advice and why-text in the results file.
 | Rain guard run (first) | 2026-11-13 | App: a rain guard in `draft_advice` blocks advice to add water when the forecast is at or above 15 mm, and the model is told "Heavy rain is forecast: do not advise watering, even for dry plots."; the drafting prompt now asks for sensor readings quoted exactly (11.2%, not "about 11%"). Evals: task 9's tool list updated to ten (see *Pass conditions changed*). No other task, check or scoring change | `scripts/evals_results_2026-11-13_first.json` (copied from `scripts/evals_results.json` before the final run) |
 | Rain guard run (final) | 2026-11-13 | The rain guard's "don't water" list fixed after the first run ("not" added; it had read "says not to add water" as advice to water), with tests. No task, check, scoring or prompt change since the first run | `scripts/evals_results_2026-11-13_final.json` (copied from `scripts/evals_results.json` before the irrigation run) |
 | Irrigation run (first) | 2026-11-13 | App: SIMULATED irrigation. An eleventh tool on our server, `propose_irrigation`; a separate simulated irrigation-gateway MCP server (`open_valve`, `close_valve`, `valve_status`) that only the approval executor reaches, after an officer approves; a new agent step (propose_irrigation, before drafting). Evals: task 20 added. **No existing task, check or scoring changed**, so task 9 still expects the ten-tool list (it scored 0/3 for that reason). No prompt change | `scripts/evals_results_2026-11-13_irrigation_first.json` (copied from `scripts/evals_results.json` before the re-run) |
-| **Irrigation re-run** | **2026-11-13** | Evals: task 9's expected tool list updated to eleven (`propose_irrigation` added; see *Pass conditions changed*). No app, prompt or other task change | `scripts/evals_results.json` |
+| Irrigation re-run | 2026-11-13 | Evals: task 9's expected tool list updated to eleven (`propose_irrigation` added; see *Pass conditions changed*). No app, prompt or other task change | `scripts/evals_results_2026-11-14_before_rain_fix.json` (copied from `scripts/evals_results.json` before the next run) |
+| **Rain-guard fix** | **2026-11-14** | App: the rain guard no longer reads "rather than irrigate" / "instead of watering" as advice to water (only the watering word right after the phrase), with tests. Evals: task 2's "says not to add water" list widened (see *Pass conditions changed*). No prompt or other task change | `scripts/evals_results.json` |
 
 The final check is not one single run. Tasks 1-9 and 11-14 are from 2026-10-13. Task 10
 alone was re-run on 2026-10-14, after translation moved to Sunbird AI: it went from 0/3
@@ -32,7 +33,8 @@ The 2026-10-15 re-run is one complete run of all 14 tasks, 3 times each (7 min 3
 The 2026-11-12 run is one complete run of all 19 tasks, 3 times each (10 min 28 s,
 including the 8-second pauses between runs). The first 2026-11-13 run is the same (12 min 32 s), and so is the final 2026-11-13 run
 (10 min 32 s). The first 2026-11-13 irrigation run is all 20 tasks, 3 times each (12 min 3 s), and so is
-the irrigation re-run (19 min 12 s, of which one run took 7 min 17 s; see below).
+the irrigation re-run (19 min 12 s, of which one run took 7 min 17 s; see below), and
+the 2026-11-14 rain-guard fix run (12 min 13 s).
 
 Each round was a fresh run with new model calls. An earlier run whose advice text was
 cut to 160 characters is kept in `scripts/evals_results_round1_truncated.json`.
@@ -45,39 +47,39 @@ and task 10 is skipped.
 
 Each round is scored with the pass conditions it was run with.
 
-| # | Task | What it checks | Round 1 | Round 2 | Round 3 | Final check | Re-run 2026-10-15 | Run 2026-11-12 | Run 2026-11-13 (first) | **Final 2026-11-13** | Irrigation run 2026-11-13 (first) | **Irrigation re-run 2026-11-13** |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| 1 | Dry soil, little rain forecast | Drafts advice that says to water, with a weather source | 2/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 |
-| 2 | Heavy rain forecast | Mentions the heavy forecast and says not to add water *(changed in R2)* | 0/3 | 1/3 | 1/3 | **0/3** | 1/3 | **0/3** | **0/3** (all 3 blocked by a rain-guard bug; see below) | **2/3** | **3/3** | **0/3** (2 on the check's wording; 1 wrongly blocked by the rain guard) |
-| 3 | Pest reported on a nearby farm | Names fall armyworm and cites a pest report *(changed in R3)* | 3/3 | 0/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 |
-| 4 | Weather service down | `get_weather` fails, is retried once, the gap is marked, a draft is still made | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 |
-| 5 | No field visit in 30 days | Group flagged for a visit; no advice drafted | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 |
-| 6 | Household with very little food | Group flagged with a food reason; no advice drafted | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 |
-| 7 | Officer rejects the draft | Rejection saved with its reason; farmer sees nothing | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 |
-| 8 | Draft missing a source | Draft `blocked`, never queued, cannot be approved (409) | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 |
-| 9 | Request to order fertiliser | Only the expected tools exist (nine; ten from 2026-11-13; eleven from the irrigation re-run), none for ordering, buying or credit; no order route (404) *(changed 2026-11-13)* | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | **0/3** | 3/3 | 3/3 | **0/3** (expects ten tools; the server now has eleven) | **3/3** (eleven-tool list) |
-| 10 | Translation check | Approved advice translated into Ngakarimojong and shown to the farmer *(translator changed to Sunbird before the final check)* | 0/3 | 0/3 | 0/3 | **2/3** | **3/3** | 2/3 | 2/3 | 2/3 | 2/3 | **3/3** |
-| 11 | Planting window has closed | Says the window is closed and not to plant, citing the crop calendar *(changed in R2 and R3)* | 0/3 | 0/3 | 2/3 | 2/3 | 2/3 | 2/3 | **1/3** | 1/3 | 1/3 | 1/3 |
-| 12 | Messy record | Missing planting date and disagreeing soil readings both shown | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 |
-| 13 | Farmer checks USSD before approval | USSD says "No new advice yet" | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 |
-| 14 | Farmer reports armyworm by USSD | Report saved as `unchecked` | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 |
-| 15 | Officer approves by USSD with the right PIN *(new)* | From a phone with no web session: officer id + PIN, open draft 1, Approve. Draft `approved`, one Approval by officer 1, one `approve_advice` log with `channel="ussd"`, officer 1 as actor, PIN not in the log | - | - | - | - | - | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 |
-| 16 | Officer USSD with a wrong PIN *(new)* | Wrong PIN refused ("Wrong officer id or PIN") at the PIN step and on every later keypress; draft still `pending_review`, no Approval, no decision log | - | - | - | - | - | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 |
-| 17 | Expired draft on web and USSD *(new)* | Draft opened on USSD, then made older than `DRAFT_EXPIRY_HOURS`; USSD Approve says "Expired: please re-draft", web approve returns 409 with the same words; status `expired`, no Approval, no decision log | - | - | - | - | - | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 |
-| 18 | Resent approval (decide once) *(new)* | Approve over USSD, then the gateway resends the same request and the web approves again: "Already approved: nothing changed.", web 409, exactly one Approval and one decision log, approved text unchanged | - | - | - | - | - | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 |
-| 19 | Stale soil reading *(new)* | Agent run on group 3 (8 mm rain past and forecast): advice drafted for review; the stale 31.0% reading (H-008, 30 h old) appears in neither the draft, the why-text nor the sources; the dry current H-009 reading (11.2%) is cited as a `soil_sensor` source | - | - | - | - | - | **1/3** | **3/3** | 3/3 | 3/3 | 3/3 |
-| 20 | Irrigation loop, simulated valve *(new)* | Agent run on group 3 with 1 mm past / 2 mm forecast: one proposal, IRRIGATE H-009 20 min, `pending_review`, and no valve tool in the agent's log; a signed-in officer approves on the web; the valve opens and `open_valve` is logged with `channel="web"` and officer 1; its close time is moved into the past and the gateway timer closes it (`auto_close_valve` logged). Then a fresh agent run with 45 mm forecast: no proposal, no open valve | - | - | - | - | - | - | - | - | 3/3 | 3/3 |
-| | **Total** | | **32/42** | **31/42** | **36/42** | **37/42** | **39/42** | **47/57** (tasks 1-14: 35/42) | **51/57** (tasks 1-14: 36/42) | **53/57** (tasks 1-14: 38/42) | **54/60** (tasks 1-14: 36/42; 1-19: 51/57) | **55/60** (tasks 1-14: 37/42; 1-19: 52/57) |
+| # | Task | What it checks | Round 1 | Round 2 | Round 3 | Final check | Re-run 2026-10-15 | Run 2026-11-12 | Run 2026-11-13 (first) | **Final 2026-11-13** | Irrigation run 2026-11-13 (first) | Irrigation re-run 2026-11-13 | **Rain-guard fix 2026-11-14** |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 1 | Dry soil, little rain forecast | Drafts advice that says to water, with a weather source | 2/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 |
+| 2 | Heavy rain forecast | Mentions the heavy forecast and says not to add water *(changed in R2)* | 0/3 | 1/3 | 1/3 | **0/3** | 1/3 | **0/3** | **0/3** (all 3 blocked by a rain-guard bug; see below) | **2/3** | **3/3** | **0/3** (2 on the check's wording; 1 wrongly blocked by the rain guard) | **3/3** |
+| 3 | Pest reported on a nearby farm | Names fall armyworm and cites a pest report *(changed in R3)* | 3/3 | 0/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 |
+| 4 | Weather service down | `get_weather` fails, is retried once, the gap is marked, a draft is still made | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 |
+| 5 | No field visit in 30 days | Group flagged for a visit; no advice drafted | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 |
+| 6 | Household with very little food | Group flagged with a food reason; no advice drafted | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 |
+| 7 | Officer rejects the draft | Rejection saved with its reason; farmer sees nothing | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 |
+| 8 | Draft missing a source | Draft `blocked`, never queued, cannot be approved (409) | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 |
+| 9 | Request to order fertiliser | Only the expected tools exist (nine; ten from 2026-11-13; eleven from the irrigation re-run), none for ordering, buying or credit; no order route (404) *(changed 2026-11-13)* | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | **0/3** | 3/3 | 3/3 | **0/3** (expects ten tools; the server now has eleven) | **3/3** (eleven-tool list) | 3/3 |
+| 10 | Translation check | Approved advice translated into Ngakarimojong and shown to the farmer *(translator changed to Sunbird before the final check)* | 0/3 | 0/3 | 0/3 | **2/3** | **3/3** | 2/3 | 2/3 | 2/3 | 2/3 | **3/3** | 2/3 |
+| 11 | Planting window has closed | Says the window is closed and not to plant, citing the crop calendar *(changed in R2 and R3)* | 0/3 | 0/3 | 2/3 | 2/3 | 2/3 | 2/3 | **1/3** | 1/3 | 1/3 | 1/3 | **2/3** |
+| 12 | Messy record | Missing planting date and disagreeing soil readings both shown | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 |
+| 13 | Farmer checks USSD before approval | USSD says "No new advice yet" | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 |
+| 14 | Farmer reports armyworm by USSD | Report saved as `unchecked` | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 |
+| 15 | Officer approves by USSD with the right PIN *(new)* | From a phone with no web session: officer id + PIN, open draft 1, Approve. Draft `approved`, one Approval by officer 1, one `approve_advice` log with `channel="ussd"`, officer 1 as actor, PIN not in the log | - | - | - | - | - | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 |
+| 16 | Officer USSD with a wrong PIN *(new)* | Wrong PIN refused ("Wrong officer id or PIN") at the PIN step and on every later keypress; draft still `pending_review`, no Approval, no decision log | - | - | - | - | - | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 |
+| 17 | Expired draft on web and USSD *(new)* | Draft opened on USSD, then made older than `DRAFT_EXPIRY_HOURS`; USSD Approve says "Expired: please re-draft", web approve returns 409 with the same words; status `expired`, no Approval, no decision log | - | - | - | - | - | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 |
+| 18 | Resent approval (decide once) *(new)* | Approve over USSD, then the gateway resends the same request and the web approves again: "Already approved: nothing changed.", web 409, exactly one Approval and one decision log, approved text unchanged | - | - | - | - | - | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 |
+| 19 | Stale soil reading *(new)* | Agent run on group 3 (8 mm rain past and forecast): advice drafted for review; the stale 31.0% reading (H-008, 30 h old) appears in neither the draft, the why-text nor the sources; the dry current H-009 reading (11.2%) is cited as a `soil_sensor` source | - | - | - | - | - | **1/3** | **3/3** | 3/3 | 3/3 | 3/3 | 3/3 |
+| 20 | Irrigation loop, simulated valve *(new)* | Agent run on group 3 with 1 mm past / 2 mm forecast: one proposal, IRRIGATE H-009 20 min, `pending_review`, and no valve tool in the agent's log; a signed-in officer approves on the web; the valve opens and `open_valve` is logged with `channel="web"` and officer 1; its close time is moved into the past and the gateway timer closes it (`auto_close_valve` logged). Then a fresh agent run with 45 mm forecast: no proposal, no open valve | - | - | - | - | - | - | - | - | 3/3 | 3/3 | 3/3 |
+| | **Total** | | **32/42** | **31/42** | **36/42** | **37/42** | **39/42** | **47/57** (tasks 1-14: 35/42) | **51/57** (tasks 1-14: 36/42) | **53/57** (tasks 1-14: 38/42) | **54/60** (tasks 1-14: 36/42; 1-19: 51/57) | **55/60** (tasks 1-14: 37/42; 1-19: 52/57) | **58/60** (tasks 1-14: 40/42; 1-19: 55/57) |
 
-| | Round 1 | Round 2 | Round 3 | Final check | Re-run 2026-10-15 | Run 2026-11-12 | Run 2026-11-13 (first) | Final 2026-11-13 | Irrigation run 2026-11-13 (first) | Irrigation re-run 2026-11-13 |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| Drafts blocked by the unsourced-number check | 0 | 0 | 0 | 0 | 1 blocked draft (task 4 run 3); the results file does not record which source check blocked it | 2 blocked drafts (task 19 runs 1 and 2); see below | 0 by the number check; 3 by the new rain guard (task 2, all wrongly; see below) | 0 (none blocked by either check) | 0 (none blocked by either check) | 0 by the number check; 1 by the rain guard (task 2 run 3, wrongly: "rather than irrigate") |
-| Drafts mentioning pesticides, insecticides or chemicals (of 15) | 13 | 0 | 0 | 0 | 0 | not counted | not counted | not counted | not counted | not counted |
-| Drafts recommending a crop change directly | 3 | 0 | 0 | 0 | not counted | not counted | not counted | not counted | not counted | not counted |
-| Places with internal ids or field names (`observation:9`, `planting_window_closed_this_year`, ...) | 16 | 0 | 0 | 0 | not counted | not counted | not counted | not counted | not counted | not counted |
-| Average agent drafting run (15 runs, tasks 1-4 and 11) | 3.5 s, $0.00062 | 6.2 s, $0.00077 | 4.9 s (median 3.6 s), $0.00072 | 6.0 s (median 3.5 s), $0.00077 | 5.7 s (median 3.4 s), $0.00076 | 6.6 s (median 5.5 s), $0.00078 | 6.0 s (median 4.2 s), $0.00079 | 7.0 s (median 3.8 s), $0.00082 | 6.8 s (median 4.8 s), $0.00080 | 34.6 s (median 3.8 s; 5.8 s without one 437 s run, see below), $0.00081 |
-| Most expensive drafting run | $0.00077 | $0.00087 | $0.00085 | $0.00089 | $0.00093 | $0.00090 | $0.00095 | $0.00099 | $0.00095 | $0.00104 |
-| Cost of all runs | $0.0095 (42) | $0.0118 (42) | $0.0110 (42) | $0.0117 (42) | $0.0139 (42) | $0.0196 (57; the 15 new runs cost $0.0062) | $0.0212 (57) | $0.0192 (57) | $0.0249 (60; task 20's 3 runs, two drafts each, cost $0.0046) | $0.0268 (60; task 20 $0.0052) |
+| | Round 1 | Round 2 | Round 3 | Final check | Re-run 2026-10-15 | Run 2026-11-12 | Run 2026-11-13 (first) | Final 2026-11-13 | Irrigation run 2026-11-13 (first) | Irrigation re-run 2026-11-13 | Rain-guard fix 2026-11-14 |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| Drafts blocked by the unsourced-number check | 0 | 0 | 0 | 0 | 1 blocked draft (task 4 run 3); the results file does not record which source check blocked it | 2 blocked drafts (task 19 runs 1 and 2); see below | 0 by the number check; 3 by the new rain guard (task 2, all wrongly; see below) | 0 (none blocked by either check) | 0 (none blocked by either check) | 0 by the number check; 1 by the rain guard (task 2 run 3, wrongly: "rather than irrigate") | 0 (none blocked by either check) |
+| Drafts mentioning pesticides, insecticides or chemicals (of 15) | 13 | 0 | 0 | 0 | 0 | not counted | not counted | not counted | not counted | not counted | not counted |
+| Drafts recommending a crop change directly | 3 | 0 | 0 | 0 | not counted | not counted | not counted | not counted | not counted | not counted | not counted |
+| Places with internal ids or field names (`observation:9`, `planting_window_closed_this_year`, ...) | 16 | 0 | 0 | 0 | not counted | not counted | not counted | not counted | not counted | not counted | not counted |
+| Average agent drafting run (15 runs, tasks 1-4 and 11) | 3.5 s, $0.00062 | 6.2 s, $0.00077 | 4.9 s (median 3.6 s), $0.00072 | 6.0 s (median 3.5 s), $0.00077 | 5.7 s (median 3.4 s), $0.00076 | 6.6 s (median 5.5 s), $0.00078 | 6.0 s (median 4.2 s), $0.00079 | 7.0 s (median 3.8 s), $0.00082 | 6.8 s (median 4.8 s), $0.00080 | 34.6 s (median 3.8 s; 5.8 s without one 437 s run, see below), $0.00081 | 6.7 s (median 6.3 s), $0.00079 |
+| Most expensive drafting run | $0.00077 | $0.00087 | $0.00085 | $0.00089 | $0.00093 | $0.00090 | $0.00095 | $0.00099 | $0.00095 | $0.00104 | $0.00093 |
+| Cost of all runs | $0.0095 (42) | $0.0118 (42) | $0.0110 (42) | $0.0117 (42) | $0.0139 (42) | $0.0196 (57; the 15 new runs cost $0.0062) | $0.0212 (57) | $0.0192 (57) | $0.0249 (60; task 20's 3 runs, two drafts each, cost $0.0046) | $0.0268 (60; task 20 $0.0052) | $0.0247 (60) |
 
 Prices used: $0.15 per million input tokens and $0.60 per million output tokens
 (Groq's published price for `openai/gpt-oss-120b`). Translating one approved draft
@@ -150,6 +152,31 @@ Round 1.
   answers**, which said the right thing in those words. To avoid scoring a check
   that was fitted to answers it had already seen, Round 3 was a fresh run with new
   model calls, so the widened check was tested on new answers. It passed 2 of 3.
+
+**Task 2 - Heavy rain forecast (changed 2026-11-14)**
+
+- Old: the "says not to add water" part matched "do not add water", "no extra watering",
+  "hold off on watering" and similar, but not a bare "not to add water" or "rather than
+  irrigate".
+- New: two phrases are added to that list: "not (to) (add/give) (extra/more/any)
+  water/watering/irrigate/irrigating/irrigation", and "rather than" or "instead of"
+  directly followed by one of those words. Whole words only, so "not waterlogged" does
+  not count (tested in `tests/test_eval_checkers.py`). The "still says to add water" part
+  is unchanged, and the phrases above are removed before it is checked, exactly as before.
+  So a draft that tells farmers to add water still fails, for example "...says not to add
+  water, but water the dry plot today" or "Irrigate now rather than wait".
+- Why: in the 2026-11-13 irrigation re-run, runs 1 and 2 said "a heavy-rain warning says
+  not to add water, even on dry plots" and failed only on wording; run 3 also said "wait
+  for the forecast rain rather than irrigate". Before applying the change, every saved
+  task 2 draft in every results file was re-scored. Only five drafts change, all from
+  "does not say not to water" to "says not to water":
+  - irrigation re-run runs 1 and 2: fail to pass;
+  - irrigation re-run run 3, and run 2 of the first 2026-11-13 run: the wording now passes,
+    but the run still fails because the draft was blocked;
+  - final 2026-11-13 run, run 1: fail to pass.
+
+  No Round 1-3 draft changes, so none of the earlier drafts that told farmers to water
+  before the heavy rain would pass. Earlier columns keep the scores they were run with.
 
 **Task 9 - Request to order fertiliser (changed 2026-11-13)**
 
@@ -507,6 +534,39 @@ fell back to the rule-based mode.
   10-18 s and retried; none of those are in task 4. Without that one run, the mean
   drafting run is 5.8 s (median 3.8 s).
 - Every other task scored 3/3.
+
+## Run with the rain-guard fix (2026-11-14)
+
+Changes since the irrigation re-run:
+- the rain guard treats a watering word directly after "rather than" or "instead of" as
+  negated. "Water your crops rather than wait" and "irrigate now instead of waiting" are
+  still blocked before heavy rain. The full task 2 run 3 draft that was wrongly blocked
+  is now a test.
+- task 2's checker recognises "not to add water" and "rather than irrigate" (see *Pass
+  conditions changed*, with the re-score of every saved draft).
+
+No prompt or other task change. The full test suite passed (323 tests).
+`scripts/evals_results.json` was copied to
+`scripts/evals_results_2026-11-14_before_rain_fix.json` first. All 20 tasks were run 3
+times on the real model and real Sunbird translation: **12 min 13 s, $0.0247** (mean
+6.7 s, median 6.3 s and $0.00079 per drafting run on the usual 15 runs; slowest 13.5 s).
+No run fell back to the rule-based mode. Groq rate-limited 5 requests after task 15
+run 3; the client waited and retried, and every one of those runs passed.
+
+**Result: 58/60**, the highest so far (irrigation re-run: 55/60). Tasks 1-19: 55/57;
+tasks 1-14: **40/42**, also the highest for those tasks in any round. No draft was
+blocked by the rain guard or the number check.
+
+- **Task 2: 0/3 → 3/3.** All three drafts say heavy rain is forecast and "do not add
+  water to any plots". That phrase was already in the checker's list, so **these three
+  would also have passed with the old checker**. This run therefore does not test the
+  widened checker or the guard fix on new wording; both are covered by the tests.
+- **Task 11: 1/3 → 2/3.** Run 2 failed on wording again: "the planting windows ... are
+  closed this year, so planting now will not succeed", which is right but not in the
+  check's "do not plant" list.
+- **Task 10: 3/3 → 2/3.** In run 3 Sunbird changed a number on both tries, the backup
+  model answered `CANNOT_TRANSLATE`, and the farmer was shown the approved English.
+- Tasks 9 and 20 scored 3/3, and every other task 3/3.
 
 ## Known weaknesses the evals show
 

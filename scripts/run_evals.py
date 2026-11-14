@@ -168,6 +168,10 @@ _NO_EXTRA_WATER = re.compile(
     r"(?:water|irrigat)\w*"
     r"|(?:hold off|stop|avoid|skip|pause)(?: on)? (?:extra |any )?(?:watering|irrigat\w*)"
     r"|no (?:extra|more|additional) water"
+    # Added 2026-11-14 (EVALS.md "Pass conditions changed", task 2): correct wording the
+    # check missed. Whole words only, so "not waterlogged" does not count.
+    r"|\bnot (?:to )?(?:add |give )?(?:extra |more |any )?(?:water(?:ing)?|irrigat(?:e|ing|ion))\b"  # "says not to add water"
+    r"|\b(?:rather than|instead of) (?:water(?:ing)?|irrigat(?:e|ing|ion))\b"  # "rather than irrigate": the word right after only
 )
 _ADD_WATER = re.compile(
     r"\birrigat\w*|keep (?:the |your )?(?:soil|fields?|ground|crops?)(?: as)? moist"

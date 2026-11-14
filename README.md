@@ -29,9 +29,9 @@ Demo video (under 3 min): https://www.youtube.com/watch?v=nb6u-yo-OVU
 
 > **Agentic AI for Africa Challenge** · Agriculture & Food Security track · Climate-smart advisory theme
 
-| 11 | 2 | 55 / 60 | 301 | ~$0.0008 |
+| 11 | 2 | 58 / 60 | 323 | ~$0.0008 |
 | :---: | :---: | :---: | :---: | :---: |
-| MCP tools in our server | MCP servers used by the agent | Evaluation score (2026-11-13) | Automated tests | Model cost per agent run |
+| MCP tools in our server | MCP servers used by the agent | Evaluation score (2026-11-14) | Automated tests | Model cost per agent run |
 
 <p align="center">
   <img src="images/officer.png" width="49%" alt="Officer home: drafts waiting for approval, farmer messages and visits needed">
@@ -176,7 +176,7 @@ gateway (M3) is reached only by the approval executor. See
 | Translation and speech | [Sunbird AI](https://sunbird.ai): `sunflower-9b` translation and Orpheus text-to-speech |
 | Persistence | SQLite via SQLModel / SQLAlchemy |
 | External data | [Open-Meteo](https://open-meteo.com) weather; [FEWS NET](https://fews.net) crop calendar |
-| Testing | pytest (301 tests) and a 20-task evaluation harness |
+| Testing | pytest (323 tests) and a 20-task evaluation harness |
 | Deployment | Docker and Docker Compose; hosted demo on Render |
 
 ## Getting started
@@ -472,7 +472,8 @@ against the real stack. Each run uses a fresh database, real MCP subprocesses an
 | Rain guard, first run (2026-11-13) | 51/57 | Code blocks watering advice before heavy rain; sensor readings quoted exactly; task 9 tool list updated to ten. Tasks 1-14: 36/42 |
 | Rain guard, final (2026-11-13) | 53/57 | Guard bug fixed (it blocked "says not to add water"); nothing else changed. Tasks 1-14: 38/42 |
 | Simulated irrigation, first run (2026-11-13) | 54/60 | Task 20 added (irrigation loop): 3/3. No existing task changed, so task 9 still expected ten tools and failed 0/3 with the eleventh (`propose_irrigation`). Tasks 1-14: 36/42 |
-| **Simulated irrigation, re-run (2026-11-13)** | **55/60** | Task 9's tool list updated to eleven; nothing else changed. Task 9 3/3, task 20 3/3, task 2 0/3 (see below). Tasks 1-14: **37/42** |
+| Simulated irrigation, re-run (2026-11-13) | 55/60 | Task 9's tool list updated to eleven; nothing else changed. Task 9 3/3, task 20 3/3, task 2 0/3 (see below). Tasks 1-14: 37/42 |
+| **Rain-guard fix (2026-11-14)** | **58/60** | Guard no longer blocks "rather than irrigate"; task 2's check widened to accept "not to add water". Tasks 1-14: **40/42** |
 
 On 2026-11-12, tasks 1-14 dropped from 39/42 to 35/42. Task 9 went to 0/3 because its
 check still expects exactly nine tools and the server now has ten (the read-only
@@ -514,10 +515,19 @@ guard**, which read "wait for the forecast rain rather than irrigate" as advice 
 irrigate. That bug is in the safe direction but is not fixed yet. Task 11 stayed at 1/3
 on wording.
 
-**Cost and latency** (15 real drafting runs, 2026-11-13 irrigation re-run): about
-**$0.0008 per agent run** (mean $0.00081, max $0.00104) and **3.8 s median** per run (mean
-5.8 s without one unexplained 437 s run; 34.6 s with it). The full 60-run suite took
-19 min 12 s, including that run, and cost $0.0268. Translating one approved draft cost
+On 2026-11-14 the rain guard was fixed to read a watering word right after "rather
+than" or "instead of" as negated (while "water your crops rather than wait" is still
+blocked), and task 2's check was widened to accept "not to add water" and "rather than
+irrigate". Both are covered by tests. The full run scored **58/60** (tasks 1-14:
+**40/42**), the best so far, with no draft blocked. Task 2 passed 3/3, but all three
+drafts said "do not add water", which the old check also accepted, so this run did not
+exercise either change. The two failures are task 11 run 2 on wording ("planting now will
+not succeed") and task 10 run 3, where Sunbird changed a number and the farmer saw the
+approved English.
+
+**Cost and latency** (15 real drafting runs, 2026-11-14 run): about **$0.0008 per agent
+run** (mean $0.00079, max $0.00093) and **6.7 s mean / 6.3 s median** per run. The full
+60-run suite took 12 min 13 s and cost $0.0247. Translating one approved draft cost
 $0.0004-$0.0009 (the `translation_cost` logged on each of the 12 approvals in
 `scripts/evals_results_2026-10-15.json` and `scripts/evals_results_2026-11-12.json`).
 
@@ -534,7 +544,7 @@ $0.0004-$0.0009 (the `translation_cost` logged on each of the 12 approvals in
 ## Testing
 
 ```bash
-pytest                              # 301 tests
+pytest                              # 323 tests
 docker compose run app pytest       # inside Docker
 python scripts/run_evals.py         # 20-task evaluation (uses the real model if a key is set)
 ```
