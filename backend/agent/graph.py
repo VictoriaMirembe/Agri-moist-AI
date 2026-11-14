@@ -2,6 +2,11 @@
 # per tool before a gap is marked (never guessed). Built with LangGraph. Tools are
 # called over the real MCP protocol through backend.agent.mcp_client.ToolClient, which
 # talks to our own MCP server and the borrowed mcp-server-time server as subprocesses.
+#
+# plan -> gather -> check_urgent -> propose_irrigation -> draft_or_flag. The agent can
+# PROPOSE irrigation (a pending_review item for the officer) but cannot open or close a
+# valve: those tools are on the separate irrigation gateway server, which ToolClient
+# never connects to. Only the approval executor reaches it, after an officer approves.
 from __future__ import annotations
 
 import re
@@ -18,7 +23,7 @@ from backend.core.database import session_scope
 from backend.db.models import District, Household, Run, Village, VisitFlag
 from backend.logging.tool_log import run_logged
 from backend.core.config import settings
-from backend.tools.agrimoist_tools import HEAVY_RAIN_FACT, soil_reading_is_stale, weather_fact
+from backend.tools.agrimoist_tools import HEAVY_RAIN_FACT, is_heavy_rain, soil_reading_is_stale, weather_fact
 from backend.tools.errors import ToolError
 
 EmitFn = Callable[[int, dict[str, Any]], Awaitable[None]]
@@ -48,6 +53,7 @@ class AgentState(TypedDict, total=False):
     crop_calendar_errors: dict[str, str]
     flag_reason: str | None
     flag_id: int | None
+    irrigation_proposals: list[dict]
     outcome: str | None
     advice_id: int | None
     model_cost: float
@@ -287,6 +293,31 @@ async def check_urgent_node(state: AgentState) -> dict:
     return {"flag_reason": flag_reason}
 
 
+async def propose_irrigation_node(state: AgentState) -> dict:
+    """Ask propose_irrigation about every plot with a soil reading. The rule (current
+    and dry reading, known weather below the heavy-rain threshold, no open proposal) is
+    checked by the tool itself, in code, from the database and the weather - so the
+    agent cannot talk its way past it. If this run's own weather or soil read was a
+    gap, nothing is proposed at all. A proposal only enters the officer's queue."""
+    client: ToolClient = state["_client"]
+    run_id = state["run_id"]
+    emit_fn: EmitFn = state["_emit"]
+    soil = state.get("soil_moisture")
+    if not state.get("weather") or not soil:
+        gap = "weather" if not state.get("weather") else "soil moisture"
+        await emit_fn(run_id, {"type": "irrigation_skipped", "reason": f"{gap} is a gap in this run"})
+        return {"irrigation_proposals": []}
+    proposals = []
+    for plot in sorted({r["household_code"] for r in soil.get("readings", [])}):
+        result, _err = await _call_with_retry(
+            client, run_id, emit_fn, "propose_irrigation",
+            group_id=state["group_id"], plot=plot, minutes=settings.irrigation_default_minutes,
+        )
+        if result and result.get("proposed"):
+            proposals.append(result)
+    return {"irrigation_proposals": proposals}
+
+
 async def draft_or_flag_node(state: AgentState) -> dict:
     client: ToolClient = state["_client"]
     run_id = state["run_id"]
@@ -306,7 +337,7 @@ async def draft_or_flag_node(state: AgentState) -> dict:
     weather = state.get("weather")
     if weather:
         facts["weather"] = weather
-        if (weather.get("next_7_days_rain_mm") or 0) >= settings.heavy_rain_threshold_mm:
+        if is_heavy_rain(weather.get("next_7_days_rain_mm")):
             # Told to the model up front; draft_advice still blocks any watering advice.
             facts["heavy_rain_warning"] = HEAVY_RAIN_FACT
         sources.append(
@@ -415,11 +446,13 @@ def build_graph():
     graph.add_node("plan", plan_node)
     graph.add_node("gather", gather_node)
     graph.add_node("check_urgent", check_urgent_node)
+    graph.add_node("propose_irrigation", propose_irrigation_node)
     graph.add_node("draft_or_flag", draft_or_flag_node)
     graph.set_entry_point("plan")
     graph.add_edge("plan", "gather")
     graph.add_edge("gather", "check_urgent")
-    graph.add_edge("check_urgent", "draft_or_flag")
+    graph.add_edge("check_urgent", "propose_irrigation")
+    graph.add_edge("propose_irrigation", "draft_or_flag")
     graph.add_edge("draft_or_flag", END)
     return graph.compile()
 

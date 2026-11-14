@@ -25,6 +25,7 @@ from backend.core.config import settings
 from backend.core.database import session_scope
 from backend.db.models import (
     Advice,
+    IrrigationProposal,
     Approval,
     Contact,
     CropCalendar,
@@ -467,7 +468,9 @@ def farmer_followup(body: FollowupBody):
             advice is None
             or advice.group_id != household.group_id
             or advice.status not in ("approved", "edited_and_approved")
+            or session.exec(select(IrrigationProposal).where(IrrigationProposal.advice_id == advice.id)).first()
         ):
+            # An irrigation proposal is an instruction to the simulated valve, not advice.
             raise HTTPException(404, "No approved advice found for this household.")
         _save_followup(session, body.advice_id, household, body.followed, body.helped, "farmer_web")
         run_logged(

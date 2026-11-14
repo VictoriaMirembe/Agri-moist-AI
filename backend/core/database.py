@@ -22,10 +22,15 @@ def init_db() -> None:
 
     SQLModel.metadata.create_all(engine)
     with engine.begin() as conn:
+        # Recreated on every start so an existing database picks up the current rule.
+        # An approved irrigation proposal is an instruction to the (simulated) valve,
+        # not advice for farmers, so it is never in this view.
+        conn.exec_driver_sql("DROP VIEW IF EXISTS advice_visible_to_farmer")
         conn.exec_driver_sql(
             """
-            CREATE VIEW IF NOT EXISTS advice_visible_to_farmer AS
+            CREATE VIEW advice_visible_to_farmer AS
             SELECT * FROM advice WHERE status IN ('approved', 'edited_and_approved')
+            AND id NOT IN (SELECT advice_id FROM irrigationproposal)
             """
         )
 

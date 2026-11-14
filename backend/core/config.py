@@ -26,6 +26,20 @@ class Settings(BaseSettings):
     # farmers to add water is blocked before review (rain guard in draft_advice).
     heavy_rain_threshold_mm: float = 15.0
 
+    # SIMULATED irrigation (no real valve hardware). A plot is proposed for irrigation
+    # only when its current soil reading is below this (volumetric %), the weather is
+    # known and forecast rain is below HEAVY_RAIN_THRESHOLD_MM. A proposal never opens a
+    # valve by itself: a named officer approves it first (backend/approvals/router.py).
+    irrigation_dry_threshold_pct: float = 15.0
+    irrigation_default_minutes: int = 20
+    irrigation_max_minutes: int = 30  # every proposal and every valve opening is capped here
+    # How often the app checks for valves whose time is up (the simulated timer).
+    irrigation_sweep_seconds: float = 5.0
+    # Demo/test switch for the simulated gateway: "open_fails" (the valve never opens)
+    # or "no_confirmation" (it opens but the confirmation is lost). Either way the
+    # approval executor must leave the valve closed.
+    irrigation_gateway_fault: str = ""
+
     # Optional demo/eval override so a specific rain scenario can be rehearsed or
     # evaluated on demand (live weather cannot be forced to "little rain" on
     # purpose). When set, get_weather returns these figures instead of calling

@@ -442,6 +442,20 @@ def mark_flag_visited(flag_id: int, body: MarkVisitedRequest | None = None):
 
 
 # ---------------------------------------------------------------------------
+# SIMULATED irrigation: live valve status for the officer panel. Read only: the timer
+# runs first, so a valve whose time is up shows (and is) closed.
+# ---------------------------------------------------------------------------
+@router.get("/irrigation/valves")
+def irrigation_valves():
+    from backend.irrigation_server import device
+    from backend.irrigation_server.timer import close_due_valves_logged
+
+    with session_scope() as session:
+        close_due_valves_logged(session)
+        return {"simulated": True, "valves": device.all_valves(session)}
+
+
+# ---------------------------------------------------------------------------
 # Log and officer list
 # ---------------------------------------------------------------------------
 @router.get("/logs")

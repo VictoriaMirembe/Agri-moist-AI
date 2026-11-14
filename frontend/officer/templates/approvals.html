@@ -37,8 +37,14 @@
 
 <section id="panel-advice">
   <h2>Advice waiting for approval</h2>
-  <p class="muted">Written by the AI assistant from the facts listed under each draft. Read the facts, then approve, edit, or reject.</p>
+  <p class="muted">Written by the AI assistant from the facts listed under each draft. Read the facts, then approve, edit, or reject.
+  Irrigation proposals are listed here too: a <strong>simulated</strong> valve opens only after you approve one.</p>
   <div id="list-advice" class="muted">Loading...</div>
+
+  <h2>Valves <span class="pill amber">Simulated</span></h2>
+  <p class="muted">Live state of each plot's valve on the simulated irrigation gateway (no real hardware). An open valve closes itself when its time is up.</p>
+  <p id="valve-note" class="alert" style="display:none;"></p>
+  <div id="list-valves" class="muted" aria-live="polite">Loading...</div>
 </section>
 
 <section id="panel-reports" style="display:none;">
@@ -108,7 +114,52 @@ function sourceLabel(s) {
 // ---------------------------------------------------------------------------
 // Advice drafts
 // ---------------------------------------------------------------------------
+function renderIrrigation(a) {
+  const i = a.irrigation;
+  return `
+  <article class="card o-card o-advice o-irrigation" data-id="${a.id}">
+    <div class="o-card-head">
+      <p class="o-card-title"><strong>${escapeHTML(i.label)}</strong> · <a href="/groups/${encodeURIComponent(a.group_id)}">${escapeHTML(groupName(a.group_id))}</a></p>
+      <span class="pill amber">Irrigation proposal (simulated valve)</span>
+    </div>
+    <p class="o-card-meta">Proposed ${escapeHTML(formatWhen(a.created_at))}</p>
+    <ul class="source-list o-sources">
+      <li><span class="o-fact">Plot ${escapeHTML(i.plot)}</span></li>
+      <li><span class="o-fact">Soil reading ${escapeHTML(String(i.moisture_pct))}%</span><span class="o-fact-source">Simulated soil sensor · ${escapeHTML(formatWhen(i.soil_read_at))}</span></li>
+      <li><span class="o-fact">Forecast rain ${escapeHTML(String(i.forecast_mm))} mm in the next 7 days</span><span class="o-fact-source">Weather forecast</span></li>
+      <li><span class="o-fact">Valve open for ${escapeHTML(String(i.minutes))} minutes, then it closes itself</span></li>
+    </ul>
+    <p class="o-why"><strong>Why:</strong> ${escapeHTML(a.why_text)}</p>
+    <div class="row actions">
+      <button class="btn" onclick="approve(${a.id})">Approve and open valve</button>
+      <button class="btn danger secondary" onclick="reject(${a.id})">Reject</button>
+    </div>
+    <p class="error pill red alert alert-danger" style="display:none;margin-top:0.6rem;"></p>
+  </article>`;
+}
+
+function renderValve(v) {
+  const open = v.state === "open";
+  const left = open ? `${Math.floor(v.seconds_left / 60)} min ${v.seconds_left % 60} s left` : "";
+  return `<article class="card o-card" data-valve="${escapeHTML(v.plot)}">
+    <div class="o-card-head"><p class="o-card-title">Valve ${escapeHTML(v.plot)}</p>
+    <span class="pill ${open ? "green" : ""}">${open ? "Open" : "Closed"}</span></div>
+    ${open ? `<p class="o-card-meta">${escapeHTML(left)}</p>` : ""}
+  </article>`;
+}
+
+async function loadValves() {
+  const listEl = document.getElementById("list-valves");
+  try {
+    const data = await getJSON("/api/irrigation/valves");
+    listEl.innerHTML = data.valves.length ? data.valves.map(renderValve).join("") : "<p class='o-empty'>All valves closed. None has been opened yet.</p>";
+  } catch (err) {
+    showLoadError(listEl, err);
+  }
+}
+
 function renderAdvice(a) {
+  if (a.kind === "irrigation") return renderIrrigation(a);
   const facts = a.sources.map(s => {
     const src = sourceLabel(s);
     return `<li class="${src.gap ? "gap" : ""}"><span class="o-fact">${escapeHTML(plainFact(s.fact))}</span>
@@ -198,6 +249,7 @@ async function loadFlags() {
 
 function loadAll() {
   loadAdvice();
+  loadValves();
   loadReports();
   loadFlags();
 }
@@ -217,7 +269,17 @@ function cardButtons(id) {
 async function decide(id, path, body) {
   document.querySelector(`[data-id="${id}"] .error`).style.display = "none";
   try {
-    await whileBusy(cardButtons(id), () => postJSON(`/api/approvals/${id}/${path}`, body));
+    const result = await whileBusy(cardButtons(id), () => postJSON(`/api/approvals/${id}/${path}`, body));
+    if (result && result.irrigation) {
+      // Say what the valve did after the approval, set as text (never as HTML).
+      const note = document.getElementById("valve-note");
+      const v = result.irrigation;
+      note.textContent = v.opened
+        ? `Approved by ${result.officer}: valve ${v.valve.plot} is open (simulated) and closes itself when its time is up.`
+        : `Approved by ${result.officer}, but valve ${v.valve.plot} did not open and is CLOSED. Reason: ${v.error}`;
+      note.className = v.opened ? "alert" : "alert alert-danger";
+      note.style.display = "block";
+    }
     // Decided: remove the card first, otherwise its disabled buttons would make the
     // refresh treat it as still in use and keep it on screen.
     document.querySelector(`[data-id="${id}"]`).remove();
@@ -240,7 +302,7 @@ function editApprove(id) {
 }
 
 function reject(id) {
-  const reason = prompt("Reason for rejecting this advice:");
+  const reason = prompt("Reason for rejecting:");
   if (!reason) return;
   decide(id, "reject", { reason });
 }
@@ -260,5 +322,6 @@ function markVisited(id) {
 
 loadAll();
 autoRefresh(() => Promise.all([loadAdvice(), loadReports(), loadFlags()]));
+autoRefresh(loadValves, 5000);  // the valve panel is live: time left counts down
 </script>
 {% endblock %}

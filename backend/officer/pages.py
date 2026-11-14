@@ -99,6 +99,13 @@ TOOL_WORDS = {
     "draft_advice": "Wrote an advice draft",
     "flag_for_visit": "Asked for an officer visit",
     "schedule_followup": "Booked a follow-up date",
+    "propose_irrigation": "Checked a plot for irrigation (simulated valve)",
+    "execute_irrigation": "Opened a valve after approval (simulated)",
+    "open_valve": "Valve opened (simulated)",
+    "close_valve": "Valve closed (simulated)",
+    "valve_status": "Read a valve's state (simulated)",
+    "auto_close_valve": "Valve closed itself: time up (simulated)",
+    "force_close_valve": "Valve forced closed after an error (simulated)",
     "approve_advice": "Approved advice",
     "edit_and_approve_advice": "Edited and approved advice",
     "reject_advice": "Rejected advice",
@@ -507,11 +514,14 @@ def log_page(request: Request, run_id: int | None = None):
 # starts both servers over stdio, exactly as an agent run does, and lists what they
 # report over the protocol - nothing on this screen is hard-coded.
 # ---------------------------------------------------------------------------
-MCP_WRITE_TOOLS = {"record_observation", "draft_advice", "flag_for_visit", "schedule_followup"}
+MCP_WRITE_TOOLS = {
+    "record_observation", "draft_advice", "flag_for_visit", "schedule_followup", "propose_irrigation",
+    "open_valve", "close_valve",
+}
 
 
 async def _mcp_status() -> dict:
-    from backend.agent.mcp_client import ToolClient
+    from backend.agent.mcp_client import IrrigationGatewayClient, ToolClient
 
     try:
         async with ToolClient() as client:
@@ -519,7 +529,15 @@ async def _mcp_status() -> dict:
         error = None
     except Exception as exc:  # shown on screen, never hidden
         servers, error = [], f"{type(exc).__name__}: {exc}"
-    for server in servers:
+    # The SIMULATED irrigation gateway is listed apart: the agent is never connected to
+    # it; only the approval executor opens it, after an officer approves.
+    try:
+        async with IrrigationGatewayClient() as gateway:
+            device_servers = [await gateway.describe()]
+        device_error = None
+    except Exception as exc:  # noqa: BLE001
+        device_servers, device_error = [], f"{type(exc).__name__}: {exc}"
+    for server in servers + device_servers:
         for tool in server["tools"]:
             tool["writes"] = tool["name"] in MCP_WRITE_TOOLS
     with session_scope() as session:
@@ -549,6 +567,8 @@ async def _mcp_status() -> dict:
     ]
     return {
         "servers": servers,
+        "device_servers": device_servers,
+        "device_error": device_error,
         "ai_services": ai_services,
         "error": error,
         "assistant_calls": len(calls),

@@ -9,6 +9,10 @@
 # the web uses - so expiry, "pending only" and "decide once" hold here too.
 # No editing over USSD; editing stays on the web.
 #
+# Irrigation proposals (SIMULATED valve) are listed in the same queue, labelled
+# "IRRIGATE H-009 20 min". Approving one here goes through the same gate, which then
+# hands it to the approval executor - the valve opens only after that approval.
+#
 # The gateway sends everything typed so far on every keypress ("2*5678*1*1"), and
 # resends a request it timed out on. So each request signs in again from the typed
 # PIN, the PIN is never written anywhere, and a repeated request finds the draft
@@ -19,6 +23,7 @@ from datetime import datetime, timedelta, timezone
 
 from sqlmodel import select, update
 
+from backend.approvals.irrigation_executor import proposal_for
 from backend.approvals.router import (
     EXPIRED_MESSAGE,
     GateRefusal,
@@ -118,6 +123,8 @@ def _group_name(session, group_id: int) -> str:
 
 def _preview(advice: Advice) -> str:
     text = " ".join((advice.draft_text or "").split())
+    if text.startswith("IRRIGATE "):  # an irrigation proposal: its label is the whole line
+        return text
     return text if len(text) <= PREVIEW_CHARS else text[: PREVIEW_CHARS - 3].rstrip() + "..."
 
 
@@ -182,7 +189,16 @@ def _decide(session, officer: Officer, advice_id: int, decision: str, reason: st
             return "END That draft no longer exists."
         return "END " + _status_line(refusal.advice_status)
     if result["status"] == "rejected":
+        if proposal_for(session, advice_id) is not None:
+            return f"END Rejected by {officer.name}: {reason}. The valve stays closed."
         return f"END Rejected by {officer.name}: {reason}. Nothing is sent to farmers."
+    irrigation = result.get("irrigation")
+    if irrigation is not None:
+        plot = irrigation["valve"]["plot"]
+        if irrigation["opened"]:
+            minutes = proposal_for(session, advice_id).minutes
+            return f"END Approved by {officer.name}. Valve {plot} open for {minutes} min (simulated), then it closes."
+        return f"END Approved by {officer.name}, but the valve {plot} did not open and is closed. See the web app."
     return f"END Approved by {officer.name}. Farmers in {_group_name(session, advice.group_id)} can now read it."
 
 
@@ -217,7 +233,10 @@ def officer_ussd_reply(session_id: str, text: str, phone: str = "") -> str:
                 if advice is None:
                     continue
                 words = _preview(advice) if advice.status == "pending_review" else _status_line(advice.status)
-                lines.append(f"{number}. {_group_name(session, advice.group_id)}: {words}")
+                if (advice.draft_text or "").startswith("IRRIGATE ") and advice.status == "pending_review":
+                    lines.append(f"{number}. {words}, {_group_name(session, advice.group_id)}")
+                else:
+                    lines.append(f"{number}. {_group_name(session, advice.group_id)}: {words}")
             return f"CON {retry}Drafts waiting:\n" + "\n".join(lines)
 
         advice_id = draft_ids[int(steps[0]) - 1]

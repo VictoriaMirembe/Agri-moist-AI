@@ -34,6 +34,7 @@ const STEP_WORDS = {
   draft_advice: "saving the draft for approval",
   flag_for_visit: "asking for an officer visit",
   schedule_followup: "booking a follow-up date",
+  propose_irrigation: "whether a plot needs irrigation (simulated valve)",
 };
 const mcpServer = (tool) => (tool === "get_current_time" ? "mcp-server-time" : "agrimoist");
 const stepWords = (tool) => STEP_WORDS[tool] || String(tool || "").replace(/_/g, " ");
@@ -67,6 +68,15 @@ source.addEventListener("tool_call", (e) => {
 });
 source.addEventListener("tool_result", (e) => {
   const d = JSON.parse(e.data);
+  const out = typeof d.outputs === "object" && d.outputs ? d.outputs : {};
+  if (d.tool === "propose_irrigation" && out.plot) {
+    // The rule is checked in code by the tool; the agent cannot open a valve.
+    line(out.proposed
+      ? `✓ Proposed: IRRIGATE ${out.plot} ${out.minutes} min - waiting for your approval (simulated valve)`
+      : `✓ No irrigation for ${out.plot}: ${(out.reasons || []).join("; ")}`, "ok");
+    raw(`   ok ${d.tool}: ${JSON.stringify(out).slice(0, 220)}`, "ok");
+    return;
+  }
   line(`✓ Checked ${stepWords(d.tool)}`, "ok");
   raw(`   ok ${d.tool}: ${JSON.stringify(d.outputs).slice(0, 220)}`, "ok");
 });
@@ -79,6 +89,11 @@ source.addEventListener("check_urgent", (e) => {
   const d = JSON.parse(e.data);
   line(d.flag_reason ? `Urgent: needs a visit - ${plainFact(d.flag_reason)}` : "No urgent problem - writing the advice draft");
   raw(`check_urgent: ${d.flag_reason ? "needs a visit - " + d.flag_reason : "no urgent flag; drafting advice"}`);
+});
+source.addEventListener("irrigation_skipped", (e) => {
+  const d = JSON.parse(e.data);
+  line(`No irrigation proposed: ${d.reason}`);
+  raw(`irrigation skipped: ${d.reason}`);
 });
 source.addEventListener("model_call", () => { line("Writing the advice draft"); raw("-> drafting with the model"); });
 source.addEventListener("model_result", (e) => {

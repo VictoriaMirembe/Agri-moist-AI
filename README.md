@@ -6,6 +6,7 @@
 
 The agent turns weather, pest and field-visit data into sourced, plot-specific advice.
 A named extension officer approves every word before it reaches a farmer.
+The AI drafts and proposes; a physical action happens only after a named officer approves.
 
 Demo video (under 3 min): https://www.youtube.com/watch?v=nb6u-yo-OVU
 
@@ -28,7 +29,7 @@ Demo video (under 3 min): https://www.youtube.com/watch?v=nb6u-yo-OVU
 
 > **Agentic AI for Africa Challenge** · Agriculture & Food Security track · Climate-smart advisory theme
 
-| 10 | 2 | 53 / 57 | 261 | ~$0.0008 |
+| 11 | 2 | 55 / 60 | 301 | ~$0.0008 |
 | :---: | :---: | :---: | :---: | :---: |
 | MCP tools in our server | MCP servers used by the agent | Evaluation score (2026-11-13) | Automated tests | Model cost per agent run |
 
@@ -80,6 +81,7 @@ The officer keeps the judgement.
 2. **Check.** The agent gathers plot history, live weather, nearby pest reports, soil moisture from a simulated sensor and the crop calendar through MCP tools.
 3. **Draft.** An open-weights model writes advice in which every fact cites its source. Urgent cases are flagged for a visit instead.
 4. **Approve.** A named officer approves, edits or rejects each draft. Nothing reaches a farmer without that approval.
+   The agent can also propose irrigating a dry plot; a **simulated** valve opens only after the officer approves that proposal.
 5. **Follow up.** Farmers read approved advice by USSD or on the web, in English or Ngakarimojong, and say whether it helped.
 
 ![Approve advice: a real AI draft for one household group, the reason behind it, and each of the 11 facts it used with its source](images/approve-advice.png)
@@ -94,11 +96,12 @@ The officer keeps the judgement.
 
 ## Key features
 
-- **Auditable agent pipeline.** A fixed LangGraph flow (plan → gather → check urgent → draft or flag) with live step-by-step progress streamed to the officer.
+- **Auditable agent pipeline.** A fixed LangGraph flow (plan → gather → check urgent → propose irrigation → draft or flag) with live step-by-step progress streamed to the officer.
 - **Human-in-the-loop approval gate.** Farmers only ever read from a database view that contains approved advice.
 - **Source-checked drafts.** A draft with an unsourced fact, or with a number that appears in none of its sources, is blocked before it reaches the queue.
 - **Graceful degradation.** A failed call to our own MCP tools is retried once and then recorded as a visible gap; a failed borrowed-clock call is recorded as a gap without a retry. The agent never guesses a missing value.
-- **Two MCP servers.** Our own 10-tool AgriMoist server (6 read, 4 write), plus the borrowed reference server `mcp-server-time`, both connected over stdio.
+- **Two MCP servers for the agent.** Our own 11-tool AgriMoist server (6 read, 5 write), plus the borrowed reference server `mcp-server-time`, both connected over stdio.
+- **Simulated irrigation, approval first.** A third MCP server, a **simulated** irrigation gateway (`open_valve`, `close_valve`, `valve_status`; no real hardware), is never connected to the agent. The agent can only call `propose_irrigation`; the rule (current dry soil reading, known weather below the heavy-rain threshold, no open proposal) is checked in code. A named officer approves the proposal through the same gate as advice, on the web or by USSD; only then does a server-side approval executor open the valve. It closes itself after the set minutes, and any error leaves it closed.
 - **Basic-phone access.** A USSD menu compatible with Africa's Talking, plus an in-browser handset simulator.
 - **Local language.** Approved advice is translated into Ngakarimojong by Sunbird AI. Translations that change any number are rejected.
 - **Voice reader.** Farmers can have their page read aloud in English, Swahili or Karamojong, using Sunbird AI's Ugandan voices. Speech is generated in short pieces and prepared in the background when the page opens. Each piece is generated once, stored by the app, and kept by the phone, so listening again uses no data.
@@ -116,14 +119,16 @@ flowchart LR
     end
 
     subgraph Backend["FastAPI backend"]
-        A[LangGraph agent<br/>plan → gather → check urgent → draft/flag]
+        A[LangGraph agent<br/>plan → gather → check urgent →<br/>propose irrigation → draft/flag]
         G[Approval gate<br/>approvals/router.py]
+        X[Approval executor<br/>after approval only]
         L[(SQLite<br/>+ audit log)]
     end
 
     subgraph MCP["MCP servers (stdio)"]
-        M1[AgriMoist server<br/>10 tools]
+        M1[AgriMoist server<br/>11 tools]
         M2[mcp-server-time]
+        M3[Irrigation gateway<br/>SIMULATED valves]
     end
 
     subgraph External
@@ -142,6 +147,9 @@ flowchart LR
     O -- approve / edit / reject --> G
     G --> L
     G --> SB
+    G -- approved irrigation --> X
+    X <--> M3
+    M3 <--> L
     L -- approved advice only --> FW
     L -- approved advice only --> U
     FW -- reports, visit requests --> L
@@ -152,7 +160,9 @@ The agent lives in `backend/agent/graph.py`. Each call to our own tools is retri
 and a second failure is written into the draft as a gap. A failed call to the borrowed
 clock is not retried; it is recorded as a gap. Urgent signals (no food left, an overdue
 visit, a food-related visit request) route the group to `flag_for_visit` instead of
-drafting advice. See [ARCHITECTURE.md](ARCHITECTURE.md) for the full design.
+drafting advice. The agent is connected to M1 and M2 only; the simulated irrigation
+gateway (M3) is reached only by the approval executor. See
+[ARCHITECTURE.md](ARCHITECTURE.md) for the full design.
 
 ## Technology stack
 
@@ -166,7 +176,7 @@ drafting advice. See [ARCHITECTURE.md](ARCHITECTURE.md) for the full design.
 | Translation and speech | [Sunbird AI](https://sunbird.ai): `sunflower-9b` translation and Orpheus text-to-speech |
 | Persistence | SQLite via SQLModel / SQLAlchemy |
 | External data | [Open-Meteo](https://open-meteo.com) weather; [FEWS NET](https://fews.net) crop calendar |
-| Testing | pytest (261 tests) and a 19-task evaluation harness |
+| Testing | pytest (301 tests) and a 20-task evaluation harness |
 | Deployment | Docker and Docker Compose; hosted demo on Render |
 
 ## Getting started
@@ -262,6 +272,10 @@ All settings are read from `.env`. See [`.env.example`](.env.example) for the fu
 | `WEATHER_FAIL` | `1` forces `get_weather` to fail, to demonstrate the retry-and-gap behaviour | `0` |
 | `SOIL_SENSOR_FAIL` | `1` forces `get_soil_moisture` (the simulated soil sensor) to fail, to demonstrate the retry-and-gap behaviour | `0` |
 | `WEATHER_OVERRIDE_PAST_MM` / `WEATHER_OVERRIDE_NEXT_MM` | Forces a rain scenario for demos and evals. Always labelled `demo-override`, never shown as a live reading. | unset |
+| `HEAVY_RAIN_THRESHOLD_MM` | Forecast rain (mm, next 7 days) at or above which watering advice is blocked and no irrigation is proposed | `15` |
+| `IRRIGATION_DRY_THRESHOLD_PCT` | A plot is proposed for (simulated) irrigation only if its current soil reading is below this | `15` |
+| `IRRIGATION_DEFAULT_MINUTES` / `IRRIGATION_MAX_MINUTES` | Minutes the agent proposes, and the cap on every proposal and valve opening | `20` / `30` |
+| `IRRIGATION_GATEWAY_FAULT` | `open_fails` or `no_confirmation` makes the simulated gateway fail, to show the valve is left closed | blank |
 
 Open-Meteo needs no key. API keys: [Groq](https://console.groq.com/keys) · [Sunbird AI](https://api.sunbird.ai).
 
@@ -322,8 +336,10 @@ These rules are enforced in code, not just stated in the prompt.
 
 | Guarantee | How it is enforced |
 | --- | --- |
-| The AI drafts only. It cannot send messages, order inputs or request credit. | No such tool or route exists in the codebase. EVALS task 9 confirms an order request returns 404. |
-| Nothing reaches a farmer without a named officer's approval | `backend/approvals/router.py` is the only code that can set an approved status (apart from one pre-approved record in the demo seed data). Farmer channels read only from the `advice_visible_to_farmer` view. |
+| **The AI drafts and proposes; a physical action happens only after a named officer approves.** It cannot send messages, order inputs, request credit or open a valve. | No send, order or credit tool or route exists (EVALS task 9 confirms an order request returns 404). The valve tools are on a separate, **simulated** irrigation gateway server that the agent is never connected to (tested in `tests/test_irrigation.py`). Only the approval executor (`backend/approvals/irrigation_executor.py`) calls them, after the approval is committed, and the gateway itself refuses to open a valve for a proposal without an officer's approval. |
+| Irrigation is proposed only when the facts allow it | `propose_irrigation` checks in code: the plot's latest soil reading is current and below `IRRIGATION_DRY_THRESHOLD_PCT`, the weather is known and forecast rain is below `HEAVY_RAIN_THRESHOLD_MM`, and the plot has no open proposal. A missing or stale reading, or a weather gap, means no proposal. |
+| A valve never stays open | Minutes are capped at `IRRIGATION_MAX_MINUTES`. Each valve stores its close time and closes itself; the app also closes any overdue valve on start-up. Any error while opening leaves the valve closed. |
+| Nothing reaches a farmer without a named officer's approval | `backend/approvals/router.py` is the only code that can set an approved status (apart from one pre-approved record in the demo seed data). Farmer channels read only from the `advice_visible_to_farmer` view, which never contains irrigation proposals. Irrigation proposals use the same gate, so sign-in, expiry, decide-once and both channels apply to them too. |
 | Every fact cites a source | A draft with an unsourced fact is set to `blocked` and cannot be approved (409). |
 | No invented numbers | A draft whose wording contains a number found in none of its sources is blocked. |
 | Missing data is never guessed | After one retry, the gap is written into the draft in plain words. |
@@ -333,8 +349,8 @@ These rules are enforced in code, not just stated in the prompt.
 ## MCP integration
 
 Our tool server (`backend/mcp_server/server.py`) is a standard stdio MCP server. It
-exposes ten tools: six that only read and four that write. None of them can contact a
-farmer.
+exposes eleven tools: six that only read and five that write. None of them can contact a
+farmer or open a valve.
 
 | Tool | Type | Purpose |
 | --- | --- | --- |
@@ -348,6 +364,13 @@ farmer.
 | `draft_advice` | Write | Queues sourced advice for approval; blocks it if any fact is unsourced |
 | `flag_for_visit` | Write | Flags a household group for an urgent officer visit |
 | `schedule_followup` | Write | Books a follow-up date |
+| `propose_irrigation` | Write | Puts an irrigation proposal for one plot (**simulated** valve) into the officer's approval queue, only if the rule in code allows it; minutes capped. Never opens a valve |
+
+**Simulated device server:** `backend/irrigation_server/server.py` (`irrigation-gateway`)
+stands in for an irrigation gateway. There is no hardware: valve state is a database
+row. Its three tools are `open_valve`, `close_valve` and `valve_status`, and every call is
+logged. The agent's MCP client never connects to it; only the approval executor does,
+after a named officer approves.
 
 **Borrowed server:** [`mcp-server-time`](https://pypi.org/project/mcp-server-time/)
 supplies an authoritative "today" in Africa/Kampala time, which the agent uses to judge
@@ -368,7 +391,7 @@ be reused unchanged by other agents and tools.
 
 | Where | How to open it | What it shows |
 | --- | --- | --- |
-| **AI tools (MCP)** page | Officer sidebar → **More** → **AI tools (MCP)**, or `/mcp` | Starts both servers live and lists every tool they report over the protocol, with inputs and a read/write label. Also shows the total number of MCP calls made so far and which AI services are linked. Nothing on this page is hard-coded. |
+| **AI tools (MCP)** page | Officer sidebar → **More** → **AI tools (MCP)**, or `/mcp` | Starts both agent servers live and lists every tool they report over the protocol, with inputs and a read/write label. The simulated irrigation gateway is listed separately, marked as not connected to the agent. Also shows the total number of MCP calls made so far and which AI services are linked. Nothing on this page is hard-coded. |
 | MCP status API | `GET /api/mcp` | The same information as JSON, for scripts and monitoring |
 | **AI draft** screen | Group → **Draft advice** → **Technical details** | Each MCP call streamed live as it happens, e.g. `-> MCP call agrimoist.get_weather (attempt 1) {...}`, including retries |
 | **Activity log** | Officer sidebar → **More** → **Activity log**, or `/log` | Every call the assistant made, labelled with the MCP tool and the server that handled it (`agrimoist` or `mcp-server-time`) |
@@ -429,12 +452,12 @@ On Windows, use `C:/path/to/Agri-moist-AI/.venv/Scripts/python.exe` as the comma
 client after saving the file.
 
 > The same safety rules apply to every client. The write tools only save drafts, flags,
-> observations and follow-up dates. Nothing reaches a farmer until a named officer
-> approves it in the app.
+> observations, follow-up dates and irrigation proposals. Nothing reaches a farmer, and
+> no (simulated) valve opens, until a named officer approves it in the app.
 
 ## Evaluation
 
-[`scripts/run_evals.py`](scripts/run_evals.py) runs 19 scenario tasks, 3 times each,
+[`scripts/run_evals.py`](scripts/run_evals.py) runs 20 scenario tasks, 3 times each,
 against the real stack. Each run uses a fresh database, real MCP subprocesses and the real
 `gpt-oss-120b` model.
 
@@ -447,7 +470,9 @@ against the real stack. Each run uses a fresh database, real MCP subprocesses an
 | Re-run (2026-10-15) | 39/42 | Approvals need a signed-in officer; no task, prompt or agent change |
 | New features (2026-11-12) | 47/57 | 5 tasks added (USSD approval, wrong PIN, expiry, decide-once, stale soil reading). Tasks 1-14: 35/42 |
 | Rain guard, first run (2026-11-13) | 51/57 | Code blocks watering advice before heavy rain; sensor readings quoted exactly; task 9 tool list updated to ten. Tasks 1-14: 36/42 |
-| **Rain guard, final (2026-11-13)** | **53/57** | Guard bug fixed (it blocked "says not to add water"); nothing else changed. Tasks 1-14: **38/42** |
+| Rain guard, final (2026-11-13) | 53/57 | Guard bug fixed (it blocked "says not to add water"); nothing else changed. Tasks 1-14: 38/42 |
+| Simulated irrigation, first run (2026-11-13) | 54/60 | Task 20 added (irrigation loop): 3/3. No existing task changed, so task 9 still expected ten tools and failed 0/3 with the eleventh (`propose_irrigation`). Tasks 1-14: 36/42 |
+| **Simulated irrigation, re-run (2026-11-13)** | **55/60** | Task 9's tool list updated to eleven; nothing else changed. Task 9 3/3, task 20 3/3, task 2 0/3 (see below). Tasks 1-14: **37/42** |
 
 On 2026-11-12, tasks 1-14 dropped from 39/42 to 35/42. Task 9 went to 0/3 because its
 check still expects exactly nine tools and the server now has ten (the read-only
@@ -472,9 +497,27 @@ third failed only because the check does not recognise "says not to add water". 
 stayed at 1/3 on wording, and task 10 at 2/3 (Sunbird changed a number, so the farmer
 saw the approved English). Task 19 passed 3/3, and every other task 3/3.
 
-**Cost and latency** (15 real drafting runs, final 2026-11-13 run): about **$0.0008 per
-agent run** (mean $0.00082, max $0.00099) and **7.0 s mean / 3.8 s median** per run. The
-full 57-run suite took 10 min 32 s and cost $0.0192. Translating one approved draft cost
+The latest run (also 2026-11-13) adds the **simulated** irrigation loop and scored
+**54/60**. The new task 20 passed 3/3: the agent proposed "IRRIGATE H-009 20 min" for the
+dry plot without calling any valve tool, the valve opened only after the officer
+approved, and it closed itself; with 45 mm of forecast rain nothing was proposed. Task 9
+fell to 0/3 only because its unchanged check expects exactly ten tools and the server now
+has eleven. No ordering or credit tool exists, and the order route still returns 404.
+Task 2 rose to 3/3, task 11 stayed at 1/3 on wording ("not advised", "no longer
+possible"), and task 10 at 2/3. No draft was blocked.
+
+After task 9's list was updated to eleven tools, a re-run scored **55/60** (tasks 1-14:
+37/42). Task 9 and task 20 passed 3/3, and task 10 rose to 3/3. Task 2 fell to 0/3,
+although all three drafts said not to water before the heavy rain: two failed on the
+check's wording ("says not to add water"), and one was **wrongly blocked by the rain
+guard**, which read "wait for the forecast rain rather than irrigate" as advice to
+irrigate. That bug is in the safe direction but is not fixed yet. Task 11 stayed at 1/3
+on wording.
+
+**Cost and latency** (15 real drafting runs, 2026-11-13 irrigation re-run): about
+**$0.0008 per agent run** (mean $0.00081, max $0.00104) and **3.8 s median** per run (mean
+5.8 s without one unexplained 437 s run; 34.6 s with it). The full 60-run suite took
+19 min 12 s, including that run, and cost $0.0268. Translating one approved draft cost
 $0.0004-$0.0009 (the `translation_cost` logged on each of the 12 approvals in
 `scripts/evals_results_2026-10-15.json` and `scripts/evals_results_2026-11-12.json`).
 
@@ -491,9 +534,9 @@ $0.0004-$0.0009 (the `translation_cost` logged on each of the 12 approvals in
 ## Testing
 
 ```bash
-pytest                              # 261 tests
+pytest                              # 301 tests
 docker compose run app pytest       # inside Docker
-python scripts/run_evals.py         # 19-task evaluation (uses the real model if a key is set)
+python scripts/run_evals.py         # 20-task evaluation (uses the real model if a key is set)
 ```
 
 The test suite always runs in rule-based mode with the external keys cleared, so it
@@ -504,12 +547,13 @@ never calls Groq or Sunbird, even when `.env` contains keys.
 ```
 backend/
   agent/          LangGraph agent, MCP client, model and Sunbird clients
-  approvals/      Approval gate (the only path to an approved status)
+  approvals/      Approval gate (the only path to an approved status) and the irrigation approval executor
   core/           Settings and database setup
   db/             SQLModel models and synthetic seed data
   farmer/         Farmer web API, USSD handler, voice endpoints
   logging/        Audit log
-  mcp_server/     AgriMoist MCP server (10 tools)
+  irrigation_server/  SIMULATED irrigation gateway MCP server (3 valve tools; not connected to the agent)
+  mcp_server/     AgriMoist MCP server (11 tools)
   officer/        Officer pages, API and sign-in
   tools/          Tool implementations shared by the MCP server
 frontend/
@@ -535,6 +579,7 @@ This is a hackathon build. We state its limits plainly.
 - **USSD needs a public URL** set in the Africa's Talking dashboard to go live. No SMS is sent in this build.
 - **USSD pest reports cannot name the pest.** The web page lets the farmer choose one.
 - **Synthetic data only**, and there is no household registration screen yet.
+- **The irrigation valves are simulated.** There is no irrigation hardware: `open_valve` changes a database row, and the officer page shows that simulated state. A real gateway would need its own authentication and a hardware fail-safe; this build only shows the approval-first control flow.
 - **The soil-moisture sensor is simulated.** There is no sensor hardware; every reading is labelled `simulated sensor`, and the seeded ones are demo data. Demo readings are timed when the database is first seeded, so on an old database they will all show as stale.
 - **Docker was not run in the build environment.** The app was verified with uvicorn and the full test suite; the Docker image uses the same install and start commands.
 - Karamojong is read aloud with Sunbird's Ateso voice because no Karamojong voice exists.

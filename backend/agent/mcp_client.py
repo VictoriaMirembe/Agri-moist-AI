@@ -2,6 +2,12 @@
 # mcp-server-time server over the MCP protocol (stdio), not by importing their code.
 # Both subprocesses are opened once per agent run and kept open across every tool
 # call in that run, then closed together at the end.
+#
+# The SIMULATED irrigation gateway (backend/irrigation_server) is registered here the
+# same way, but in its own client, IrrigationGatewayClient, which only the approval
+# executor (backend/approvals/irrigation_executor.py) opens after an officer approves.
+# ToolClient - the agent's client - never connects to it, so no agent run can reach
+# open_valve or close_valve.
 from __future__ import annotations
 
 import json
@@ -38,6 +44,32 @@ def _time_server_params() -> StdioServerParameters:
     )
 
 
+def _irrigation_server_params() -> StdioServerParameters:
+    # First-party, like our AgriMoist server: same environment (DATABASE_URL in particular).
+    return StdioServerParameters(
+        command=sys.executable, args=["-m", "backend.irrigation_server.server"], env=os.environ.copy()
+    )
+
+
+async def _open_session(stack: AsyncExitStack, params: StdioServerParameters) -> tuple[ClientSession, str]:
+    read, write = await stack.enter_async_context(stdio_client(params))
+    session = await stack.enter_async_context(ClientSession(read, write))
+    init = await session.initialize()
+    return session, init.serverInfo.name
+
+
+async def _list_tools(session: ClientSession) -> list[dict]:
+    listed = await session.list_tools()
+    return [
+        {
+            "name": tool.name,
+            "description": (tool.description or "").strip(),
+            "inputs": sorted((tool.inputSchema or {}).get("properties", {})),
+        }
+        for tool in listed.tools
+    ]
+
+
 class ToolClient:
     def __init__(self) -> None:
         self._stack: AsyncExitStack | None = None
@@ -54,10 +86,8 @@ class ToolClient:
 
     async def _open(self, params: StdioServerParameters) -> ClientSession:
         assert self._stack is not None
-        read, write = await self._stack.enter_async_context(stdio_client(params))
-        session = await self._stack.enter_async_context(ClientSession(read, write))
-        init = await session.initialize()
-        self._server_names[id(session)] = init.serverInfo.name
+        session, name = await _open_session(self._stack, params)
+        self._server_names[id(session)] = name
         return session
 
     async def __aexit__(self, *exc_info: Any) -> None:
@@ -75,27 +105,45 @@ class ToolClient:
         servers = []
         for kind, session in (("Built by us", self.agrimoist), ("Borrowed", self.time)):
             assert session is not None
-            listed = await session.list_tools()
-            servers.append(
-                {
-                    "name": self._server_names[id(session)],
-                    "kind": kind,
-                    "tools": [
-                        {
-                            "name": tool.name,
-                            "description": (tool.description or "").strip(),
-                            "inputs": sorted((tool.inputSchema or {}).get("properties", {})),
-                        }
-                        for tool in listed.tools
-                    ],
-                }
-            )
+            servers.append({"name": self._server_names[id(session)], "kind": kind, "tools": await _list_tools(session)})
         return servers
 
     async def now(self, timezone: str = "Africa/Kampala") -> dict:
         assert self.time is not None
         result = await self.time.call_tool("get_current_time", {"timezone": timezone})
         return _parse(result, "get_current_time")
+
+
+class IrrigationGatewayClient:
+    """The SIMULATED irrigation gateway over MCP (stdio). Used only by the approval
+    executor, after approval - never by the agent (see the note at the top)."""
+
+    def __init__(self) -> None:
+        self._stack: AsyncExitStack | None = None
+        self.gateway: ClientSession | None = None
+        self.name: str | None = None
+
+    async def __aenter__(self) -> "IrrigationGatewayClient":
+        self._stack = AsyncExitStack()
+        await self._stack.__aenter__()
+        try:
+            self.gateway, self.name = await _open_session(self._stack, _irrigation_server_params())
+        except BaseException:
+            await self._stack.__aexit__(None, None, None)
+            raise
+        return self
+
+    async def __aexit__(self, *exc_info: Any) -> None:
+        if self._stack is not None:
+            await self._stack.__aexit__(*exc_info)
+
+    async def call(self, tool_name: str, **arguments: Any) -> dict:
+        assert self.gateway is not None
+        return _parse(await self.gateway.call_tool(tool_name, arguments), tool_name)
+
+    async def describe(self) -> dict:
+        assert self.gateway is not None
+        return {"name": self.name, "kind": "Simulated device", "tools": await _list_tools(self.gateway)}
 
 
 def _parse(result: Any, tool_name: str) -> dict:

@@ -133,6 +133,43 @@ class Advice(SQLModel, table=True):
     created_at: datetime = Field(default_factory=utcnow)
 
 
+class IrrigationProposal(SQLModel, table=True):
+    """A proposal to irrigate one plot (SIMULATED valve, no hardware). The decision
+    itself lives on its Advice row (status pending_review -> approved / rejected /
+    expired), so it goes through exactly the same approval gate as advice drafts.
+    This table only holds what the proposal is about, and what the approval executor
+    did after approval. A new table so the existing advice columns stay as they were."""
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    advice_id: int = Field(foreign_key="advice.id", index=True, unique=True)
+    run_id: Optional[int] = Field(default=None, foreign_key="run.id")  # the agent run that proposed it
+    group_id: int
+    plot_id: int = Field(foreign_key="plot.id")
+    plot_code: str  # the household code of the plot, e.g. "H-009"
+    minutes: int  # already capped at IRRIGATION_MAX_MINUTES
+    moisture_pct: float
+    soil_reading_ref: str  # soil_reading:<id>
+    soil_read_at: datetime
+    forecast_mm: float
+    weather_ref: str
+    # not_started -> opening -> opened -> closed, or failed (valve left closed)
+    execution: str = "not_started"
+    execution_error: Optional[str] = None
+    created_at: datetime = Field(default_factory=utcnow)
+
+
+class Valve(SQLModel, table=True):
+    """The state of one plot's valve on the SIMULATED irrigation gateway
+    (backend/irrigation_server). Only that server's open_valve writes 'open'."""
+
+    plot_code: str = Field(primary_key=True)
+    state: str = "closed"  # closed or open
+    opened_at: Optional[datetime] = None
+    close_at: Optional[datetime] = None  # when the gateway's timer closes it
+    proposal_id: Optional[int] = Field(default=None, foreign_key="irrigationproposal.id")
+    updated_at: datetime = Field(default_factory=utcnow)
+
+
 class AdviceSource(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     advice_id: int = Field(foreign_key="advice.id")

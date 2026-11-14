@@ -193,6 +193,7 @@ def test_no_tool_exists_to_order_inputs_or_request_credit(client):
         "draft_advice",
         "flag_for_visit",
         "schedule_followup",
+        "propose_irrigation",  # added 2026-11-13: only PROPOSES; no valve tool is on this server
     }
 
 

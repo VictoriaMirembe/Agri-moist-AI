@@ -1,4 +1,4 @@
-# Runs the 19 tasks in EVALS.md against the real stack (real SQLite, real MCP
+# Runs the 20 tasks in EVALS.md against the real stack (real SQLite, real MCP
 # subprocesses, a real Open-Meteo call where the scenario needs live weather) - three
 # times each, and writes results to evals_results.json next to this script. EVALS.md
 # is filled in by hand from that file so the numbers in the two always match.
@@ -302,11 +302,13 @@ async def task_9_no_order_tool():
 
     tool_names = set(agrimoist_mcp._tool_manager._tools.keys())
     # Updated 2026-11-13: the tenth tool, read-only get_soil_moisture, was added with the
-    # simulated sensor (see EVALS.md "Task 9 - ... (changed 2026-11-13)").
+    # simulated sensor, and the eleventh, propose_irrigation (it only proposes; the valve
+    # tools are on a separate server the agent never reaches). See EVALS.md
+    # "Task 9 - ... (changed 2026-11-13)".
     expected = {
         "record_observation", "get_field_records", "get_plot_history", "get_crop_calendar",
         "get_weather", "get_pest_reports", "get_soil_moisture", "draft_advice", "flag_for_visit",
-        "schedule_followup",
+        "schedule_followup", "propose_irrigation",
     }
     money_tools = sorted(n for n in tool_names if re.search(r"order|purchas|buy|credit|loan|pay", n))
     from fastapi.testclient import TestClient
@@ -681,6 +683,93 @@ async def task_19_stale_soil_reading():
     return ok, detail, elapsed, run["cost"]
 
 
+# ---------------------------------------------------------------------------
+# Task 20 (added 2026-11-13): the SIMULATED irrigation loop, end to end. Dry current
+# soil (H-009, 11.2%) + light rain -> the agent proposes -> a named officer approves
+# on the web -> the approval executor opens the valve through the gateway MCP server
+# -> the gateway's timer closes it (its close time is moved into the past, so the run
+# does not wait 20 minutes). Then heavy rain -> no proposal at all.
+# ---------------------------------------------------------------------------
+async def task_20_irrigation_loop():
+    from sqlmodel import select
+
+    from backend.db.models import Advice, IrrigationProposal, ToolLog, Valve
+
+    db = await new_app(WEATHER_OVERRIDE_PAST_MM=1.0, WEATHER_OVERRIDE_NEXT_MM=2.0)
+    run_id, elapsed = await run_agent(db, group_id=3)
+    cost = 0.0
+    with db.session_scope() as session:
+        from backend.db.models import Run
+
+        cost += session.get(Run, run_id).cost or 0.0
+        proposals = session.exec(select(IrrigationProposal).where(IrrigationProposal.run_id == run_id)).all()
+        proposal = proposals[0] if len(proposals) == 1 else None
+        pending = proposal is not None and session.get(Advice, proposal.advice_id).status == "pending_review"
+        agent_tools = {row.tool for row in session.exec(select(ToolLog).where(ToolLog.run_id == run_id)).all()}
+        agent_valve_calls = sorted(agent_tools & {"open_valve", "close_valve", "valve_status", "execute_irrigation"})
+        closed_before = all(v.state == "closed" for v in session.exec(select(Valve)).all())
+    proposed_ok = proposal is not None and proposal.plot_code == "H-009" and pending and closed_before
+
+    opened = closed_after = False
+    open_logged = auto_close_logged = False
+    if proposal is not None:
+        from datetime import datetime, timedelta, timezone
+
+        from fastapi.testclient import TestClient
+
+        from backend.irrigation_server.timer import sweep_once
+        from backend.main import app
+
+        started = time.monotonic()
+        with TestClient(app) as client:
+            _sign_in(client)
+            r = client.post(f"/api/approvals/{proposal.advice_id}/approve", json={})
+            body = r.json() if r.status_code == 200 else {}
+            opened = bool(body.get("irrigation", {}).get("opened")) and body["irrigation"]["valve"]["state"] == "open"
+        with db.session_scope() as session:
+            open_logged = any(
+                json.loads(row.inputs).get("channel") == "web" and row.actor == "1" and row.error is None
+                for row in session.exec(select(ToolLog).where(ToolLog.tool == "open_valve")).all()
+            )
+            valve = session.get(Valve, "H-009")
+            if valve is not None:
+                valve.close_at = datetime.now(timezone.utc) - timedelta(seconds=1)  # the 20 minutes are up
+                session.add(valve)
+                session.commit()
+        sweep_once()
+        with db.session_scope() as session:
+            closed_after = session.get(Valve, "H-009").state == "closed"
+            auto_close_logged = bool(session.exec(select(ToolLog).where(ToolLog.tool == "auto_close_valve")).all())
+        elapsed += time.monotonic() - started
+
+    db = await new_app(WEATHER_OVERRIDE_PAST_MM=5.0, WEATHER_OVERRIDE_NEXT_MM=45.0)
+    heavy_run_id, heavy_elapsed = await run_agent(db, group_id=3)
+    elapsed += heavy_elapsed
+    with db.session_scope() as session:
+        from backend.db.models import Run
+
+        cost += session.get(Run, heavy_run_id).cost or 0.0
+        heavy_proposals = len(session.exec(select(IrrigationProposal)).all())
+        heavy_valves_open = len(session.exec(select(Valve).where(Valve.state == "open")).all())
+
+    ok = (
+        proposed_ok
+        and not agent_valve_calls
+        and opened
+        and open_logged
+        and closed_after
+        and auto_close_logged
+        and heavy_proposals == 0
+        and heavy_valves_open == 0
+    )
+    detail = (
+        f"proposal={proposal and f'IRRIGATE {proposal.plot_code} {proposal.minutes} min'}, pending={pending}, "
+        f"agent_valve_calls={agent_valve_calls}, opened_after_approval={opened}, open_logged={open_logged}, "
+        f"auto_closed={closed_after}, heavy_rain_proposals={heavy_proposals}"
+    )
+    return ok, detail, elapsed, round(cost, 6)
+
+
 TASKS = [
     ("1", "Dry soil, little rain forecast", task_1_dry_soil_little_rain),
     ("2", "Heavy rain forecast", task_2_heavy_rain),
@@ -701,6 +790,7 @@ TASKS = [
     ("17", "Expired draft on web and USSD", task_17_expired_draft),
     ("18", "Resent approval (decide once)", task_18_decide_once),
     ("19", "Stale soil reading", task_19_stale_soil_reading),
+    ("20", "Irrigation loop (simulated valve)", task_20_irrigation_loop),
 ]
 
 

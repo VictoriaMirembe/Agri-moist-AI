@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import secrets
+import asyncio
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -16,6 +17,7 @@ from backend.core.config import settings
 from backend.core.database import init_db, session_scope
 from backend.db.seed import seed
 from backend.farmer.pages import router as farmer_pages_router
+from backend.irrigation_server.timer import run_timer, sweep_once
 from backend.farmer.router import router as farmer_router
 from backend.officer.pages import api_router as officer_pages_api_router
 from backend.officer.pages import public_router as officer_login_router
@@ -31,7 +33,14 @@ async def lifespan(app: FastAPI):
     init_db()
     with session_scope() as session:
         seed(session)
-    yield
+    # SIMULATED irrigation: close any valve whose time passed while the app was down,
+    # then keep checking while it runs.
+    sweep_once()
+    timer = asyncio.create_task(run_timer())
+    try:
+        yield
+    finally:
+        timer.cancel()
 
 
 app = FastAPI(

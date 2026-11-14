@@ -12,6 +12,7 @@ AGRIMOIST_TOOLS = {
     "draft_advice",
     "flag_for_visit",
     "schedule_followup",
+    "propose_irrigation",  # added 2026-11-13; the valve tools are on a separate server
 }
 
 

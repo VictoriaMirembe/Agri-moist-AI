@@ -1,9 +1,11 @@
 # AgriMoist AI's own MCP server (built by us, not borrowed). See docs/TOOL_CONTRACT.md.
 #
-# Ten tools, one job each: six read, four change data (record_observation, draft_advice,
-# flag_for_visit, schedule_followup). get_soil_moisture reads a SIMULATED soil sensor -
-# there is no real sensor hardware yet. None of them can send anything to a farmer or
-# place an order - see README "Safety rules". Every call is logged by backend.logging.tool_log,
+# Eleven tools, one job each: six read, five change data (record_observation, draft_advice,
+# flag_for_visit, schedule_followup, propose_irrigation). get_soil_moisture reads a
+# SIMULATED soil sensor - there is no real sensor hardware yet. None of them can send
+# anything to a farmer, place an order or open a valve: propose_irrigation only puts a
+# proposal in the officer's queue, and the valve tools live on a separate server
+# (backend/irrigation_server) the agent is never connected to - see README "Safety rules". Every call is logged by backend.logging.tool_log,
 # through the same database file the web app uses.
 #
 # Run standalone (for MCP Inspector, Claude Desktop or another MCP client), from the
@@ -26,10 +28,10 @@ mcp = FastMCP(
     "agrimoist",
     instructions=(
         "Tools for AgriMoist AI, a field assistant for agricultural extension officers "
-        "in Karamoja, Uganda. Read tools gather facts for advice; the four write tools "
-        "(record_observation, draft_advice, flag_for_visit, schedule_followup) never "
-        "send anything to a farmer - a named officer must separately approve a draft "
-        "before it can ever reach one."
+        "in Karamoja, Uganda. Read tools gather facts for advice; the five write tools "
+        "(record_observation, draft_advice, flag_for_visit, schedule_followup, "
+        "propose_irrigation) never send anything to a farmer or open a valve - a named "
+        "officer must separately approve a draft or proposal before anything happens."
     ),
 )
 
@@ -236,6 +238,29 @@ def schedule_followup(advice_id: int, due_on: str, run_id: int | None = None) ->
             source="assistant-followup",
             run_id=run_id,
             func=lambda: impl.schedule_followup(session, advice_id=advice_id, due_on=due),
+        )
+
+
+@mcp.tool()
+def propose_irrigation(group_id: int, plot: str, minutes: int, run_id: int | None = None) -> dict:
+    """Propose irrigating one plot (its household code, e.g. 'H-009') for `minutes`,
+    capped at IRRIGATION_MAX_MINUTES. The valve is SIMULATED. The rule is checked here in
+    code: the plot's latest soil reading must be current and below
+    IRRIGATION_DRY_THRESHOLD_PCT, the weather known and forecast rain below
+    HEAVY_RAIN_THRESHOLD_MM, and no proposal already open for the plot - otherwise
+    nothing is saved and the reasons are returned. A proposal is saved as pending_review
+    in the officer's approval queue and NEVER opens a valve by itself."""
+    with session_scope() as session:
+        return run_logged(
+            session,
+            tool="propose_irrigation",
+            inputs={"group_id": group_id, "plot": plot, "minutes": minutes},
+            actor="assistant",
+            source="assistant-irrigation",
+            run_id=run_id,
+            func=lambda: impl.propose_irrigation(
+                session, group_id=group_id, plot=plot, minutes=minutes, run_id=run_id
+            ),
         )
 
 

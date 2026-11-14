@@ -63,6 +63,29 @@
 {% endfor %}
 
 <section class="o-panel">
+  <h2>Irrigation gateway <span class="pill amber">Simulated device</span></h2>
+  <p>The valves are <strong>simulated</strong>: there is no irrigation hardware. This server is <strong>not</strong>
+  connected to the AI assistant. The assistant can only propose irrigation; a named officer approves it, and only then
+  does the approval executor open a valve through this server. Every valve closes itself when its minutes are up.
+  Source: <code>backend/irrigation_server/server.py</code></p>
+  {% if device_error %}<p class="alert alert-danger"><span class="pill red">Problem</span> Could not start the gateway: {{ device_error }}</p>{% endif %}
+  {% for server in device_servers %}
+  <div class="table-wrap"><table class="o-table">
+    <thead><tr><th>Tool</th><th>What it does</th><th>Inputs</th></tr></thead>
+    <tbody>
+      {% for tool in server.tools %}
+      <tr>
+        <td><code>{{ tool.name }}</code></td>
+        <td>{{ tool.description }}</td>
+        <td>{% for name in tool.inputs if name != "run_id" %}<code>{{ name }}</code>{% if not loop.last %}, {% endif %}{% endfor %}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table></div>
+  {% endfor %}
+</section>
+
+<section class="o-panel">
   <h2>Use these tools from another MCP client</h2>
   <p>Our server runs on its own, so any MCP client (Claude Desktop, MCP Inspector, another agent) can use it.
   None of its tools can send anything to a farmer: a named officer still has to approve every draft.</p>

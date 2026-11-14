@@ -18,9 +18,24 @@ invoked (MCP, the API, or the agent).
 | `draft_advice` | Writes | `group_id, draft_text, why_text, sources[], language="English"` | `{advice_id, status, blocked_reason}` | `sources[]` must each carry `fact, source_type, source_ref`; any missing one blocks the draft |
 | `flag_for_visit` | Writes | `group_id, reason` | `{flag_id, group_id, reason, status}` | `assistant-flag` |
 | `schedule_followup` | Writes | `advice_id, due_on` | `{followup_id, advice_id, due_on}` | `assistant-followup` |
+| `propose_irrigation` | Writes | `group_id, plot` (household code), `minutes` (capped at `IRRIGATION_MAX_MINUTES`) | `{proposed: true, advice_id, proposal_id, plot, minutes, minutes_capped, status}` or `{proposed: false, plot, reasons[]}` | `assistant-irrigation`. Valve is **simulated**. Saves a `pending_review` proposal only when the rule in code allows it; never opens a valve |
 
-All ten tools take an optional `run_id` so calls made during an agent run are tied to
+All eleven tools take an optional `run_id` so calls made during an agent run are tied to
 that run's log rows and cost.
+
+## Simulated irrigation gateway (not connected to the agent)
+
+`backend/irrigation_server/server.py` (`irrigation-gateway`, FastMCP, stdio). There is no
+hardware: valve state is the `Valve` table. Only the approval executor
+(`backend/approvals/irrigation_executor.py`) calls it, after a named officer approves.
+
+| Tool | Inputs | Output |
+| --- | --- | --- |
+| `open_valve` | `plot, minutes, proposal_id, officer_id, channel` | `{plot, state: "open", opened_at, close_at, seconds_left, proposal_id, simulated}`. Refused unless the proposal was approved by an officer, is waiting to open, and `minutes` matches it |
+| `close_valve` | `plot, reason, officer_id?, channel?` | `{plot, state: "closed", ...}` |
+| `valve_status` | `plot` | `{plot, state, seconds_left, close_at, simulated}` |
+
+Every call first closes any valve whose time is up (logged as `auto_close_valve`).
 
 ## Borrowed MCP server
 

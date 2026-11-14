@@ -7,18 +7,24 @@ sourced advice for a group of farming households from visit records, farmer repo
 weather, simulated soil-moisture sensor readings and the crop calendar. A named
 officer approves every draft before anything reaches a farmer.
 
+**The AI drafts and proposes; a physical action happens only after a named officer
+approves.** The one physical action is irrigation, and it is **simulated**: there is no
+valve hardware, only a valve state in the database behind a simulated gateway.
+
 ## 2. Agent shape
 
 ```mermaid
 flowchart LR
-  P[plan] --> G[gather<br/>read tools, 1 retry each] --> U{check_urgent}
-  U -- no food / no visit in 30 days / food request --> F[flag_for_visit]
-  U -- otherwise --> D[draft_advice] --> Q[pending_review]
+  P[plan] --> G[gather<br/>read tools, 1 retry each] --> U{check_urgent} --> I[propose_irrigation<br/>rule in code]
+  I --> PQ[irrigation proposal<br/>pending_review]
+  I -- no food / no visit in 30 days / food request --> F[flag_for_visit]
+  I -- otherwise --> D[draft_advice] --> Q[pending_review]
   Q -- named officer --> A[approved / edited_and_approved / rejected]
+  PQ -- named officer, same gate --> X[approval executor] -- MCP --> V[irrigation gateway<br/>SIMULATED valve]
 ```
 
 - **Flow:** LangGraph in `backend/agent/graph.py`: plan → gather → check_urgent →
-  draft or flag.
+  propose_irrigation → draft or flag.
 - **Retry rule:** each call to our own tools is retried once. If it still fails, the gap
   is written into the draft ("weather missing after one retry"), never guessed. A failed
   call to the borrowed clock is not retried; it is recorded as a gap.
@@ -30,6 +36,25 @@ flowchart LR
   ("Heavy rain is forecast: do not advise watering, even for dry plots."), but the
   block is in code, so it holds even when the model ignores that. The reason is shown
   on the run page.
+- **Irrigation rule (code, not the model):** the `propose_irrigation` tool
+  (`irrigation_check` in `backend/tools/agrimoist_tools.py`) reads the facts itself and
+  proposes only when the plot's latest soil reading is current (the soil sensor's stale
+  check) and below `IRRIGATION_DRY_THRESHOLD_PCT`, the weather is known and forecast rain
+  is below `HEAVY_RAIN_THRESHOLD_MM` (`is_heavy_rain`, shared with the rain guard), and
+  the plot has no open proposal or open valve. Minutes are capped at
+  `IRRIGATION_MAX_MINUTES`. If the run's own weather or soil read was a gap, the agent
+  proposes nothing.
+- **Proposals use the same gate:** a proposal is an `Advice` row (status
+  `pending_review`) plus an `IrrigationProposal` row, so `load_decidable` and
+  `apply_decision` handle it exactly like advice: signed-in officer, expiry
+  (`DRAFT_EXPIRY_HOURS`), decide-once, web and USSD (listed as "IRRIGATE H-009 20 min").
+  It cannot be edited, is not translated, and is never in the farmer view.
+- **Approval executor:** after an approval is committed, `apply_decision` hands the
+  proposal to `backend/approvals/irrigation_executor.py`, the only code that calls the
+  valve tools. It claims the proposal once (a conditional UPDATE), calls `open_valve`
+  over MCP, and on any error closes the valve through the gateway, or marks it closed
+  directly if the gateway cannot be reached (fail closed). The approval stands either
+  way. Each step is logged with the channel and officer.
 - **Approval gate:** `backend/approvals/router.py` is the only code that sets
   `approved` or `edited_and_approved` (apart from one pre-approved demo seed record). Rejecting needs a reason, and every decision is
   logged with the officer who made it.
@@ -38,10 +63,11 @@ flowchart LR
 
 | | Server | Tools |
 |---|---|---|
-| **Built** | `backend/mcp_server/server.py` | **Read only (6):** `get_field_records`, `get_plot_history`, `get_crop_calendar`, `get_weather`, `get_pest_reports`, `get_soil_moisture`. **Saves a record:** `record_observation`. **Acts:** `draft_advice`, `flag_for_visit`, `schedule_followup` (4 that write) |
+| **Built** | `backend/mcp_server/server.py` | **Read only (6):** `get_field_records`, `get_plot_history`, `get_crop_calendar`, `get_weather`, `get_pest_reports`, `get_soil_moisture`. **Saves a record:** `record_observation`. **Acts:** `draft_advice`, `flag_for_visit`, `schedule_followup`. **Proposes:** `propose_irrigation` (5 that write, 11 tools) |
 | **Borrowed** | `mcp-server-time` (official MCP reference server) | `get_current_time` for Africa/Kampala |
+| **Built, simulated device** | `backend/irrigation_server/server.py` (`irrigation-gateway`) | `open_valve`, `close_valve`, `valve_status`. **Not connected to the agent.** |
 
-The agent calls both servers over the real MCP protocol, not as direct Python function
+The agent calls its two servers over the real MCP protocol, not as direct Python function
 calls: `backend/agent/mcp_client.py` starts each one as a subprocess over stdio, once
 per agent run. Every call to both servers is written to the log, with its inputs,
 output or error, and the agent run it belongs to.
@@ -57,8 +83,17 @@ problem where borrowing beats writing.
 
 **Why these tool boundaries:** each tool is one thing an extension officer would
 recognise (read the visits, check the weather, flag a visit, book a follow-up). No
-tool can send anything to a farmer, order inputs or request credit; the strongest a
-tool can do is put a draft in the officer's queue.
+tool the agent can reach can send anything to a farmer, order inputs, request credit or
+open a valve; the strongest it can do is put a draft or a proposal in the officer's
+queue.
+
+**The irrigation gateway is simulated, and kept apart.** `IrrigationGatewayClient` in
+`backend/agent/mcp_client.py` registers it the same way as the other servers, but the
+agent's `ToolClient` never opens it; only the approval executor does. The gateway also
+checks for itself that a proposal was approved before `open_valve` acts, and that the
+minutes match it. Each valve row stores its close time; the gateway closes overdue
+valves before every call, and the app closes them on start-up and every
+`IRRIGATION_SWEEP_SECONDS`, so a restart never leaves a valve open past its time.
 
 **Soil moisture is simulated.** There is no sensor hardware. `get_soil_moisture` reads
 the `SoilReading` table, whose readings are labelled `simulated sensor`; the ones in

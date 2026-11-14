@@ -17,7 +17,7 @@ the end of this file.
 | Method | Path | Body / query | Returns |
 | --- | --- | --- | --- |
 | `POST` | `/api/groups/{id}/draft` | `{}` | `{run_id}` - starts an agent run in the background |
-| `GET` | `/api/runs/{id}/events` | - | Server-sent events stream as the run happens: `plan`, `tool_call`, `tool_result`, `tool_error`, `check_urgent` (urgent food or overdue visit, so flag instead of draft), `model_call`, `model_result`, `run_error`, `run_finished` |
+| `GET` | `/api/runs/{id}/events` | - | Server-sent events stream as the run happens: `plan`, `tool_call`, `tool_result`, `tool_error`, `check_urgent` (urgent food or overdue visit, so flag instead of draft), `irrigation_skipped` (weather or soil was a gap, so no proposal), `model_call`, `model_result`, `run_error`, `run_finished` |
 | `GET` | `/api/runs/{id}` | - | Run summary: model, outcome, cost, timing |
 
 ## Approvals
@@ -31,6 +31,17 @@ the end of this file.
 
 Only this router may change an advice row's status to `approved` or
 `edited_and_approved` - see `backend/approvals/router.py`.
+
+**Irrigation proposals (SIMULATED valve)** are listed by `GET /api/approvals` too, with
+`kind: "irrigation"` and an `irrigation` object (`plot, minutes, moisture_pct,
+soil_read_at, forecast_mm, execution, label, valve`). They are approved or rejected with
+the same routes; `/edit` answers 409 (a proposal cannot be edited). An approval response
+for a proposal also carries `irrigation: {opened, valve, error}`: the approval executor
+opened the valve, or left it closed after an error.
+
+| Method | Path | Body / query | Returns |
+| --- | --- | --- | --- |
+| `GET` | `/api/irrigation/valves` | - | `{simulated: true, valves[]}`, each `{plot, state, seconds_left, close_at}`. Signed-in officers only |
 
 ## Farmer reports and visit flags
 
@@ -95,7 +106,9 @@ drafted -> pending_review -> rejected            (reason recorded)
                                         -> followed_up
 ```
 
-Only `approved` and `edited_and_approved` advice can ever reach a farmer.
+Only `approved` and `edited_and_approved` advice can ever reach a farmer. An approved
+irrigation proposal never does: the farmer view leaves out every advice row that has an
+`irrigationproposal` row.
 
 The `advice.status` column only ever holds `blocked`, `pending_review`, `rejected`,
 `approved` or `edited_and_approved`. The last two steps are not statuses:

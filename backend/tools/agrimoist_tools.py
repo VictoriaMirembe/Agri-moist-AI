@@ -469,12 +469,18 @@ def forecast_rain_mm(sources: list[dict[str, str]]) -> float | None:
     return None
 
 
+def is_heavy_rain(forecast_mm: float | None) -> bool:
+    """True when the forecast (mm, next 7 days) is at or above HEAVY_RAIN_THRESHOLD_MM.
+    Used by the rain guard below, the agent's heavy-rain warning and the irrigation rule."""
+    return forecast_mm is not None and forecast_mm >= settings.heavy_rain_threshold_mm
+
+
 def watering_before_heavy_rain(texts: list[str], sources: list[dict[str, str]]) -> tuple[float | None, list[str]]:
     """(forecast mm, watering phrases found) when the forecast is at or above
     HEAVY_RAIN_THRESHOLD_MM and the wording tells the farmer to add water; otherwise
     (forecast mm, []). Checked in code, so it does not depend on the model obeying."""
     forecast = forecast_rain_mm(sources)
-    if forecast is None or forecast < settings.heavy_rain_threshold_mm:
+    if not is_heavy_rain(forecast):
         return forecast, []
     found: list[str] = []
     for text in texts:
@@ -568,3 +574,147 @@ def schedule_followup(session: Session, *, advice_id: int, due_on: date) -> dict
     session.commit()
     session.refresh(followup)
     return {"followup_id": followup.id, "advice_id": advice_id, "due_on": due_on.isoformat()}
+
+
+# ---------------------------------------------------------------------------
+# propose_irrigation - does something: puts an irrigation proposal (SIMULATED valve)
+# into the officer's approval queue. It never opens a valve: only the approval
+# executor does that, after a named officer approves (backend/approvals/).
+# ---------------------------------------------------------------------------
+def _expiry_cutoff() -> datetime:
+    return datetime.now(timezone.utc) - timedelta(hours=settings.draft_expiry_hours)
+
+
+def irrigation_check(session: Session, *, group_id: int, plot: str) -> dict[str, Any]:
+    """The irrigation rule, in code (not the model). Propose for a plot only when ALL
+    hold: its latest soil reading exists, is current (soil_reading_is_stale) and below
+    IRRIGATION_DRY_THRESHOLD_PCT; the weather is known (not a gap) and forecast rain is
+    below HEAVY_RAIN_THRESHOLD_MM (is_heavy_rain, as the rain guard); and the plot has
+    no open proposal and no open valve. Facts are read here, from the database and
+    get_weather, never taken from the caller. Returns {ok, reasons, ...facts}."""
+    from backend.db.models import IrrigationProposal, Valve, Village
+
+    household = session.exec(
+        select(Household).where(Household.code == plot, Household.group_id == group_id)
+    ).first()
+    if household is None:
+        raise ToolError(f"No plot {plot} in group {group_id}")
+    reasons: list[str] = []
+    facts: dict[str, Any] = {"plot": plot}
+
+    # Soil: the latest reading for this plot, from the same tool the agent reads.
+    soil = get_soil_moisture(session, group_id=group_id)
+    reading = next((r for r in soil["readings"] if r["household_code"] == plot), None)
+    if reading is None:
+        reasons.append("no soil reading for this plot")
+    elif reading["stale"] or soil_reading_is_stale(reading["read_at"]):
+        reasons.append(f"soil reading is out of date (older than {SOIL_STALE_AFTER_HOURS} hours)")
+    else:
+        facts.update(
+            plot_id=reading["plot_id"], moisture_pct=reading["moisture_pct"],
+            soil_reading_ref=reading["source_ref"], soil_read_at=reading["read_at"],
+        )
+        if reading["moisture_pct"] >= settings.irrigation_dry_threshold_pct:
+            reasons.append(
+                f"soil is not dry ({reading['moisture_pct']:g}% is not below {settings.irrigation_dry_threshold_pct:g}%)"
+            )
+
+    # Weather: a gap means unknown rain, so no proposal. The forecast is read back the
+    # same way the rain guard reads it (weather_fact -> forecast_rain_mm).
+    village = session.get(Village, household.village_id)
+    try:
+        weather = get_weather(latitude=village.latitude, longitude=village.longitude)
+    except ToolError as exc:
+        weather = None
+        reasons.append(f"weather unavailable (a gap): {exc}")
+    if weather is not None:
+        forecast = forecast_rain_mm([
+            {
+                "fact": weather_fact(weather["past_7_days_rain_mm"], weather["next_7_days_rain_mm"]),
+                "source_type": "weather",
+                "source_ref": weather["source_ref"],
+            }
+        ])
+        facts.update(forecast_mm=forecast, weather_ref=weather["source_ref"],
+                     past_mm=weather["past_7_days_rain_mm"])
+        if forecast is None:
+            reasons.append("forecast rain unknown")
+        elif is_heavy_rain(forecast):
+            reasons.append(
+                f"heavy rain is forecast ({forecast:g} mm in the next 7 days, threshold "
+                f"{settings.heavy_rain_threshold_mm:g} mm)"
+            )
+
+    # One open proposal per plot: pending_review and not yet past DRAFT_EXPIRY_HOURS.
+    open_proposal = session.exec(
+        select(IrrigationProposal)
+        .join(Advice, Advice.id == IrrigationProposal.advice_id)
+        .where(
+            IrrigationProposal.plot_code == plot,
+            Advice.status == "pending_review",
+            Advice.created_at > _expiry_cutoff(),
+        )
+    ).first()
+    if open_proposal is not None:
+        reasons.append(f"an open proposal already exists for this plot (advice {open_proposal.advice_id})")
+    valve = session.get(Valve, plot)
+    if valve is not None and valve.state == "open":
+        reasons.append("the valve on this plot is open now")
+
+    return {"ok": not reasons, "reasons": reasons, **facts}
+
+
+def propose_irrigation(
+    session: Session, *, group_id: int, plot: str, minutes: int, run_id: int | None = None
+) -> dict[str, Any]:
+    from backend.db.models import IrrigationProposal
+
+    if minutes < 1:
+        raise ToolError("minutes must be at least 1")
+    capped = min(int(minutes), settings.irrigation_max_minutes)
+    check = irrigation_check(session, group_id=group_id, plot=plot)
+    if not check["ok"]:
+        return {"proposed": False, "plot": plot, "reasons": check["reasons"]}
+
+    pct, forecast = check["moisture_pct"], check["forecast_mm"]
+    advice = Advice(
+        group_id=group_id,
+        run_id=None,  # the run is on the proposal row; Advice.run_id stays the run's advice draft
+        status="pending_review",
+        draft_text=f"IRRIGATE {plot} {capped} min (simulated valve)",
+        why_text=(
+            f"Soil at {plot} is {pct:g}% (simulated sensor, current reading), below "
+            f"{settings.irrigation_dry_threshold_pct:g}%. Forecast rain is {forecast:g} mm in "
+            f"the next 7 days, below {settings.heavy_rain_threshold_mm:g} mm."
+        ),
+        language="English",
+    )
+    session.add(advice)
+    session.commit()
+    session.refresh(advice)
+    session.add(AdviceSource(
+        advice_id=advice.id, fact=f"Soil moisture at {plot}: {pct}% (simulated sensor, current reading)",
+        source_type="soil_sensor", source_ref=check["soil_reading_ref"],
+    ))
+    session.add(AdviceSource(
+        advice_id=advice.id, fact=weather_fact(check["past_mm"], forecast),
+        source_type="weather", source_ref=check["weather_ref"],
+    ))
+    proposal = IrrigationProposal(
+        advice_id=advice.id, run_id=run_id, group_id=group_id, plot_id=check["plot_id"], plot_code=plot,
+        minutes=capped, moisture_pct=pct, soil_reading_ref=check["soil_reading_ref"],
+        soil_read_at=datetime.fromisoformat(check["soil_read_at"]), forecast_mm=forecast,
+        weather_ref=check["weather_ref"],
+    )
+    session.add(proposal)
+    session.commit()
+    session.refresh(proposal)
+    return {
+        "proposed": True,
+        "advice_id": advice.id,
+        "proposal_id": proposal.id,
+        "plot": plot,
+        "minutes": capped,
+        "minutes_capped": capped != int(minutes),
+        "status": "pending_review",
+    }

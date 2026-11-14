@@ -9,6 +9,13 @@
 # draft still be decided?) and apply_decision (decide it, once). The web routes below
 # and the officer USSD menu (backend/officer/ussd.py) both call them, so a rule added
 # here - such as draft expiry - holds on every channel and cannot be skipped.
+#
+# Irrigation proposals (SIMULATED valve) are queue items too: an Advice row plus an
+# IrrigationProposal row. They pass through these same two functions, so sign-in,
+# expiry, decide-once and both channels apply to them unchanged. Only after an approval
+# is committed does apply_decision hand the proposal to the approval executor
+# (irrigation_executor.py), the one piece of code that may open a valve. A proposal
+# cannot be edited, and it is never translated or shown to farmers.
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
@@ -18,9 +25,11 @@ from pydantic import BaseModel, field_validator
 from sqlmodel import select, update
 
 from backend.agent.model_client import translate_text
+from backend.approvals.irrigation_executor import execute_approved_proposal, proposal_for
 from backend.core.config import settings
 from backend.core.database import session_scope
 from backend.db.models import Advice, AdviceSource, Approval, Officer, Run
+from backend.irrigation_server import device
 from backend.logging.tool_log import run_logged
 from backend.officer.auth import require_officer, signed_in_officer_id
 
@@ -59,6 +68,7 @@ class RejectRequest(BaseModel):
 
 def _serialize(session, advice: Advice) -> dict:
     sources = session.exec(select(AdviceSource).where(AdviceSource.advice_id == advice.id)).all()
+    proposal = proposal_for(session, advice.id)
     return {
         "id": advice.id,
         "group_id": advice.group_id,
@@ -69,6 +79,8 @@ def _serialize(session, advice: Advice) -> dict:
         "why_text": advice.why_text,
         "language": advice.language,
         "created_at": advice.created_at.isoformat(),
+        "kind": "irrigation" if proposal else "advice",
+        "irrigation": _irrigation_details(session, proposal) if proposal else None,
         "sources": [
             {
                 "fact": s.fact,
@@ -78,6 +90,22 @@ def _serialize(session, advice: Advice) -> dict:
             }
             for s in sources
         ],
+    }
+
+
+def _irrigation_details(session, proposal) -> dict:
+    return {
+        "proposal_id": proposal.id,
+        "plot": proposal.plot_code,
+        "minutes": proposal.minutes,
+        "moisture_pct": proposal.moisture_pct,
+        "soil_read_at": proposal.soil_read_at.isoformat(),
+        "forecast_mm": proposal.forecast_mm,
+        "execution": proposal.execution,
+        "execution_error": proposal.execution_error,
+        "label": f"IRRIGATE {proposal.plot_code} {proposal.minutes} min",
+        "valve": device.valve_status(session, plot=proposal.plot_code),
+        "simulated": True,
     }
 
 
@@ -160,16 +188,19 @@ def _session_officer(session, request: Request) -> Officer:
     return officer
 
 
-def _log_decision(session, advice: Advice, officer: Officer, decision: str, inputs: dict, outputs: dict) -> None:
+def _log_decision(
+    session, advice: Advice, officer: Officer, decision: str, inputs: dict, outputs: dict, run_id: int | None = None
+) -> None:
     """Every approval decision goes into the same log as tool calls, tied to the
-    agent run that drafted the advice, with the officer as the actor."""
+    agent run that drafted the advice (or proposed the irrigation), with the officer
+    as the actor."""
     run_logged(
         session,
         tool=f"{decision}_advice",
         inputs={"advice_id": advice.id, "officer_id": officer.id, **inputs},
         actor=str(officer.id),
         source="officer",
-        run_id=advice.run_id,
+        run_id=advice.run_id or run_id,
         func=lambda: outputs,
     )
 
@@ -193,7 +224,12 @@ def apply_decision(
     new_status = DECISION_STATUS[decision]
     values: dict = {"status": new_status}
     translation = None
-    if decision != "reject":
+    proposal = proposal_for(session, advice.id)
+    if proposal is not None and decision == "edit_and_approve":
+        raise GateRefusal(409, "An irrigation proposal cannot be edited: approve or reject it.", advice.status)
+    if proposal is not None and decision == "approve":
+        values["final_text"] = advice.draft_text  # an instruction to the valve: not translated
+    elif decision != "reject":
         # Translate the final, approved text for farmers. Any translation failure
         # falls back to showing the English text - it never blocks the approval.
         values["final_text"] = final_text if decision == "edit_and_approve" else advice.draft_text
@@ -231,7 +267,12 @@ def apply_decision(
     if translation is not None:
         result["translation_model"] = translation["model"]
         outputs = {**result, "translation_cost": translation.get("cost", 0.0)}
-    _log_decision(session, advice, officer, decision, inputs, outputs)
+    if proposal is not None:
+        inputs["irrigation_proposal_id"] = proposal.id
+    _log_decision(session, advice, officer, decision, inputs, outputs, run_id=proposal.run_id if proposal else None)
+    if proposal is not None and new_status == "approved":
+        # Only now, with the named officer's approval committed and logged, may a valve open.
+        result["irrigation"] = execute_approved_proposal(session, proposal, officer, channel)
     return result
 
 
