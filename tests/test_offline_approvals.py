@@ -3,6 +3,7 @@
 # on the phone are the only sign-in. Demo PINs: officer 1 = 1234, officer 2 = 5678.
 from __future__ import annotations
 
+from backend.db.seed import DEMO_OFFICER_PASSWORD
 from datetime import datetime, timedelta, timezone
 
 import pytest
@@ -82,7 +83,7 @@ def _decision_logs(client, tool: str) -> list[dict]:
     reader = TestClient(app)  # no `with`: the app is already started by the test's client
     try:
         login = reader.post(
-            "/api/auth/login", json={"officer_id": 1, "password": settings.officer_demo_password}
+            "/api/auth/login", json={"officer_id": 1, "password": DEMO_OFFICER_PASSWORD}
         )
         assert login.status_code == 200, f"Officer sign-in for reading /api/logs failed: {login.status_code} {login.text}"
         r = reader.get("/api/logs")
@@ -219,7 +220,7 @@ def test_a_correct_pin_clears_earlier_wrong_attempts(phone):
 # --- approve and reject --------------------------------------------------------
 
 
-def test_ussd_approval_with_correct_pin(phone):
+def test_ussd_approval_with_correct_pin(phone, farmer_client):
     advice_id = _pending_id()
     draft = _dial(phone, "a1", "2*5678*1")
     assert draft.startswith("CON Group 2") and draft.endswith("1. Approve\n2. Reject\n0. Back")
@@ -230,7 +231,7 @@ def test_ussd_approval_with_correct_pin(phone):
     decisions = _approvals(advice_id)
     assert [(d.officer_id, d.decision) for d in decisions] == [(2, "approved")]
     # The farmer in group 2 can now read it; final text is the draft, unedited.
-    advice = phone.get("/api/farmer/advice", params={"phone": "+256700000004"}).json()
+    advice = farmer_client("+256700000004").get("/api/farmer/advice").json()
     assert advice["has_advice"] is True and "Heavy rain fell at H-004" in advice["text"]
 
 
@@ -282,7 +283,7 @@ def test_web_decision_is_logged_with_channel_web(client):
     assert '"channel": "web"' in _decision_logs(client, "approve_advice")[0]["inputs"]
 
 
-def test_ussd_reject_records_the_reason_from_the_fixed_list(phone):
+def test_ussd_reject_records_the_reason_from_the_fixed_list(phone, farmer_client):
     advice_id = _pending_id()
     reasons = _dial(phone, "j1", "1*1234*1*2")
     assert reasons.startswith("CON Why reject?\n1. Facts look wrong")
@@ -296,7 +297,7 @@ def test_ussd_reject_records_the_reason_from_the_fixed_list(phone):
     assert [(d.officer_id, d.decision, d.reason) for d in _approvals(advice_id)] == [(1, "rejected", "Out of date")]
     row = _decision_logs(phone, "reject_advice")[0]
     assert row["actor"] == "1" and '"channel": "ussd"' in row["inputs"] and "Out of date" in row["inputs"]
-    assert phone.get("/api/farmer/advice", params={"phone": "+256700000004"}).json()["has_advice"] is False
+    assert farmer_client("+256700000004").get("/api/farmer/advice").json()["has_advice"] is False
 
 
 def test_back_returns_to_the_list_without_deciding(phone):
@@ -482,6 +483,7 @@ def test_officer_ids_and_pins_do_nothing_on_the_farmer_code(phone):
     assert _status(advice_id) == "pending_review"
 
 
-def test_simulator_page_offers_the_officer_code(phone):
-    page = phone.get("/ussd").text
+def test_simulator_page_offers_the_officer_code(client):
+    # The simulator page itself is for signed-in officers (it lists farmers' numbers).
+    page = client.get("/ussd").text
     assert OFFICER_CODE in page and "officer-dial-btn" in page
