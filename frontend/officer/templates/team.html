@@ -1,0 +1,114 @@
+{# Team: the officers who can sign in (GET /api/team). An admin officer adds officers (POST /api/team) and resets passwords (POST /api/team/{id}/password). #}
+{% extends "base.html" %}
+{% block title %}Team{% endblock %}
+{% block content %}
+{%- set is_admin = request.session.get("is_admin") -%}
+<div class="o-page-head">
+  <div>
+    <p class="o-eyebrow">Extension office</p>
+    <h1>Team</h1>
+    <p class="o-lead">Officers who can sign in. Every approval is recorded under the officer who signed in.</p>
+  </div>
+</div>
+
+<section class="card o-panel">
+  <div id="team-list" class="muted">Loading...</div>
+</section>
+
+<section class="card o-panel">
+  <h2>My USSD PIN</h2>
+  <p class="o-hint">To approve or reject drafts from a basic phone, dial {{ officer_service_code }} and give your officer number ({{ request.session.get("officer_id") }}) and this PIN.</p>
+  <form id="ussd-pin-form" class="o-form">
+    <label for="ussd-pin">New 4-digit PIN</label>
+    <input id="ussd-pin" type="password" inputmode="numeric" maxlength="4" pattern="[0-9]{4}" required>
+    <p id="ussd-pin-msg" role="status"></p>
+    <button class="btn" type="submit">Save PIN</button>
+  </form>
+</section>
+
+{% if is_admin %}
+<section class="card o-panel">
+  <h2>Add an officer</h2>
+  <form id="officer-form" class="o-form">
+    <label for="o-name">Full name</label>
+    <input id="o-name" required>
+    <label for="o-phone">Phone number (they sign in with it)</label>
+    <input id="o-phone" type="tel" inputmode="tel" placeholder="07XX XXX XXX" required>
+    <label for="o-password">First password (at least 8 characters)</label>
+    <input id="o-password" type="password" minlength="8" autocomplete="new-password" required>
+    <label class="o-check"><input id="o-admin" type="checkbox"> Admin: can add officers and reset passwords</label>
+    <p id="officer-msg" role="status"></p>
+    <button class="btn" type="submit">Add officer</button>
+  </form>
+</section>
+{% else %}
+<p class="o-hint">Only an admin officer can add officers or reset passwords.</p>
+{% endif %}
+{% endblock %}
+{% block scripts %}
+<script>
+const IS_ADMIN = {{ (is_admin or False) | tojson }};
+
+async function loadTeam() {
+  const el = document.getElementById("team-list");
+  try {
+    const rows = await getJSON("/api/team");
+    el.classList.remove("muted");
+    el.innerHTML = `<div class="o-table-wrap"><table class="o-table">
+      <thead><tr><th>Name</th><th>Phone</th><th>Role</th>${IS_ADMIN ? "<th></th>" : ""}</tr></thead>
+      <tbody>${rows.map(r => `<tr>
+        <td>${escapeHTML(r.name)}</td>
+        <td>${escapeHTML(r.phone || "no sign-in")}</td>
+        <td>${r.is_admin ? "Admin" : "Officer"}</td>
+        ${IS_ADMIN && r.can_sign_in ? `<td><button class="btn secondary small" data-reset="${r.officer_id}">Reset password</button></td>` : (IS_ADMIN ? "<td></td>" : "")}
+      </tr>`).join("")}</tbody></table></div>`;
+  } catch (err) { showLoadError(el, err); }
+}
+
+document.getElementById("team-list").addEventListener("click", (e) => {
+  const btn = e.target.closest("[data-reset]");
+  if (!btn) return;
+  const cell = btn.parentElement;
+  cell.innerHTML = `<input type="password" minlength="8" placeholder="New password" aria-label="New password"> <button class="btn small">Save</button>`;
+  const input = cell.querySelector("input");
+  input.focus();
+  cell.querySelector("button").addEventListener("click", async () => {
+    try {
+      await postJSON(`/api/team/${btn.dataset.reset}/password`, { password: input.value });
+      cell.textContent = "Password set";
+    } catch (err) { showError(cell, err); }
+  });
+});
+
+const form = document.getElementById("officer-form");
+if (form) form.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const msg = document.getElementById("officer-msg");
+  try {
+    const r = await postJSON("/api/team", {
+      name: document.getElementById("o-name").value,
+      phone: document.getElementById("o-phone").value,
+      password: document.getElementById("o-password").value,
+      is_admin: document.getElementById("o-admin").checked,
+    });
+    msg.className = "o-ok";
+    msg.textContent = `${r.name} can now sign in.`;
+    form.reset();
+    loadTeam();
+  } catch (err) { msg.className = "o-err"; msg.textContent = err.message; }
+});
+
+document.getElementById("ussd-pin-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const msg = document.getElementById("ussd-pin-msg");
+  try {
+    await postJSON("/api/team/me/ussd-pin", { pin: document.getElementById("ussd-pin").value.trim() });
+    msg.className = "o-ok";
+    msg.textContent = "PIN saved.";
+    e.target.reset();
+  } catch (err) { msg.className = "o-err"; msg.textContent = err.message; }
+});
+
+loadTeam();
+</script>
+{% endblock %}
