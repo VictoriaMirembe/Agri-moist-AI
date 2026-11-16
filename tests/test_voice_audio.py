@@ -89,3 +89,38 @@ def test_voice_audio_failure_is_503(client, voice_dir, monkeypatch):
     res = client.post("/api/farmer/voice-audio", json={"text": "Karibu", "lang": "sw"})
     assert res.status_code == 503
     assert not voice_dir.exists() or not any(voice_dir.iterdir())
+
+
+def test_a_slow_piece_answers_pending_instead_of_holding_up_the_reading(client, voice_dir, monkeypatch):
+    # Sunbird can take over a minute per piece; the page waits only a few seconds.
+    import threading
+
+    release = threading.Event()
+    monkeypatch.setattr(settings, "sunbird_api_key", "test-key")
+    monkeypatch.setattr(model_client, "synthesize_speech", lambda text, lang: release.wait(10) and {"audio_url": "u"})
+    monkeypatch.setattr(model_client, "download_audio", lambda url: WAV)
+
+    slow = client.post("/api/farmer/voice-audio", json={"text": "Slow piece", "lang": "kdj", "wait": 0.2})
+    assert slow.status_code == 202 and slow.json() == {"pending": True}
+    release.set()
+    # The audio keeps being made in the background; asking again gets it.
+    ready = client.post("/api/farmer/voice-audio", json={"text": "Slow piece", "lang": "kdj", "wait": 5})
+    assert ready.status_code == 200 and ready.json()["audio_url"].startswith("/api/farmer/voice-audio/")
+
+
+def test_opening_the_page_starts_making_every_piece_of_its_audio(farmer_client, voice_dir, fake_sunbird):
+    farmer = farmer_client("+256700000004")
+    script = farmer.get("/api/farmer/voice-script", params={"lang": "kdj", "view": "dashboard"}).json()
+    assert script["pieces"] == farmer_router.split_for_speech(script["sentences"])
+    for job in list(farmer_router._VOICE_JOBS.values()):
+        job.result(timeout=10)
+    made = {p.name for p in voice_dir.glob("*.wav")}
+    assert {farmer_router._voice_file_name("kdj", p["text"]) for p in script["pieces"]} <= made
+
+
+def test_speech_pieces_keep_decimals_whole_and_start_with_one_sentence():
+    pieces = farmer_router.split_for_speech(
+        [{"label": "a", "text": "Rain was 58.4 mm. Next week 0.6 mm is forecast. Soil is dry."}]
+    )
+    assert pieces[0]["text"] == "Rain was 58.4 mm."
+    assert pieces[1]["text"] == "Next week 0.6 mm is forecast. Soil is dry."
