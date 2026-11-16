@@ -77,14 +77,8 @@ def test_farmer_updates_endpoint_does_not_count_as_a_read(client):
     assert reads() == start  # background refreshes are not the farmer reading advice
 
 
-def test_translation_cost_is_added_to_the_run_and_the_week(client, monkeypatch):
-    from backend.approvals import router as approvals_router
-
-    monkeypatch.setattr(
-        approvals_router,
-        "translate_text",
-        lambda text, lang: {"translated_text": "(kdj)", "model": "sunbird/sunflower-9b", "cost": 0.0004},
-    )
+def test_translation_cost_is_added_to_the_run_and_the_week(client, fake_translator):
+    fake_translator({"translated_text": "(kdj)", "model": "sunbird/sunflower-9b", "cost": 0.0004})
     pending = client.get("/api/approvals", params={"status": "pending_review"}).json()[0]
     run_id = pending["run_id"]
     before = client.get(f"/api/runs/{run_id}").json()["cost"]
