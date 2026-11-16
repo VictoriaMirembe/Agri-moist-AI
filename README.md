@@ -79,7 +79,7 @@ AgriMoist AI gives each officer an AI assistant that does the checking and draft
 The officer keeps the judgement.
 
 1. **Collect.** Officers record field visits. Farmers report pests, rain and crop problems from any phone.
-2. **Check.** The agent gathers plot history, live weather, nearby pest reports, soil moisture from a simulated sensor and the crop calendar through MCP tools.
+2. **Check.** The agent gathers plot history, live weather, nearby pest reports, soil moisture (Open-Meteo's soil model for each village) and the crop calendar through MCP tools.
 3. **Draft.** An open-weights model writes advice in which every fact cites its source. Urgent cases are flagged for a visit instead.
 4. **Approve.** A named officer approves, edits or rejects each draft. Nothing reaches a farmer without that approval.
    The agent can also propose irrigating a dry plot; a **simulated** valve opens only after the officer approves that proposal.
@@ -215,9 +215,12 @@ git clone https://github.com/VictoriaMirembe/Agri-moist-AI.git && cd Agri-moist-
 git clone https://github.com/VictoriaMirembe/Agri-moist-AI.git; cd Agri-moist-AI; .\run.bat
 ```
 
-Then open **<http://localhost:8000>** for the officer screens and
-**<http://localhost:8000/farmer>** for the farmer page. You can also double-click
-`run.bat` in File Explorer.
+Then open **<http://localhost:8000>**. The app starts with **no made-up data**: on the
+first visit it opens **Set up your extension office** (`/officer/setup`), where you create
+your district and your own admin account. Then, on the **Farmers** page, add a village
+(the place search finds its coordinates) and register real farmers, each with a 4-digit
+PIN. Farmers sign in at **<http://localhost:8000/farmer/login>** with their phone number
+and that PIN. You can also double-click `run.bat` in File Explorer.
 
 The script:
 
@@ -225,7 +228,7 @@ The script:
 2. Creates a virtual environment in `.venv`
 3. Installs the requirements
 4. Creates `.env` from `.env.example`
-5. Starts the app, which creates and seeds its database on first start
+5. Starts the app, which creates its database tables and loads the FEWS NET crop calendar on first start
 
 Running it again skips the steps that are already done, so later starts take only a
 few seconds. To use a different port, set `APP_PORT` (for example `APP_PORT=8080 ./run.sh`).
@@ -242,8 +245,8 @@ cp .env.example .env
 docker compose up --build
 ```
 
-Open <http://localhost:8000>. On first start, the app creates its database and loads the
-synthetic demo households.
+Open <http://localhost:8000>. On first start, the app creates its tables and loads the
+crop calendar; there are no made-up households. Set up your office as described above.
 
 ### Run manually (without the script)
 
@@ -281,12 +284,15 @@ All settings are read from `.env`. See [`.env.example`](.env.example) for the fu
 | `GROQ_API_KEY` | Enables the open-weights model for drafting. Blank = rule-based mode, labelled `rule-based-stub` in every run log. | blank |
 | `GROQ_MODEL` | Drafting model | `openai/gpt-oss-120b` |
 | `SUNBIRD_API_KEY` | Enables Karamojong translation and the Sunbird voice reader. Blank = farmers see English and the voice reader uses the browser's voice. | blank |
-| `SESSION_SECRET` | Signs officer session cookies. Blank = a new random key on each start. | blank |
-| `OFFICER_DEMO_PASSWORD` | Password for the officer sign-in page, shown there as the demo login. Change it on a public host. | `napak2026` |
+| `DATABASE_URL` | The database. Use Neon Postgres in production (`postgresql+psycopg://...?sslmode=require`), so data survives restarts. Blank = a local SQLite file. | `sqlite:///./data/agrimoist.db` |
+| `SESSION_SECRET` | Signs officer and farmer session cookies. Set it on a host; blank = a new random key on each start, so everyone signs in again after a restart. | blank |
+| `SOIL_SOURCE` | `open-meteo`: Open-Meteo's modelled soil moisture (9-27 cm) at each village. `sensor-only`: only stored readings (tests and evals). | `open-meteo` |
+| `SEED_DEMO_DATA` | Loads the made-up Napak test households. Only for tests and evals, and refused on Postgres. | `false` |
+| `WEB_LOGIN_MAX_ATTEMPTS` / `WEB_LOGIN_LOCK_MINUTES` | Wrong passwords or PINs on the sign-in pages before that account is locked, and for how long | `5` / `15` |
 | `USSD_SERVICE_CODE` | Short code shown in the simulator | `*384*5951#` |
 | `USSD_CALLBACK_TOKEN` | Shared secret required on the Africa's Talking callback URLs | blank |
 | `WEATHER_FAIL` | `1` forces `get_weather` to fail, to demonstrate the retry-and-gap behaviour | `0` |
-| `SOIL_SENSOR_FAIL` | `1` forces `get_soil_moisture` (the simulated soil sensor) to fail, to demonstrate the retry-and-gap behaviour | `0` |
+| `SOIL_SENSOR_FAIL` | `1` forces `get_soil_moisture` to fail, to demonstrate the retry-and-gap behaviour | `0` |
 | `WEATHER_OVERRIDE_PAST_MM` / `WEATHER_OVERRIDE_NEXT_MM` | Forces a rain scenario for demos and evals. Always labelled `demo-override`, never shown as a live reading. | unset |
 | `HEAVY_RAIN_THRESHOLD_MM` | Forecast rain (mm, next 7 days) at or above which watering advice is blocked and no irrigation is proposed | `15` |
 | `IRRIGATION_DRY_THRESHOLD_PCT` | A plot is proposed for (simulated) irrigation only if its current soil reading is below this | `15` |
@@ -299,15 +305,15 @@ Open-Meteo needs no key. API keys: [Groq](https://console.groq.com/keys) · [Sun
 
 Watch the recorded demo first: https://www.youtube.com/watch?v=nb6u-yo-OVU
 
-The demo uses synthetic data for 10 households in 2 villages and 3 household groups.
-No real person's data is used.
+The app holds only data that officers enter: there are no made-up households.
 
 | Step | Where | What to look for |
 | --- | --- | --- |
-| 1 | **Officer sign-in** → **Home** | Choose an officer and use the demo login (password `napak2026`), then open a household group |
+| 0 | **Set up** (`/officer/setup`, first visit only) → **Farmers** | Create the district and your admin account, add a village with the place search, and register farmers with consent and a PIN. Record a visit for a household |
+| 1 | **Officer sign-in** (`/officer/login`) → **Home** | Your phone number and password, then open a household group |
 | 2 | Group → **Draft advice** | Agent steps stream in live; raw tool calls and sources are under *Technical details* |
 | 3 | **Approve advice** | Each claim shows its source and gaps are highlighted. Approve, edit and approve, or reject |
-| 4 | **Farmer page** (`/farmer`) | Sign in as `+256700000001` to `+256700000010`. Only approved advice appears. Try **Listen** |
+| 4 | **Farmer sign-in** (`/farmer/login`) | The farmer's phone number and PIN. Only approved advice appears. Try **Listen** |
 | 5 | **USSD simulator** (`/ussd`) | Dial `*384*5951#` and press `1`. The same approval rule holds on a basic phone |
 | 6 | **Activity log** | Every tool call, with its MCP server, source, actor and per-run cost |
 | 7 | **AI tools (MCP)** (`/mcp`) | Three MCP servers, each started live and its tools listed over the protocol: our own `agrimoist` server (11 tools, *Built by us*, *Connected*), the borrowed `mcp-server-time` (*Borrowed*, *Connected*), and, in its own panel below them, the **simulated** `irrigation-gateway` (`open_valve`, `close_valve`, `valve_status`), marked *Simulated device* and **not** connected to the agent. The page also shows the number of MCP calls made so far and which AI services are linked |
@@ -330,16 +336,12 @@ instead of inventing a rain figure.
 ## Approving by phone (officer USSD)
 
 An extension officer can approve or reject drafts from a basic phone, with no web app.
-In the simulator (`/ussd`) press **Officer: dial `*384*5952#`**, then enter the officer id and PIN.
+Each officer sets their own USSD PIN on the **Team** page. In the simulator (`/ussd`,
+officers only) press **Officer: dial `*384*5952#`**, then enter the officer number shown on
+the Team page and that PIN.
 
-| Officer | Officer id | Demo PIN |
-|---|---|---|
-| Among Betty | `1` | `1234` |
-| Lomuria Peter | `2` | `5678` |
-
-These are demo PINs seeded by `backend/db/seed.py`; change them before any real use. Only a
-salted scrypt hash of each PIN is stored (`backend/officer/pins.py`). Three wrong PINs in a
-row lock that officer's USSD sign-in for 15 minutes.
+Only a salted scrypt hash of each PIN is stored (`backend/officer/pins.py`). Three wrong
+PINs in a row lock that officer's USSD sign-in for 15 minutes.
 
 - The menu lists up to 3 drafts waiting, newest first. Pick one, then `1` Approve, `2` Reject (choose a reason from a fixed list) or `0` Back. Editing stays on the web.
 - USSD calls the same approval gate as the web (`load_decidable` and `apply_decision` in `backend/approvals/router.py`). The decision records the officer who signed in and is logged with `channel` `ussd` (web decisions log `web`).
@@ -418,16 +420,17 @@ be reused unchanged by other agents and tools.
 
 The AgriMoist server is a standard stdio MCP server, so you can use it outside this
 app. Run these commands from the repository root after the [quick start](#quick-start-clone-and-run-with-one-command),
-which creates `.venv`. The `--demo-data` flag creates and seeds the database if it
-does not exist yet.
+which creates `.venv`. The server reads the same `DATABASE_URL` as the app, so it sees
+the farmers your officers registered. (`--demo-data` loads the made-up test households,
+and only into a local SQLite file; it is refused on Postgres.)
 
 **Option 1: MCP Inspector (browser UI, needs Node.js)**
 
 ```bash
 # macOS / Linux
-npx @modelcontextprotocol/inspector .venv/bin/python -m backend.mcp_server.server --demo-data
+npx @modelcontextprotocol/inspector .venv/bin/python -m backend.mcp_server.server
 # Windows
-npx @modelcontextprotocol/inspector .venv\Scripts\python.exe -m backend.mcp_server.server --demo-data
+npx @modelcontextprotocol/inspector .venv\Scripts\python.exe -m backend.mcp_server.server
 ```
 
 The Inspector opens in your browser. Choose **Connect**, then **Tools** → **List Tools**,
@@ -453,7 +456,7 @@ path of your clone:
   "mcpServers": {
     "agrimoist": {
       "command": "/path/to/Agri-moist-AI/.venv/bin/python",
-      "args": ["-m", "backend.mcp_server.server", "--demo-data"],
+      "args": ["-m", "backend.mcp_server.server"],
       "env": {
         "PYTHONPATH": "/path/to/Agri-moist-AI",
         "DATABASE_URL": "sqlite:////path/to/Agri-moist-AI/data/agrimoist.db"
@@ -551,11 +554,12 @@ $0.0004-$0.0009 (the `translation_cost` logged on each of the 12 approvals in
 
 | Data | Source | Limitations |
 | --- | --- | --- |
-| Households, plots, visits | Synthetic, written by the team (`backend/db/seed.py`) | Deliberately includes messy records: a missing planting date, disagreeing soil readings, an overdue visit |
+| Households, plots, visits | Registered and recorded by signed-in officers (Farmers page, Record a visit), with the farmer's consent | Only as complete as what officers enter |
+| Village coordinates | [Open-Meteo geocoding](https://open-meteo.com/en/docs/geocoding-api) (GeoNames place names) | A village missing from GeoNames needs its coordinates typed in |
 | Rainfall | [Open-Meteo](https://open-meteo.com) | Model forecast, not ground measurement |
 | Crop calendar | [FEWS NET Karamoja Livelihood Zones report](https://fews.net/sites/default/files/documents/reports/Karamoja%20Final_LHZ%20Report.pdf) | Sorghum and maize only; seasonal windows |
 | Pest reports | Derived from visit and farmer-report records | Only as current as the last record |
-| Soil moisture | **Simulated** sensor readings (`SoilReading` table); the seeded ones are demo data (`backend/db/seed.py`) | No real sensor hardware. A reading older than 24 hours is marked stale and never used as current |
+| Soil moisture | [Open-Meteo](https://open-meteo.com) modelled soil moisture, 9-27 cm, at the village's coordinates, refreshed every 3 hours and labelled with its source | A weather-model estimate for a ~10 km area, not a probe in the field. A reading older than 24 hours is marked stale and never used as current |
 
 ## Testing
 
@@ -575,12 +579,12 @@ backend/
   agent/          LangGraph agent, MCP client, model and Sunbird clients
   approvals/      Approval gate (the only path to an approved status) and the irrigation approval executor
   core/           Settings and database setup
-  db/             SQLModel models and synthetic seed data
+  db/             SQLModel models, the crop calendar loader, and made-up test data (tests and evals only)
   farmer/         Farmer web API, USSD handler, voice endpoints
   logging/        Audit log
   irrigation_server/  SIMULATED irrigation gateway MCP server (3 valve tools; not connected to the agent)
   mcp_server/     AgriMoist MCP server (11 tools)
-  officer/        Officer pages, API and sign-in
+  officer/        Officer pages, API, sign-in, and registering officers, villages and farmers
   tools/          Tool implementations shared by the MCP server
 frontend/
   farmer/         Farmer page and USSD simulator templates
@@ -597,23 +601,21 @@ tests/            pytest suite
 
 This is a hackathon build. We state its limits plainly.
 
-- **Officer authentication is demo-grade.** Every officer screen and officer API needs a signed session, but all officers share one demo password (`OFFICER_DEMO_PASSWORD`) and choose their name at sign-in. This is not production authentication.
-- **Farmer sign-in is a phone-number lookup**, not authentication.
+- **Sign-in is password and PIN based.** Each officer has their own phone number and password, and each farmer a 4-digit PIN set by their officer (scrypt hashes only, lockout after 5 wrong tries). There is no SMS one-time code yet, and an admin resets forgotten passwords by hand.
 - **The model can still give wrong advice.** See EVALS task 2. Officer approval is the safeguard.
-- **Only numbers are checked automatically against the sources**, and only numbers written as digits. The officer reviews the rest of the wording.
+- **Only numbers are checked automatically against the sources**: digits, and numbers written in words before a unit ("eight millimetres"). The officer reviews the rest of the wording.
 - **Karamojong output has not been reviewed by a native speaker.** About one in three translations is rejected by the number check, and the farmer then sees English. Sunbird has no Karamojong voice, so Karamojong is read aloud by its Ateso voice, a closely related language.
 - **USSD needs a public URL** set in the Africa's Talking dashboard to go live. No SMS is sent in this build.
 - **USSD pest reports cannot name the pest.** The web page lets the farmer choose one.
-- **Synthetic data only**, and there is no household registration screen yet.
 - **The irrigation valves are simulated.** There is no irrigation hardware: `open_valve` changes a database row, and the officer page shows that simulated state. A real gateway would need its own authentication and a hardware fail-safe; this build only shows the approval-first control flow.
-- **The soil-moisture sensor is simulated.** There is no sensor hardware; every reading is labelled `simulated sensor`, and the seeded ones are demo data. Demo readings are timed when the database is first seeded, so on an old database they will all show as stale.
+- **Soil moisture is modelled, not measured.** It comes from Open-Meteo's soil model for the village area. There are no field probes; a probe's reading could be stored in the same table later.
 - **Docker was not run in the build environment.** The app was verified with uvicorn and the full test suite; the Docker image uses the same install and start commands.
 - Karamojong is read aloud with Sunbird's Ateso voice because no Karamojong voice exists.
 - The fixed greeting and field-condition phrases in Karamojong and Swahili were written by the team and have not been checked by a native speaker.
 - The Swahili option reads the Karamojong translation when one exists; advice is not translated into Swahili.
-- `POST /api/farmer/voice-audio` is not yet restricted to approved advice and its calls are not logged.
+- `POST /api/farmer/voice-audio` needs a signed-in farmer or officer and every new piece of audio is logged, but it is not yet restricted to the text of approved advice.
 - The voice audio cache is on disk and is lost when the free Render instance restarts.
-- Since commit `654ed7d`, every officer screen and officer API requires a signed-in officer, but recording a visit, checking a farmer report and marking a visit done still take the officer's id from the request body rather than from the signed-in session. The web sign-in is a shared demo login: its password is shown on the sign-in page so judges can try the app. Production would need a password or a one-time code (OTP) for each officer. The officer USSD menu already uses a separate PIN for each officer, with lockout after repeated wrong PINs.
+- Every officer action (approving, recording a visit, checking a farmer report, marking a visit done) is recorded under the signed-in officer; an officer id sent in a request body is ignored.
 
 ## Roadmap
 
