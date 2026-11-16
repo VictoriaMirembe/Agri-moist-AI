@@ -1,8 +1,8 @@
 # AgriMoist AI's own MCP server (built by us, not borrowed). See docs/TOOL_CONTRACT.md.
 #
 # Eleven tools, one job each: six read, five change data (record_observation, draft_advice,
-# flag_for_visit, schedule_followup, propose_irrigation). get_soil_moisture reads a
-# SIMULATED soil sensor - there is no real sensor hardware yet. None of them can send
+# flag_for_visit, schedule_followup, propose_irrigation). get_soil_moisture reads
+# Open-Meteo's modelled soil moisture for the village (no field probes yet). None of them can send
 # anything to a farmer, place an order or open a valve: propose_irrigation only puts a
 # proposal in the officer's queue, and the valve tools live on a separate server
 # (backend/irrigation_server) the agent is never connected to - see README "Safety rules". Every call is logged by backend.logging.tool_log,
@@ -10,14 +10,17 @@
 #
 # Run standalone (for MCP Inspector, Claude Desktop or another MCP client), from the
 # repository root:
-#   python -m backend.mcp_server.server --demo-data
-# --demo-data creates the database and loads the made-up demo households if this is a
-# fresh clone (the web app does the same on its first start). See .mcp.json.
+#   python -m backend.mcp_server.server
+# It uses DATABASE_URL like the web app. --demo-data loads the made-up test households,
+# and only on a local SQLite file, never on the real database. See .mcp.json.
 from __future__ import annotations
 
+import functools
+import os
 import sys
 from datetime import datetime
 
+import anyio
 from mcp.server.fastmcp import FastMCP
 
 from backend.core.database import init_db, session_scope
@@ -36,7 +39,21 @@ mcp = FastMCP(
 )
 
 
-@mcp.tool()
+def _tool(fn):
+    """Register `fn` as an MCP tool that runs in a worker thread. FastMCP calls a plain
+    function directly on its event loop, so one slow (database or HTTP) tool would hold
+    up every other request; registered as async, the agent's reads run side by side.
+    The module-level name stays the plain function, for direct callers and tests."""
+
+    @functools.wraps(fn)
+    async def threaded(*args, **kwargs):
+        return await anyio.to_thread.run_sync(functools.partial(fn, *args, **kwargs))
+
+    mcp.add_tool(threaded, name=fn.__name__, description=fn.__doc__)
+    return fn
+
+
+@_tool
 def record_observation(
     household_code: str,
     source: str,
@@ -77,7 +94,7 @@ def record_observation(
         )
 
 
-@mcp.tool()
+@_tool
 def get_field_records(group_id: int, days: int = 60, run_id: int | None = None) -> dict:
     """Read recent field visits and farmer reports for a household group, most
     recent first, including how many days since each household's last visit."""
@@ -93,7 +110,7 @@ def get_field_records(group_id: int, days: int = 60, run_id: int | None = None) 
         )
 
 
-@mcp.tool()
+@_tool
 def get_plot_history(group_id: int, run_id: int | None = None) -> dict:
     """Read a household group's plots' past crops, planting dates and harvests."""
     with session_scope() as session:
@@ -108,7 +125,7 @@ def get_plot_history(group_id: int, run_id: int | None = None) -> dict:
         )
 
 
-@mcp.tool()
+@_tool
 def get_crop_calendar(zone: str, crop: str, run_id: int | None = None) -> dict:
     """Give the planting and harvest window for a crop in an agroclimatic zone, and
     whether today falls inside this year's planting window."""
@@ -124,7 +141,7 @@ def get_crop_calendar(zone: str, crop: str, run_id: int | None = None) -> dict:
         )
 
 
-@mcp.tool()
+@_tool
 def get_weather(latitude: float, longitude: float, run_id: int | None = None) -> dict:
     """Get rain for the last 7 days and the rain forecast for the next 7 days from
     Open-Meteo for a village's coordinates. No API key needed."""
@@ -140,7 +157,7 @@ def get_weather(latitude: float, longitude: float, run_id: int | None = None) ->
         )
 
 
-@mcp.tool()
+@_tool
 def get_pest_reports(group_id: int, days: int = 21, run_id: int | None = None) -> dict:
     """List pest sightings from recent officer visits and farmer reports in and
     around a household group's village."""
@@ -156,24 +173,25 @@ def get_pest_reports(group_id: int, days: int = 21, run_id: int | None = None) -
         )
 
 
-@mcp.tool()
+@_tool
 def get_soil_moisture(group_id: int, run_id: int | None = None) -> dict:
     """Read the latest soil-moisture reading (volumetric %) for each plot in a household
-    group, with its time and source label. Readings come from a SIMULATED sensor, not
-    real hardware. A reading older than 24 hours is marked stale=true: it is not current."""
+    group, with its time and source label. Readings come from Open-Meteo's soil model for
+    the village (a weather-model estimate, not a probe in the field), or a stored sensor
+    reading. A reading older than 24 hours is marked stale=true: it is not current."""
     with session_scope() as session:
         return run_logged(
             session,
             tool="get_soil_moisture",
             inputs={"group_id": group_id},
             actor="assistant",
-            source="simulated-soil-sensor",
+            source="soil-moisture",
             run_id=run_id,
             func=lambda: impl.get_soil_moisture(session, group_id=group_id),
         )
 
 
-@mcp.tool()
+@_tool
 def draft_advice(
     group_id: int,
     draft_text: str,
@@ -208,7 +226,7 @@ def draft_advice(
         )
 
 
-@mcp.tool()
+@_tool
 def flag_for_visit(group_id: int, reason: str, run_id: int | None = None) -> dict:
     """Flag a household group for an urgent officer visit (for example: no recent
     visit, or very little food left). Never sends anything to the household."""
@@ -224,7 +242,7 @@ def flag_for_visit(group_id: int, reason: str, run_id: int | None = None) -> dic
         )
 
 
-@mcp.tool()
+@_tool
 def schedule_followup(advice_id: int, due_on: str, run_id: int | None = None) -> dict:
     """Book a check-back date (YYYY-MM-DD) for a piece of advice, so the office can
     later record whether it was followed and whether it helped."""
@@ -241,7 +259,7 @@ def schedule_followup(advice_id: int, due_on: str, run_id: int | None = None) ->
         )
 
 
-@mcp.tool()
+@_tool
 def propose_irrigation(group_id: int, plot: str, minutes: int, run_id: int | None = None) -> dict:
     """Propose irrigating one plot (its household code, e.g. 'H-009') for `minutes`,
     capped at IRRIGATION_MAX_MINUTES. The valve is SIMULATED. The rule is checked here in
@@ -265,10 +283,20 @@ def propose_irrigation(group_id: int, plot: str, minutes: int, run_id: int | Non
 
 
 if __name__ == "__main__":
-    init_db()  # creates tables only if missing; safe on every start
-    if "--demo-data" in sys.argv:
-        from backend.db.seed import seed
+    # The web app already created the tables before it starts this server for an agent
+    # run, and says so (AGRIMOIST_DB_READY); skipping the checks saves several database
+    # round trips per run. Started on its own (MCP Inspector, Claude Desktop), it does them.
+    if os.environ.get("AGRIMOIST_DB_READY") != "1":
+        init_db()  # creates tables only if missing; safe on every start
+        from backend.db.seed import load_reference_data
 
+        with session_scope() as session:
+            load_reference_data(session)
+    if "--demo-data" in sys.argv:
+        from backend.db.seed import seed, seed_allowed
+
+        if not seed_allowed():
+            sys.exit("--demo-data loads MADE-UP farmers; it only runs on a local SQLite test database.")
         with session_scope() as session:
             seed(session)  # does nothing if the demo data is already there
     mcp.run()
