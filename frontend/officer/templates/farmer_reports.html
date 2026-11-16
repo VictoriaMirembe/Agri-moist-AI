@@ -8,14 +8,6 @@
     <h1>Farmer messages</h1>
     <p class="o-lead">What farmers told you by phone (USSD) or on the farmer web page.</p>
   </div>
-  <div class="o-acting">
-    <label for="officer">Acting as</label>
-    <select id="officer">
-      {% for o in officers %}
-      <option value="{{ o.id }}" {% if o.id == request.session.get("officer_id") %}selected{% endif %}>{{ o.name }}</option>
-      {% endfor %}
-    </select>
-  </div>
 </div>
 
 <nav class="o-subtabs" aria-label="Farmer messages">
@@ -26,7 +18,6 @@
 <div id="list" class="muted">Loading...</div>
 
 <script>
-const officerSelect = document.getElementById("officer");
 window.GROUP_VILLAGES = {{ group_villages | tojson }};
 
 function renderReport(r) {
@@ -46,7 +37,7 @@ async function load() {
 
 function markChecked(id) {
   const card = document.querySelector(`[data-id="${id}"]`);
-  return cardAction(card, () => postJSON(`/api/farmer-reports/${id}/check`, { officer_id: parseInt(officerSelect.value, 10) }), load);
+  return cardAction(card, () => postJSON(`/api/farmer-reports/${id}/check`, {}), load);
 }
 
 load();
