@@ -1,0 +1,36 @@
+{# One-time setup: shown only while no officer account exists. Creates the district and the first (admin) officer, who then registers other officers and the farmers. #}
+{% extends "auth_base.html" %}
+{% block title %}Set up your office{% endblock %}
+{% block content %}
+<section class="auth-card" aria-labelledby="auth-heading">
+  <p class="auth-eyebrow">First-time setup</p>
+  <h1 id="auth-heading">Set up your extension office</h1>
+  <p class="auth-lead">No officer account exists yet. Create your district and your own admin account. You can add other officers and register farmers after you sign in.</p>
+
+  <form method="POST" action="/officer/setup" class="auth-form" novalidate>
+    <fieldset>
+      <legend>Your district</legend>
+      <label for="district">District name</label>
+      <input id="district" name="district" value="{{ form.district or '' }}" placeholder="e.g. Napak" required>
+      <label for="zone">Agro-climatic zone</label>
+      <select id="zone" name="zone" required>
+        {% for z in zones %}<option value="{{ z }}" {% if z == form.zone %}selected{% endif %}>{{ z }}</option>{% endfor %}
+      </select>
+      <p class="auth-hint">The zone picks the crop calendar the assistant uses (FEWS NET).</p>
+    </fieldset>
+    <fieldset>
+      <legend>Your account</legend>
+      <label for="name">Full name</label>
+      <input id="name" name="name" value="{{ form.name or '' }}" autocomplete="name" required>
+      <label for="phone">Phone number</label>
+      <input id="phone" name="phone" type="tel" inputmode="tel" autocomplete="username" placeholder="07XX XXX XXX" value="{{ form.phone or '' }}" required>
+      <label for="password">Password <span class="auth-hint-inline">(at least 8 characters)</span></label>
+      <input id="password" name="password" type="password" autocomplete="new-password" minlength="8" required>
+      <label for="password2">Type the password again</label>
+      <input id="password2" name="password2" type="password" autocomplete="new-password" minlength="8" required>
+    </fieldset>
+    {% if error %}<p class="auth-error" role="alert">{{ error }}</p>{% endif %}
+    <button type="submit" class="auth-button">Create office and sign in</button>
+  </form>
+</section>
+{% endblock %}
