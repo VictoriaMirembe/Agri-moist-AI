@@ -17,6 +17,8 @@ itsdangerous>=2.2
 sqlmodel>=0.0.22
 pydantic>=2.10
 pydantic-settings>=2.7
+# Postgres driver for DATABASE_URL=postgresql+psycopg://... (Neon)
+psycopg[binary]>=3.2
 
 # Agent orchestration
 langgraph>=0.2.62
