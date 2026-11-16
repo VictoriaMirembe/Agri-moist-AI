@@ -1,6 +1,7 @@
 # Tests for server-side role protection (FastAPI session/cookie) and real-time APIs (Open-Meteo).
 from __future__ import annotations
 
+from backend.db.seed import DEMO_OFFICER_PASSWORD
 import pytest
 from fastapi.testclient import TestClient
 
@@ -51,7 +52,7 @@ def test_officer_login_and_logout_flow(unauthenticated_client):
 
     # 2. Log in as Among Betty (officer_id 1)
     login_res = unauthenticated_client.post(
-        "/api/auth/login", json={"officer_id": 1, "password": settings.officer_demo_password}
+        "/api/auth/login", json={"officer_id": 1, "password": DEMO_OFFICER_PASSWORD}
     )
     assert login_res.status_code == 200
     assert login_res.json()["status"] == "authenticated"
@@ -77,13 +78,14 @@ def test_officer_login_and_logout_flow(unauthenticated_client):
 
 
 def test_officer_login_page_renders(unauthenticated_client):
-    """The /officer/login page renders successfully with profile selector."""
+    """/officer/login is a full sign-in screen: phone and password, no list of
+    officers, no shared password, and none of the officer app around it."""
     res = unauthenticated_client.get("/officer/login")
     assert res.status_code == 200
-    assert "Sign in as this officer" in res.text
-    assert "Among Betty" in res.text
-    assert "Demo login" in res.text
-    assert settings.officer_demo_password in res.text
+    assert 'name="phone"' in res.text and 'name="password"' in res.text
+    assert "Among Betty" not in res.text
+    assert DEMO_OFFICER_PASSWORD not in res.text
+    assert "o-sidebar" not in res.text and "Approve advice" not in res.text
 
 
 @pytest.mark.parametrize(
@@ -131,16 +133,16 @@ def test_wrong_password_is_refused(unauthenticated_client):
     assert unauthenticated_client.get("/api/approvals").status_code == 403
 
     page = unauthenticated_client.post(
-        "/officer/login", data={"officer_id": "1", "password": "guess", "next": "/approvals"}, follow_redirects=False
+        "/officer/login", data={"phone": "+256780000001", "password": "guess", "next": "/approvals"}, follow_redirects=False
     )
     assert page.status_code == 401
-    assert "password is not right" in page.text
+    assert "do not match an officer account" in page.text
 
 
 def test_sign_in_form_returns_to_the_page_asked_for(unauthenticated_client):
     res = unauthenticated_client.post(
         "/officer/login",
-        data={"officer_id": "2", "password": settings.officer_demo_password, "next": "/approvals"},
+        data={"phone": "0780 000 002", "password": DEMO_OFFICER_PASSWORD, "next": "/approvals"},
         follow_redirects=False,
     )
     assert res.status_code == 303
@@ -152,16 +154,40 @@ def test_sign_in_form_returns_to_the_page_asked_for(unauthenticated_client):
 def test_sign_in_never_redirects_off_site(unauthenticated_client):
     res = unauthenticated_client.post(
         "/officer/login",
-        data={"officer_id": "1", "password": settings.officer_demo_password, "next": "//evil.example"},
+        data={"phone": "+256780000001", "password": DEMO_OFFICER_PASSWORD, "next": "//evil.example"},
         follow_redirects=False,
     )
     assert res.headers["location"] == "/"
 
 
-def test_farmer_screens_stay_open(unauthenticated_client):
-    assert unauthenticated_client.get("/farmer").status_code == 200
-    assert unauthenticated_client.get("/ussd").status_code == 200
-    assert unauthenticated_client.get("/api/farmer/profile", params={"phone": "+256700000001"}).status_code == 200
+def test_farmer_screens_need_the_farmers_pin(unauthenticated_client):
+    c = unauthenticated_client
+    assert c.get("/farmer/login").status_code == 200
+    # Farmer pages and farmer data are closed until the farmer signs in.
+    r = c.get("/farmer/home", follow_redirects=False)
+    assert r.status_code == 303 and r.headers["location"].startswith("/farmer/login")
+    assert c.get("/api/farmer/profile", params={"phone": "+256700000001"}).status_code == 401
+    # The USSD simulator lists real farmers' numbers, so it is for officers only.
+    assert c.get("/ussd", follow_redirects=False).status_code == 303
+
+    bad = c.post("/farmer/login", data={"phone": "0700000001", "pin": "0000"}, follow_redirects=False)
+    assert bad.status_code == 401
+    ok = c.post("/farmer/login", data={"phone": "0700000001", "pin": "2580"}, follow_redirects=False)
+    assert ok.status_code == 303 and ok.headers["location"] == "/farmer/home"
+    assert c.get("/farmer/home").status_code == 200
+    assert c.get("/api/farmer/profile").json()["household_code"] == "H-001"
+    # A farmer sees only their own farm, and is not an officer.
+    assert c.get("/api/farmer/profile", params={"phone": "+256700000002"}).status_code == 403
+    assert c.get("/api/approvals").status_code == 403
+    assert c.get("/", follow_redirects=False).status_code == 303
+
+
+def test_farmer_pin_locks_after_repeated_wrong_tries(unauthenticated_client):
+    c = unauthenticated_client
+    for _ in range(5):
+        assert c.post("/farmer/login", data={"phone": "0700000003", "pin": "9999"}).status_code == 401
+    locked = c.post("/farmer/login", data={"phone": "0700000003", "pin": "2580"})
+    assert locked.status_code == 401 and "Too many wrong tries" in locked.text
 
 
 def test_live_weather_api_returns_open_meteo_data(client):
