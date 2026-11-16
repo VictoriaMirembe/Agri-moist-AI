@@ -103,7 +103,7 @@ def test_mcp_tool_call_is_logged(seeded_session):
     rows = seeded_session.exec(select(ToolLog).where(ToolLog.tool == "get_soil_moisture")).all()
     assert len(rows) == 1
     row = rows[0]
-    assert row.error is None and row.actor == "assistant" and row.source == "simulated-soil-sensor"
+    assert row.error is None and row.actor == "assistant" and row.source == "soil-moisture"
     assert '"group_id": 3' in row.inputs and "simulated sensor" in row.outputs
 
 
@@ -293,7 +293,7 @@ def test_group_page_shows_latest_readings_with_a_stale_label(client):
     assert data["soil_moisture"]["plots_without_reading"] == ["H-010"]
 
     page = client.get("/groups/3").text
-    assert "Soil moisture (simulated sensor)" in page and "Stale" in page
+    assert "<h2>Soil moisture</h2>" in page and "Stale" in page
 
 
 def test_group_page_readings_need_an_officer_sign_in(unauthenticated_client):
