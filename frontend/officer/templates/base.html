@@ -1,6 +1,6 @@
 {# Shared officer layout: on wide screens a left sidebar with the five main screens and a "More" group, a slim top bar with a Kampala-time greeting and today's date, and on phones the bottom tab bar. Every officer screen fills in the content block. Loads app.js and styles.css; all officer styles are scoped to body.officer so the farmer pages are not affected. #}
 {%- set path = request.url.path -%}
-{%- set section = "home" if path == "/" else "approve" if path.startswith("/approvals") else "messages" if (path.startswith("/farmer-reports") or path.startswith("/followups")) else "visits" if path.startswith("/flags") else "record" if path.startswith("/visits/new") else "log" if path.startswith("/log") else "mcp" if path.startswith("/mcp") else "" -%}
+{%- set section = "home" if path == "/" else "approve" if path.startswith("/approvals") else "messages" if (path.startswith("/farmer-reports") or path.startswith("/followups")) else "visits" if path.startswith("/flags") else "record" if path.startswith("/visits/new") else "log" if path.startswith("/log") else "mcp" if path.startswith("/mcp") else "farmers" if path.startswith("/farmers") else "team" if path.startswith("/team") else "" -%}
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -42,6 +42,10 @@
         <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M11 5h2v6h6v2h-6v6h-2v-6H5v-2h6z"/></svg>
         <span class="o-side-label">Record a visit</span>
       </a>
+      <a href="/farmers" {% if section == "farmers" %}aria-current="page"{% endif %}>
+        <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8zm0 2c-3.3 0-7 1.7-7 4v3h14v-3c0-2.3-3.7-4-7-4zm7.5-2a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7zm1 2c-.6 0-1.2.1-1.8.2 1.4.9 2.3 2.2 2.3 3.8v3h5v-3c0-2.2-3-4-5.5-4z"/></svg>
+        <span class="o-side-label">Farmers</span>
+      </a>
       <p class="o-side-group">More</p>
       <a href="/log" {% if section == "log" %}aria-current="page"{% endif %}>
         <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M5 5h14v2H5zm0 6h14v2H5zm0 6h10v2H5z"/></svg>
@@ -55,9 +59,9 @@
         <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M8 2h8a2 2 0 0 1 2 2v16a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2zm0 3v12h8V5zm4 13.5a1 1 0 1 0 0 2 1 1 0 0 0 0-2z"/></svg>
         <span class="o-side-label">USSD simulator</span>
       </a>
-      <a href="/farmer">
-        <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M17 3c-6 0-11 3-11 10 0 2 .6 3.6 1.5 4.8L5 20.3 6.4 21.7l2.5-2.5C10 20 11.4 20.5 13 20.5 19 20.5 21 14 21 3zm-4 15.5c-1 0-2-.3-2.8-.8l6.5-6.5-1.4-1.4-6.5 6.5c-.5-.8-.8-1.8-.8-2.8C8 8 11.5 5.3 18.9 5 18.6 13 16.6 18.5 13 18.5z"/></svg>
-        <span class="o-side-label">Farmer page</span>
+      <a href="/team" {% if section == "team" %}aria-current="page"{% endif %}>
+        <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M12 12a4.5 4.5 0 1 0 0-9 4.5 4.5 0 0 0 0 9zm0 2c-4 0-8 2-8 5v2h16v-2c0-3-4-5-8-5z"/></svg>
+        <span class="o-side-label">Team</span>
       </a>
     </nav>
   </aside>
@@ -71,7 +75,7 @@
         <p class="o-greeting-hello" id="o-greeting">Welcome</p>
         <p class="o-greeting-date" id="o-today"></p>
       </div>
-      <span class="o-topbar-place">Napak District extension office</span>
+      <span class="o-topbar-place">{{ request.session.get("district_name") or "Extension office" }}</span>
       <div id="officer-session-pill" class="o-session">
         <span id="officer-status-dot" class="o-session-dot" aria-hidden="true"></span>
         <span id="officer-name-display">Checking...</span>
@@ -105,7 +109,7 @@
       <span class="nav-badge" data-badge-for="nav-badge-flags" style="display:none;"></span>
     </a>
     <details class="o-tab-more">
-      <summary {% if section in ("record", "log", "mcp") %}aria-current="page"{% endif %}>
+      <summary {% if section in ("record", "log", "mcp", "farmers", "team") %}aria-current="page"{% endif %}>
         <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M5 10a2 2 0 1 0 0 4 2 2 0 0 0 0-4zm7 0a2 2 0 1 0 0 4 2 2 0 0 0 0-4zm7 0a2 2 0 1 0 0 4 2 2 0 0 0 0-4z"/></svg>
         <span>More</span>
       </summary>
@@ -114,7 +118,8 @@
         <a href="/log">Activity log</a>
         <a href="/mcp">AI tools (MCP)</a>
         <a href="/ussd">USSD simulator</a>
-        <a href="/farmer">Farmer page</a>
+        <a href="/farmers">Farmers</a>
+        <a href="/team">Team</a>
       </div>
     </details>
   </nav>
