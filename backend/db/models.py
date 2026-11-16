@@ -62,6 +62,30 @@ class OfficerPin(SQLModel, table=True):
     locked_until: Optional[datetime] = None
 
 
+class OfficerAccount(SQLModel, table=True):
+    """An officer's web sign-in: their own phone number and password (salted scrypt
+    hash only, backend/officer/pins.py), with the wrong-password counter. An admin can
+    add other officers. The first account is made on the one-time /officer/setup page."""
+
+    officer_id: int = Field(primary_key=True, foreign_key="officer.id")
+    phone: str = Field(index=True, unique=True)  # stored normalised, e.g. 256772123456
+    password_hash: str
+    is_admin: bool = False
+    failed_attempts: int = 0
+    locked_until: Optional[datetime] = None
+    created_at: datetime = Field(default_factory=utcnow)
+
+
+class FarmerPin(SQLModel, table=True):
+    """A farmer's 4-digit sign-in PIN for the farmer web page, set by the officer who
+    registers them. Hash only, with the wrong-PIN counter."""
+
+    household_id: int = Field(primary_key=True, foreign_key="household.id")
+    pin_hash: str
+    failed_attempts: int = 0
+    locked_until: Optional[datetime] = None
+
+
 class Plot(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     household_id: int = Field(foreign_key="household.id")
@@ -130,6 +154,23 @@ class Advice(SQLModel, table=True):
     why_text: Optional[str] = None
     translated_text: Optional[str] = None
     language: Optional[str] = None
+    created_at: datetime = Field(default_factory=utcnow)
+
+
+class AdviceTranslation(SQLModel, table=True):
+    """A translation made ahead of time, in the background, as soon as a draft reaches
+    the review queue. If the officer approves the text unchanged, this is used at once,
+    so approving never waits for the translator. Never shown to farmers by itself:
+    only Advice.translated_text on approved advice is (advice_visible_to_farmer)."""
+
+    advice_id: int = Field(primary_key=True, foreign_key="advice.id")
+    source_text: str
+    translated_text: Optional[str] = None  # None: no usable translation (English is shown)
+    model: str = ""
+    cost: float = 0.0
+    prompt_tokens: int = 0
+    completion_tokens: int = 0
+    total_tokens: int = 0
     created_at: datetime = Field(default_factory=utcnow)
 
 
