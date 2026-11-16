@@ -44,6 +44,7 @@ Demo video (under 3 min): https://www.youtube.com/watch?v=nb6u-yo-OVU
 - [The problem](#the-problem)
 - [The solution](#the-solution)
 - [Key features](#key-features)
+- [What officers told us](#what-officers-told-us)
 - [Architecture](#architecture)
 - [Technology stack](#technology-stack)
 - [Getting started](#getting-started)
@@ -107,6 +108,21 @@ The officer keeps the judgement.
 - **Voice reader.** Farmers can have their page read aloud in English, Swahili or Karamojong, using Sunbird AI's Ugandan voices. Speech is generated in short pieces and prepared in the background when the page opens. Each piece is generated once, stored by the app, and kept by the phone, so listening again uses no data.
 - **Built for weak signal.** The farmer page keeps a copy of the farmer's own data on the phone. It opens instantly, and when there is no connection it still shows the last approved advice, clearly labelled as saved. Signing out removes the copy, because farm phones are often shared.
 - **Full audit log.** Every agent tool call, officer decision and saved farmer action is logged with its inputs, outputs, source, actor and cost. Voice playback, sign-ins and the weather shown on the screens are not logged.
+
+## What officers told us
+
+On 14 November 2026, Evans Rwothomio interviewed **Dr. Alex Candia, District Production Officer, Maracha district** (West Nile, Uganda) by phone. He agreed to be named.
+
+- The district has 32,914 households; each agricultural extension worker visits a household once a season.
+- "Any advice provided by extension workers must have authentic source and checked for relevance by the District Production Office." His worry: "misinformation to farmers if not edited by the office of the District Production Department."
+- He would approve advice by USSD code and PIN, "provided the source of information is authentic", and could review drafts the same week. (Drafts expire after 72 hours by default; `DRAFT_EXPIRY_HOURS` can be changed in settings.)
+- Weather comes from the Department of Meteorological Services; pest information from daily surveillance reports by extension workers.
+- Farmers need advice in English and Lugbara, and voice helps. Farmers "embrace irrigation due to unpredictable weather".
+- What would stop use: "Not every farmer has a phone."
+
+On 13 November 2026, Evans also spoke by phone with a farmer group leader in Maracha (name withheld): basic phone with no data, advice through meetings and visits, trusts advice from the extension officer "because of direct interactions", prefers to read and listen in Lugbara. The last time advice came too late, "pests damaged my crops".
+
+This is one district, in West Nile rather than Karamoja. It is a start, not a study.
 
 ## Architecture
 
@@ -294,7 +310,7 @@ No real person's data is used.
 | 4 | **Farmer page** (`/farmer`) | Sign in as `+256700000001` to `+256700000010`. Only approved advice appears. Try **Listen** |
 | 5 | **USSD simulator** (`/ussd`) | Dial `*384*5951#` and press `1`. The same approval rule holds on a basic phone |
 | 6 | **Activity log** | Every tool call, with its MCP server, source, actor and per-run cost |
-| 7 | **AI tools (MCP)** (`/mcp`) | Both MCP servers are started and their tools listed live over the protocol |
+| 7 | **AI tools (MCP)** (`/mcp`) | Three MCP servers, each started live and its tools listed over the protocol: our own `agrimoist` server (11 tools, *Built by us*, *Connected*), the borrowed `mcp-server-time` (*Borrowed*, *Connected*), and, in its own panel below them, the **simulated** `irrigation-gateway` (`open_valve`, `close_valve`, `valve_status`), marked *Simulated device* and **not** connected to the agent. The page also shows the number of MCP calls made so far and which AI services are linked |
 
 <p align="center">
   <img src="images/ai-draft-run.png" width="58%" alt="AI draft screen: each MCP tool call checked off, with the raw calls under Technical details">
