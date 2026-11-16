@@ -20,13 +20,7 @@
         <option value="{{ h.code }}">{{ h.code }} · Group {{ h.group_id }}</option>
         {% endfor %}
       </select>
-
-      <label for="officer_id">Officer</label>
-      <select id="officer_id" required>
-        {% for o in officers %}
-        <option value="{{ o.id }}" {% if o.id == request.session.get("officer_id") %}selected{% endif %}>{{ o.name }}</option>
-        {% endfor %}
-      </select>
+      {% if not households %}<p class="o-hint">No farmers registered yet. <a href="/farmers">Register a farmer</a> first.</p>{% endif %}
     </fieldset>
 
     <fieldset>
@@ -91,7 +85,6 @@ document.getElementById("visit-form").addEventListener("submit", async (e) => {
   try {
     const body = {
       household_code: document.getElementById("household_code").value,
-      officer_id: parseInt(document.getElementById("officer_id").value, 10),
       crop: document.getElementById("crop").value || null,
       soil_wetness: document.getElementById("soil_wetness").value,
       rain_last_7_days: document.getElementById("rain_last_7_days").value,
