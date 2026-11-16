@@ -263,3 +263,17 @@ def test_run_page_replay_shows_the_blocked_reason(client, monkeypatch):
     assert data["blocked_reason"].startswith("heavy rain is forecast (45 mm")
     page = client.get(f"/runs/{run_id}").text
     assert "Blocked before review" in page and "d.blocked_reason" in page
+
+
+def test_a_number_written_in_words_before_a_unit_must_be_sourced_too():
+    from backend.tools.agrimoist_tools import unsourced_numbers
+
+    sources = [{"fact": "Rain last 7 days 8.0mm, next 7 days forecast 45.0mm", "source_ref": "weather"}]
+    # Sourced values written in words pass, as do number words that are not measurements.
+    assert unsourced_numbers(["About eight millimetres fell; forty five mm is forecast."], sources) == []
+    assert unsourced_numbers(["One of the plots is dry; check it in two places within seven days."], sources) == []
+    # An invented reading in words is caught like digits are.
+    assert unsourced_numbers(["About nine millimetres fell; soil is at twelve percent."], sources) == [
+        "nine millimetres",
+        "twelve percent",
+    ]
