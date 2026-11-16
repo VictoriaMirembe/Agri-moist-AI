@@ -32,7 +32,7 @@ from backend.db.models import (
     VisitFlag,
     VisitFlagVisit,
 )
-from backend.logging.tool_log import run_logged
+from backend.logging.tool_log import ZERO_MODEL_USAGE, model_usage_by_run, model_usage_for_run, run_logged
 from backend.officer.auth import password_ok, require_officer, sign_in, signed_in_officer
 from backend.tools import agrimoist_tools as impl
 from backend.tools.errors import ToolError
@@ -210,6 +210,7 @@ def run_detail(run_id: int):
         run = session.get(Run, run_id)
         if run is None:
             raise HTTPException(404, "No such run")
+        usage = model_usage_for_run(session, run_id)
         return {
             "id": run.id,
             "group_id": run.group_id,
@@ -218,6 +219,12 @@ def run_detail(run_id: int):
             "finished_at": run.finished_at.isoformat() if run.finished_at else None,
             "cost": run.cost,
             "outcome": run.outcome,
+            # The drafting call's own tokens and cost (run.cost also includes
+            # translation once the advice is approved).
+            "model_cost": usage["model_cost"],
+            "prompt_tokens": usage["prompt_tokens"],
+            "completion_tokens": usage["completion_tokens"],
+            "total_tokens": usage["total_tokens"],
         }
 
 
@@ -485,6 +492,7 @@ def list_logs(run_id: int | None = None):
 def list_runs():
     with session_scope() as session:
         rows = session.exec(select(Run).order_by(Run.started_at.desc()).limit(100)).all()
+        usage = model_usage_by_run(session, [r.id for r in rows if r.id])
         return [
             {
                 "id": r.id,
@@ -494,6 +502,10 @@ def list_runs():
                 "finished_at": r.finished_at.isoformat() if r.finished_at else None,
                 "cost": r.cost,
                 "outcome": r.outcome,
+                **{
+                    name: usage.get(r.id, ZERO_MODEL_USAGE)[name]
+                    for name in ("model_cost", "prompt_tokens", "completion_tokens", "total_tokens")
+                },
             }
             for r in rows
         ]

@@ -43,6 +43,39 @@ def _estimate_cost(usage: Any) -> float:
     return round(cost, 6)
 
 
+# Token counts reported next to the cost on the run page and in the activity log.
+# A stub or failed call has no usage object, so every number is 0 - never an estimate.
+ZERO_TOKENS = {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}
+
+
+def _usage_tokens(usage: Any) -> dict[str, int]:
+    """The provider's own token counts, from an OpenAI-style usage object or a JSON
+    dict. Missing numbers stay 0; total_tokens falls back to prompt + completion
+    only when the provider did not send a total of its own."""
+    if usage is None:
+        return dict(ZERO_TOKENS)
+
+    def field(name: str) -> int:
+        value = usage.get(name) if isinstance(usage, dict) else getattr(usage, name, 0)
+        try:
+            return int(value or 0)
+        except (TypeError, ValueError):
+            return 0
+
+    prompt, completion = field("prompt_tokens"), field("completion_tokens")
+    return {
+        "prompt_tokens": prompt,
+        "completion_tokens": completion,
+        "total_tokens": field("total_tokens") or prompt + completion,
+    }
+
+
+def _add_tokens(running: dict[str, int], result: dict[str, Any]) -> None:
+    """Add one attempt's tokens to the running total for a translation."""
+    for name in ZERO_TOKENS:
+        running[name] += int(result.get(name) or 0)
+
+
 DRAFT_SYSTEM_PROMPT = (
     "You are AgriMoist AI, drafting field advice for a Ugandan agricultural extension "
     "officer in Karamoja to review before anything reaches a farmer. You draft only; "
@@ -96,6 +129,7 @@ def draft_advice_text(facts: dict[str, Any]) -> dict[str, Any]:
             "why": why,
             "model": settings.groq_model,
             "cost": _estimate_cost(response.usage),
+            **_usage_tokens(response.usage),
         }
     except Exception as exc:  # noqa: BLE001 - any model failure falls back to the stub
         stub = _stub_draft(facts)
@@ -167,7 +201,7 @@ def _stub_draft(facts: dict[str, Any]) -> dict[str, Any]:
         )
         or ["the facts gathered for this group"]
     ) + "."
-    return {"advice": advice, "why": why, "model": "rule-based-stub", "cost": 0.0}
+    return {"advice": advice, "why": why, "model": "rule-based-stub", "cost": 0.0, **ZERO_TOKENS}
 
 
 CANNOT_TRANSLATE = "CANNOT_TRANSLATE"
@@ -190,9 +224,10 @@ def translate_text(text: str, target_language: str) -> dict[str, Any]:
     key, a failed call, a refusal, or a translation that changed or dropped a number)
     - callers then show the English original rather than mislabel it as translated."""
     if not text:
-        return {"translated_text": None, "model": "none (nothing to translate)", "cost": 0.0}
+        return {"translated_text": None, "model": "none (nothing to translate)", "cost": 0.0, **ZERO_TOKENS}
     attempts: list[str] = []
     cost = 0.0  # a failed or rejected attempt can still have used paid tokens
+    tokens = dict(ZERO_TOKENS)  # and its tokens still count towards this translation
     # Sunbird's output varies between calls (it sometimes writes a number out in
     # words), so it gets a second try before the backup.
     for translate in (_translate_with_sunbird, _translate_with_sunbird, _translate_with_groq):
@@ -206,12 +241,18 @@ def translate_text(text: str, target_language: str) -> dict[str, Any]:
                 "model": f"fallback ({result['model']} changed a number; showing English)",
             }
         cost += result["cost"]
+        _add_tokens(tokens, result)
         if result["translated_text"]:
-            return {**result, "cost": round(cost, 6)}
+            return {**result, "cost": round(cost, 6), **tokens}
         attempts.append(result["model"])
     if not attempts:
-        return {"translated_text": None, "model": "none (no translator key configured; showing English)", "cost": 0.0}
-    return {"translated_text": None, "model": "; ".join(attempts), "cost": round(cost, 6)}
+        return {
+            "translated_text": None,
+            "model": "none (no translator key configured; showing English)",
+            "cost": 0.0,
+            **ZERO_TOKENS,
+        }
+    return {"translated_text": None, "model": "; ".join(attempts), "cost": round(cost, 6), **tokens}
 
 
 def _translate_with_sunbird(text: str, target_language: str) -> dict[str, Any] | None:
@@ -228,18 +269,25 @@ def _translate_with_sunbird(text: str, target_language: str) -> dict[str, Any] |
         response.raise_for_status()
         body = response.json()
         output = body.get("output") or {}
-        tokens = (body.get("usage") or {}).get("total_tokens") or 0
-        cost = round(tokens / 1_000_000 * _SUNBIRD_TRANSLATION_PRICE_PER_MILLION, 6)
+        usage = _usage_tokens(body.get("usage"))
+        billed_tokens = (body.get("usage") or {}).get("total_tokens") or 0
+        cost = round(billed_tokens / 1_000_000 * _SUNBIRD_TRANSLATION_PRICE_PER_MILLION, 6)
         translated = (output.get("translated_text") or "").strip()
         if output.get("Error") or not translated or translated == text.strip():
             return {
                 "translated_text": None,
                 "model": f"fallback (sunbird could not translate: {output.get('Error') or 'empty reply'})",
                 "cost": cost,
+                **usage,
             }
-        return {"translated_text": translated, "model": "sunbird/sunflower-9b", "cost": cost}
+        return {"translated_text": translated, "model": "sunbird/sunflower-9b", "cost": cost, **usage}
     except Exception as exc:  # noqa: BLE001 - any failure falls through to the backup
-        return {"translated_text": None, "model": f"fallback (sunbird translation failed: {exc})", "cost": 0.0}
+        return {
+            "translated_text": None,
+            "model": f"fallback (sunbird translation failed: {exc})",
+            "cost": 0.0,
+            **ZERO_TOKENS,
+        }
 
 
 # Sunbird text-to-speech voices (GET /tasks/voice/speakers). Sunbird has no
@@ -313,6 +361,7 @@ def _translate_with_groq(text: str, target_language: str) -> dict[str, Any] | No
             temperature=0.0,
         )
         cost = _estimate_cost(response.usage)  # tokens are paid for even if the reply is unusable
+        usage = _usage_tokens(response.usage)
         translated = (response.choices[0].message.content or "").strip()
         if not translated or _is_refusal(translated):
             # Never store a refusal or apology as the "translation" - the farmer would
@@ -321,7 +370,13 @@ def _translate_with_groq(text: str, target_language: str) -> dict[str, Any] | No
                 "translated_text": None,
                 "model": f"fallback (model could not translate: {translated[:80]!r}; showing English)",
                 "cost": cost,
+                **usage,
             }
-        return {"translated_text": translated, "model": settings.groq_model, "cost": cost}
+        return {"translated_text": translated, "model": settings.groq_model, "cost": cost, **usage}
     except Exception as exc:  # noqa: BLE001
-        return {"translated_text": None, "model": f"fallback (translation failed: {exc}; showing English)", "cost": 0.0}
+        return {
+            "translated_text": None,
+            "model": f"fallback (translation failed: {exc}; showing English)",
+            "cost": 0.0,
+            **ZERO_TOKENS,
+        }

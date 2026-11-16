@@ -1,4 +1,4 @@
-{# Activity log: every AI draft run (model, outcome, cost) and every recorded action - tool calls, officer decisions and farmer actions - with who did it and when. Rendered by backend/officer/pages.py log_page(); raw inputs and outputs sit under a "Details" fold. #}
+{# Activity log: every AI draft run (model, outcome, cost, tokens) and every recorded action - tool calls, officer decisions and farmer actions - with who did it and when. Rendered by backend/officer/pages.py log_page(); raw inputs and outputs sit under a "Details" fold. #}
 {% extends "base.html" %}
 {% block title %}Activity log{% endblock %}
 {% block content %}
@@ -13,7 +13,7 @@
 <section class="o-panel">
   <h2>AI draft runs</h2>
   <div class="table-wrap"><table class="o-table">
-    <thead><tr><th>Run</th><th>Group</th><th>AI model</th><th>Result</th><th>Cost (USD)</th><th>Started</th><th><span class="o-sr">Show actions</span></th></tr></thead>
+    <thead><tr><th>Run</th><th>Group</th><th>AI model</th><th>Result</th><th>Cost (USD)</th><th>Tokens (prompt + completion = total)</th><th>Started</th><th><span class="o-sr">Show actions</span></th></tr></thead>
     <tbody>
       {% for r in runs %}
       <tr>
@@ -22,6 +22,8 @@
         <td>{{ "Demo data" if r.model == "seed-data" else r.model }}</td>
         <td>{% if r.outcome %}<span class="pill {{ r.outcome | tone }}">{{ r.outcome | plain_status }}</span>{% else %}<span class="pill amber">Still running</span>{% endif %}</td>
         <td>{{ "%.6f"|format(r.cost) }}</td>
+        {% set u = run_usage.get(r.id) %}
+        <td>{% if u %}{{ u.prompt_tokens }} + {{ u.completion_tokens }} = <strong>{{ u.total_tokens }}</strong>{% else %}<span class="muted">not recorded</span>{% endif %}</td>
         <td>{{ r.started_at | when }}</td>
         <td><a class="o-button o-button-small" href="/log?run_id={{ r.id }}">Show actions</a></td>
       </tr>
@@ -44,7 +46,7 @@
         <td>
           {% if row.error %}<span class="pill red">Problem</span> {{ row.error[:140] }}
           {% else %}<span class="pill green">Done</span>{% endif %}
-          <details class="o-fold"><summary>Details</summary><code>{{ row.outputs[:140] }}</code></details>
+          <details class="o-fold"><summary>Details</summary><code>{{ row.outputs[:400] }}</code></details>
         </td>
       </tr>
       {% endfor %}

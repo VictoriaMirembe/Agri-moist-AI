@@ -15,6 +15,7 @@
   <p>Status: <span id="status" class="pill amber">Working…</span></p>
   <ol class="o-steps" id="log" aria-live="polite"><li>Connecting…</li></ol>
   <p id="next-step" class="o-next" hidden></p>
+  <p id="usage" class="muted" hidden></p>
   <details class="o-fold"><summary>Technical details</summary><div class="event-log" id="raw-log"></div></details>
 </section>
 
@@ -100,7 +101,20 @@ source.addEventListener("model_result", (e) => {
   const d = JSON.parse(e.data);
   line("✓ Draft written", "ok");
   raw(`   model (${d.model}): ${d.advice_preview}...`, "ok");
+  showUsage(d);
 });
+
+// What the drafting call used: the model's own token counts next to its cost. A
+// rule-based stub run reports 0 tokens; nothing here is estimated.
+function showUsage(d) {
+  if (!d || !d.model || d.model === "none (no model call)") return;
+  const p = d.prompt_tokens || 0, c = d.completion_tokens || 0, total = d.total_tokens || 0;
+  const cost = Number(d.model_cost || 0).toFixed(6);
+  const el = document.getElementById("usage");
+  el.textContent = `Model ${d.model} · tokens: ${p} prompt + ${c} completion = ${total} total · $${cost} for this drafting call`;
+  el.hidden = false;
+  raw(`   usage: prompt=${p} completion=${c} total=${total} cost=$${cost}`);
+}
 source.addEventListener("run_error", (e) => {
   const d = JSON.parse(e.data);
   line("✗ The run stopped with a problem - see Technical details", "err");
@@ -137,6 +151,8 @@ async function fetchGroupAndSetLink() {
   try {
     const r = await getJSON(`/api/runs/${runId}`);
     document.getElementById("back-link").href = "/groups/" + r.group_id;
+    // Also covers a reload after the run: the numbers come from this run's log row.
+    if (document.getElementById("usage").hidden) showUsage(r);
   } catch (e) { /* ignore */ }
 }
 fetchGroupAndSetLink();
