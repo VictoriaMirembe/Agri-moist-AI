@@ -57,8 +57,8 @@ def test_voice_script_different_views(client):
     assert "advice" in adv_en["full_script"].lower()
 
 
-def test_farmer_home_page_contains_professional_language_selector_and_voice_suite(client):
-    res = client.get("/farmer/home", params={"phone": "+256700000001"})
+def test_farmer_home_page_contains_professional_language_selector_and_voice_suite(farmer_client):
+    res = farmer_client("+256700000001").get("/farmer/home")
     assert res.status_code == 200
     html = res.text
 
