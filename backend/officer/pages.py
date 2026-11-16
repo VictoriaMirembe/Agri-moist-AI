@@ -28,7 +28,9 @@ from backend.db.models import (
     FollowupAnswer,
     Household,
     Observation,
+    CropCalendar,
     Officer,
+    OfficerAccount,
     Run,
     ToolLog,
     Village,
@@ -36,14 +38,15 @@ from backend.db.models import (
 )
 from backend.logging.tool_log import model_usage_by_run
 from backend.officer.auth import (
-    password_ok,
+    check_officer_login,
+    officer_accounts_exist,
     require_officer,
     require_officer_page,
     sign_in,
     signed_in_officer,
     signed_in_officer_id,
 )
-from backend.officer.router import fetch_village_weather
+from backend.officer.router import fetch_village_weather, weather_for_villages
 from backend.tools import agrimoist_tools as impl
 
 TEMPLATES_DIR = Path(__file__).resolve().parent.parent.parent / "frontend" / "officer" / "templates"
@@ -204,7 +207,9 @@ def week_at_a_glance(session, now: datetime | None = None) -> dict:
     runs = [r for r in session.exec(select(Run)).all() if recent(r.started_at)]
     ai_cost = sum(r.cost or 0.0 for r in runs)  # drafting + translation (backend/approvals)
     decisions = session.exec(
-        select(ToolLog).where(ToolLog.tool.in_(["approve_advice", "edit_and_approve_advice"]))
+        # Translation cost was logged on the approval entry until 2026-11-17, and in its
+        # own translate_advice entry (background translation) since.
+        select(ToolLog).where(ToolLog.tool.in_(["approve_advice", "edit_and_approve_advice", "translate_advice"]))
     ).all()
     translation_cost = sum(
         json.loads(r.outputs or "{}").get("translation_cost") or 0.0 for r in decisions if recent(r.at)
@@ -249,12 +254,7 @@ def home(request: Request):
 
     with session_scope() as session:
         villages = session.exec(select(Village)).all()
-        if not villages:
-            villages = [
-                Village(name="Lokopo", latitude=2.3833, longitude=34.3333),
-                Village(name="Iriiri", latitude=2.5333, longitude=34.3500),
-            ]
-        weather_list = [fetch_village_weather(v.name, v.latitude, v.longitude) for v in villages]
+        weather_list = weather_for_villages(villages)
 
         pending_advices = session.exec(
             select(Advice)
@@ -435,19 +435,11 @@ def _safe_next(next_url: str | None) -> str:
     return next_url if next_url and next_url.startswith("/") and not next_url.startswith("//") else "/"
 
 
-def _login_page(request: Request, next_url: str, error: str | None = None, officer_id: int = 1, status_code: int = 200):
-    with session_scope() as session:
-        officers = session.exec(select(Officer)).all()
+def _login_page(request: Request, next_url: str, error: str | None = None, phone: str = "", status_code: int = 200):
     return templates.TemplateResponse(
         request,
         "officer_login.html",
-        {
-            "officers": officers,
-            "next": _safe_next(next_url),
-            "error": error,
-            "selected_id": officer_id,
-            "demo_password": settings.officer_demo_password,
-        },
+        {"next": _safe_next(next_url), "error": error, "phone": phone},
         status_code=status_code,
     )
 
@@ -456,25 +448,26 @@ def _login_page(request: Request, next_url: str, error: str | None = None, offic
 def officer_login_page(request: Request, next: str = "/"):
     if signed_in_officer(request):
         return RedirectResponse(url=_safe_next(next), status_code=303)
+    with session_scope() as session:
+        if not officer_accounts_exist(session):
+            return RedirectResponse(url="/officer/setup", status_code=303)
     return _login_page(request, next)
 
 
 @public_router.post("/officer/login")
 async def officer_login_submit(request: Request):
     form_data = await request.form()
-    try:
-        officer_id = int(form_data.get("officer_id"))
-    except (ValueError, TypeError):
-        officer_id = 1
+    phone = str(form_data.get("phone", "")).strip()
     next_url = str(form_data.get("next", "/"))
-    if not password_ok(str(form_data.get("password", ""))):
-        return _login_page(request, next_url, "That password is not right. Try again.", officer_id, 401)
+    if not phone:
+        return _login_page(request, next_url, "Enter your phone number.", phone, 400)
     with session_scope() as session:
-        officer = session.get(Officer, officer_id)
+        officer, error = check_officer_login(session, phone=phone, password=str(form_data.get("password", "")))
         if officer is None:
-            return _login_page(request, next_url, "Choose an officer from the list.", 1, 400)
-        officer_name = officer.name
-    sign_in(request, officer_id, officer_name)
+            return _login_page(request, next_url, error, phone, 401)
+        account = session.get(OfficerAccount, officer.id)
+        district = session.get(District, officer.district_id)
+        sign_in(request, officer.id, officer.name, bool(account and account.is_admin), district.name if district else None)
     return RedirectResponse(url=_safe_next(next_url), status_code=303)
 
 
@@ -482,6 +475,62 @@ async def officer_login_submit(request: Request):
 def officer_logout_page(request: Request):
     request.session.clear()
     return RedirectResponse(url="/officer/login", status_code=303)
+
+
+def _zones(session) -> list[str]:
+    return sorted({row.zone for row in session.exec(select(CropCalendar)).all()})
+
+
+def _setup_page(request: Request, form: dict, error: str | None = None, status_code: int = 200):
+    with session_scope() as session:
+        zones = _zones(session)
+    return templates.TemplateResponse(
+        request, "officer_setup.html", {"zones": zones, "form": form, "error": error}, status_code=status_code
+    )
+
+
+@public_router.get("/officer/setup")
+def officer_setup_page(request: Request):
+    with session_scope() as session:
+        if officer_accounts_exist(session):
+            return RedirectResponse(url="/officer/login", status_code=303)
+    return _setup_page(request, {})
+
+
+@public_router.post("/officer/setup")
+async def officer_setup_submit(request: Request):
+    from backend.officer.people import create_officer_account, PeopleError
+
+    form = {k: str(v).strip() for k, v in (await request.form()).items()}
+    with session_scope() as session:
+        if officer_accounts_exist(session):
+            # Setup runs once. After that only an admin adds officers (Team page).
+            return RedirectResponse(url="/officer/login", status_code=303)
+        if not form.get("district"):
+            return _setup_page(request, form, "Enter your district name.", 400)
+        if form.get("zone") not in _zones(session):
+            return _setup_page(request, form, "Choose an agro-climatic zone from the list.", 400)
+        if form.get("password", "") != form.get("password2", ""):
+            return _setup_page(request, form, "The two passwords are not the same.", 400)
+        district = District(name=form["district"], agroclimatic_zone=form["zone"])
+        session.add(district)
+        session.commit()
+        session.refresh(district)
+        try:
+            officer = create_officer_account(
+                session,
+                district_id=district.id,
+                name=form.get("name", ""),
+                phone=form.get("phone", ""),
+                password=form.get("password", ""),
+                is_admin=True,
+            )
+        except PeopleError as exc:
+            session.delete(district)
+            session.commit()
+            return _setup_page(request, form, str(exc), 400)
+        sign_in(request, officer.id, officer.name, True, district.name)
+    return RedirectResponse(url="/farmers", status_code=303)
 
 
 @router.get("/flags")
