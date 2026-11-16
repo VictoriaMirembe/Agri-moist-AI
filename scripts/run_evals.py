@@ -8,6 +8,7 @@
 #   .venv/Scripts/python.exe scripts/run_evals.py 10 13
 from __future__ import annotations
 
+from backend.db.seed import DEMO_OFFICER_PASSWORD
 import asyncio
 import json
 import os
@@ -38,9 +39,7 @@ def reset_env():
 
 def _sign_in(client) -> None:
     """Officer endpoints need a signed-in officer, exactly as in the browser."""
-    from backend.core.config import settings
-
-    client.post("/api/auth/login", json={"officer_id": 1, "password": settings.officer_demo_password}).raise_for_status()
+    client.post("/api/auth/login", json={"officer_id": 1, "password": DEMO_OFFICER_PASSWORD}).raise_for_status()
 
 
 async def new_app(**env_overrides):
@@ -51,6 +50,14 @@ async def new_app(**env_overrides):
 
     db_path = fresh_db_url()
     os.environ["DATABASE_URL"] = f"sqlite:///{db_path}"
+    # The evals run on the made-up test seed (fixed scenarios), with stored sensor
+    # readings only, on a throwaway SQLite file - never on the real database.
+    os.environ["SEED_DEMO_DATA"] = "true"
+    os.environ["SOIL_SOURCE"] = "sensor-only"
+    from backend.core.config import settings as _settings
+
+    _settings.seed_demo_data = True
+    _settings.soil_source = "sensor-only"
 
     # Only the parent process's database engine needs rebuilding by hand: the two
     # MCP tool servers are spawned fresh per agent run with a copy of the current
@@ -346,22 +353,32 @@ async def task_10_translation():
         _sign_in(client)
         pending = client.get("/api/approvals", params={"status": "pending_review"}).json()[0]
         r = client.post(f"/api/approvals/{pending['id']}/approve", json={"officer_id": 1})
-        log_row = next(row for row in client.get("/api/logs").json() if row["tool"] == "approve_advice")
-        cost = json.loads(log_row["outputs"]).get("translation_cost", 0.0)
+        approve_seconds = time.monotonic() - started
+        # Since 2026-11-17 translation runs in the background after approval, so the
+        # check waits (up to 3 minutes) for its log row, then reads the farmer view.
         phone = "+256700000004"  # a household in the pending draft's group (G-2)
+        log_row = None
+        for _ in range(180):
+            log_row = next((row for row in client.get("/api/logs").json() if row["tool"] == "translate_advice"), None)
+            if log_row:
+                break
+            time.sleep(1)
+        outputs = json.loads(log_row["outputs"]) if log_row else {}
+        cost = outputs.get("translation_cost", 0.0)
+        translation_model = outputs.get("translation_model")
         farmer = client.get("/api/farmer/advice", params={"phone": phone}).json()
     elapsed = time.monotonic() - started
     english = pending["draft_text"].strip()
     shown = (farmer.get("text") or "").strip()
     ok = (
         r.status_code == 200
-        and r.json().get("translation_model") in ("sunbird/sunflower-9b", settings.groq_model)
+        and translation_model in ("sunbird/sunflower-9b", settings.groq_model)
         and farmer.get("language") == settings.farmer_language
         and bool(shown)
         and shown != english
     )
     detail = (
-        f"translation_model={r.json().get('translation_model')}, language={farmer.get('language')}, "
+        f"approve took {approve_seconds:.1f}s, translation_model={translation_model}, language={farmer.get('language')}, "
         f"translated='{shown[:200]}' (needs a Ngakarimojong speaker to confirm meaning)"
     )
     return ok, detail, elapsed, cost
