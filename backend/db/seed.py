@@ -1,7 +1,11 @@
-# Made-up demo data for Napak, Karamoja: 10 households in 2 villages, 3 household
-# groups, plots, visits and a few messy records on purpose (T12/T13). No real person's
-# details. Dates are relative to "now" so "no visit in 30 days" style checks still make
-# sense no matter when the demo is run.
+# Two kinds of start-up data:
+#   - load_reference_data(): the sourced crop calendar (FEWS NET). Real reference data,
+#     loaded on every start so the assistant and the setup page can use it.
+#   - seed(): MADE-UP test data for Napak, Karamoja: 10 households in 2 villages, 3
+#     household groups, plots, visits and a few messy records on purpose (T12/T13). No
+#     real person's details. The app never loads it on its own (SEED_DEMO_DATA is off by
+#     default); only the test suite and scripts/run_evals.py use it, each on a throwaway
+#     database. Dates are relative to "now" so "no visit in 30 days" checks still work.
 from __future__ import annotations
 
 import json
@@ -10,7 +14,7 @@ from pathlib import Path
 
 from sqlmodel import Session, select
 
-from backend.officer.pins import hash_pin
+from backend.officer.pins import hash_password, hash_pin
 from backend.db.models import (
     Advice,
     AdviceSource,
@@ -21,7 +25,9 @@ from backend.db.models import (
     Followup,
     Household,
     Observation,
+    FarmerPin,
     Officer,
+    OfficerAccount,
     OfficerPin,
     Plot,
     PlotHistory,
@@ -45,6 +51,43 @@ def _days_ago(n: int) -> datetime:
 # Demo PINs for the officer USSD menu, by officer id (documented in the README).
 # Only their scrypt hashes are stored. Change them before any real use.
 DEMO_OFFICER_PINS = {1: "1234", 2: "5678"}
+
+
+# Test-only web sign-ins for the seeded officers and farmers.
+DEMO_OFFICER_PASSWORD = "napak2026"
+DEMO_OFFICER_PHONES = {1: "+256780000001", 2: "+256780000002"}
+DEMO_FARMER_PIN = "2580"
+
+
+def seed_web_logins(session: Session) -> None:
+    """Officer accounts (officer 1 is admin) and farmer PINs for the made-up data."""
+    for officer_id, phone in DEMO_OFFICER_PHONES.items():
+        if session.get(Officer, officer_id) is not None and session.get(OfficerAccount, officer_id) is None:
+            session.add(
+                OfficerAccount(
+                    officer_id=officer_id, phone=phone,
+                    password_hash=hash_password(DEMO_OFFICER_PASSWORD), is_admin=officer_id == 1,
+                )
+            )
+    for household in session.exec(select(Household)).all():
+        if session.get(FarmerPin, household.id) is None:
+            session.add(FarmerPin(household_id=household.id, pin_hash=hash_pin(DEMO_FARMER_PIN)))
+    session.commit()
+
+
+def load_reference_data(session: Session) -> None:
+    """The crop calendar from data/crop_calendar.json (FEWS NET, every row has its
+    source URL). Loaded once; later starts leave it alone."""
+    if session.exec(select(CropCalendar)).first() is not None:
+        return
+    for row in json.loads(CROP_CALENDAR_FILE.read_text(encoding="utf-8")):
+        session.add(
+            CropCalendar(
+                zone=row["zone"], crop=row["crop"], plant_from=row["plant_from"], plant_to=row["plant_to"],
+                harvest_from=row["harvest_from"], harvest_to=row["harvest_to"], source_url=row["source_url"],
+            )
+        )
+    session.commit()
 
 
 def seed_officer_pins(session: Session) -> None:
@@ -95,6 +138,14 @@ def seed_soil_readings(session: Session) -> None:
     session.commit()
 
 
+def seed_allowed() -> bool:
+    """The made-up data may only ever go into a local SQLite file (tests, evals),
+    never into the real Postgres database."""
+    from backend.core import database
+
+    return database.engine.url.get_backend_name() == "sqlite"
+
+
 def already_seeded(session: Session) -> bool:
     return session.exec(select(District)).first() is not None
 
@@ -110,6 +161,7 @@ def seed(session: Session) -> None:
             session.commit()
         seed_officer_pins(session)
         seed_soil_readings(session)
+        seed_web_logins(session)
         return
 
     district = District(name="Napak", agroclimatic_zone="Karamoja agro-pastoral")
@@ -292,21 +344,7 @@ def seed(session: Session) -> None:
                 )
             )
 
-    # Crop calendar, from data/crop_calendar.json (owned by the field/data track, sourced).
-    calendar_rows = json.loads(CROP_CALENDAR_FILE.read_text(encoding="utf-8"))
-    for row in calendar_rows:
-        session.add(
-            CropCalendar(
-                zone=row["zone"],
-                crop=row["crop"],
-                plant_from=row["plant_from"],
-                plant_to=row["plant_to"],
-                harvest_from=row["harvest_from"],
-                harvest_to=row["harvest_to"],
-                source_url=row["source_url"],
-            )
-        )
-    session.commit()
+    load_reference_data(session)
 
     # One already-approved piece of advice for group 1, so the farmer "My advice"
     # screen and USSD menu have something to show straight after seeding.
@@ -453,3 +491,4 @@ def seed(session: Session) -> None:
     session.commit()
     seed_officer_pins(session)
     seed_soil_readings(session)
+    seed_web_logins(session)
