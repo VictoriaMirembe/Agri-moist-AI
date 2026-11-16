@@ -31,8 +31,12 @@ def _agrimoist_server_params() -> StdioServerParameters:
     # every call (not cached at import time) so it always reflects the current
     # environment - important for tests, which point DATABASE_URL at a temp file
     # per test, and for WEATHER_FAIL being toggled without a server restart.
+    # AGRIMOIST_DB_READY: the app created the tables already, so the server skips its
+    # own start-up checks (several database round trips on every agent run).
     return StdioServerParameters(
-        command=sys.executable, args=["-m", "backend.mcp_server.server"], env=os.environ.copy()
+        command=sys.executable,
+        args=["-m", "backend.mcp_server.server"],
+        env={**os.environ, "AGRIMOIST_DB_READY": "1"},
     )
 
 
@@ -156,3 +160,81 @@ def _parse(result: Any, tool_name: str) -> dict:
         return json.loads(text)
     except json.JSONDecodeError:
         return {"raw": text}
+
+
+# ---------------------------------------------------------------------------
+# Warm tool servers. Starting the two MCP servers (two Python processes) costs several
+# seconds, so the web app keeps one ToolClient open between agent runs instead of
+# starting fresh each time. One background task owns it (the MCP stdio client must be
+# opened and closed in the same task); runs only send requests through it. It is
+# restarted when the settings the servers read change (DATABASE_URL, WEATHER_FAIL, ...)
+# or when a server dies. Tests turn this off (KEEP_TOOL_SERVERS_WARM=false).
+# ---------------------------------------------------------------------------
+import asyncio  # noqa: E402
+
+_ENV_KEYS = (
+    "DATABASE_URL", "WEATHER_FAIL", "WEATHER_OVERRIDE_PAST_MM", "WEATHER_OVERRIDE_NEXT_MM",
+    "SOIL_SENSOR_FAIL", "SOIL_SOURCE", "HEAVY_RAIN_THRESHOLD_MM", "GROQ_API_KEY", "SUNBIRD_API_KEY",
+    "IRRIGATION_DRY_THRESHOLD_PCT", "IRRIGATION_MAX_MINUTES", "DRAFT_EXPIRY_HOURS",
+)
+
+
+class _WarmClient:
+    def __init__(self) -> None:
+        self.client: ToolClient | None = None
+        self.key: tuple | None = None
+        self._task: asyncio.Task | None = None
+        self._stop: asyncio.Event | None = None
+        self._lock: asyncio.Lock | None = None
+        self._loop: asyncio.AbstractEventLoop | None = None
+
+    def _current_key(self) -> tuple:
+        return (id(asyncio.get_running_loop()),) + tuple(os.environ.get(k) for k in _ENV_KEYS)
+
+    async def _own(self, ready: asyncio.Future) -> None:
+        try:
+            async with ToolClient() as client:
+                self.client = client
+                ready.set_result(client)
+                await self._stop.wait()
+        except BaseException as exc:  # noqa: BLE001
+            if not ready.done():
+                ready.set_exception(exc)
+        finally:
+            self.client = None
+
+    async def get(self) -> ToolClient:
+        loop = asyncio.get_running_loop()
+        if self._lock is None or self._loop is not loop:
+            self._lock, self._loop = asyncio.Lock(), loop
+            self.client, self._task, self.key = None, None, None
+        async with self._lock:
+            key = self._current_key()
+            alive = self._task is not None and not self._task.done() and self.client is not None
+            if alive and key == self.key:
+                return self.client
+            await self.close()
+            self._stop = asyncio.Event()
+            ready: asyncio.Future = loop.create_future()
+            self._task = loop.create_task(self._own(ready))
+            client = await ready
+            self.key = key
+            return client
+
+    async def close(self) -> None:
+        if self._task is not None and not self._task.done() and self._stop is not None:
+            self._stop.set()
+            try:
+                await asyncio.wait_for(self._task, timeout=10)
+            except Exception:  # noqa: BLE001 - closing is best effort
+                self._task.cancel()
+        self._task, self.client = None, None
+
+    def reset(self) -> None:
+        """Forget a client whose server died; the next get() starts a fresh one."""
+        if self._stop is not None:
+            self._stop.set()
+        self.key = None
+
+
+warm_tools = _WarmClient()
