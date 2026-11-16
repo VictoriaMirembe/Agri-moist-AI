@@ -1,5 +1,6 @@
-# AgriMoist AI - FastAPI app entry point. Creates the database and loads the demo
-# seed data on first start, then mounts the officer, approvals and farmer routers,
+# AgriMoist AI - FastAPI app entry point. Creates the database tables and loads the
+# sourced crop calendar (no made-up farmers: officers register real ones, unless
+# SEED_DEMO_DATA is on for tests), then mounts the officer, approvals and farmer routers,
 # the officer/farmer HTML screens, and the USSD simulator page.
 from __future__ import annotations
 
@@ -12,16 +13,20 @@ from fastapi import FastAPI, Request
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.sessions import SessionMiddleware
 
+from backend.agent.mcp_client import warm_tools
 from backend.approvals.router import router as approvals_router
 from backend.core.config import settings
 from backend.core.database import init_db, session_scope
-from backend.db.seed import seed
+from backend.db.seed import load_reference_data, seed, seed_allowed
 from backend.farmer.pages import router as farmer_pages_router
 from backend.irrigation_server.timer import run_timer, sweep_once
 from backend.farmer.router import router as farmer_router
 from backend.officer.pages import api_router as officer_pages_api_router
 from backend.officer.pages import public_router as officer_login_router
 from backend.officer.pages import router as officer_pages_router
+from backend.officer.pages import templates as officer_templates
+from backend.officer.people import api as people_api_router
+from backend.officer.people import page_router as people_page_router
 from backend.officer.router import auth_router as officer_auth_router
 from backend.officer.router import router as officer_router
 
@@ -32,15 +37,24 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 async def lifespan(app: FastAPI):
     init_db()
     with session_scope() as session:
-        seed(session)
+        load_reference_data(session)
+        if settings.seed_demo_data:
+            if not seed_allowed():
+                raise RuntimeError("SEED_DEMO_DATA loads made-up farmers and only runs on a local SQLite test database.")
+            seed(session)
     # SIMULATED irrigation: close any valve whose time passed while the app was down,
     # then keep checking while it runs.
     sweep_once()
     timer = asyncio.create_task(run_timer())
+    if settings.keep_tool_servers_warm:
+        # Start the agent's tool servers now, so the first run is quick too.
+        prewarm = asyncio.create_task(warm_tools.get())
+        prewarm.add_done_callback(lambda t: t.exception())  # a failure only means a cold first run
     try:
         yield
     finally:
         timer.cancel()
+        await warm_tools.close()
 
 
 app = FastAPI(
@@ -82,6 +96,8 @@ app.include_router(farmer_router)
 app.include_router(officer_pages_router)
 app.include_router(officer_pages_api_router)
 app.include_router(farmer_pages_router)
+app.include_router(people_api_router)
+app.include_router(people_page_router(officer_templates))
 
 static_dir = REPO_ROOT / "frontend" / "static"
 if static_dir.exists():
