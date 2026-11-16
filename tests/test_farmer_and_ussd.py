@@ -136,8 +136,8 @@ def test_farmer_dashboard_returns_recorded_farm_data(client, monkeypatch):
     assert all(crop["source_url"].startswith("https://") for crop in dashboard["crop_calendar"])
 
 
-def test_farmer_dashboard_loads_registered_profile_and_approved_advice(client):
-    response = client.get("/farmer/home", params={"phone": "+256700000001"})
+def test_farmer_dashboard_loads_registered_profile_and_approved_advice(farmer_client):
+    response = farmer_client("+256700000001").get("/farmer/home")
 
     assert response.status_code == 200
     assert '<span id="farmer-name">farmer</span>' in response.text
@@ -152,7 +152,8 @@ def test_farmer_dashboard_loads_registered_profile_and_approved_advice(client):
     )
 
 
-def test_farmer_actions_share_the_dashboard_template(client):
+def test_farmer_actions_share_the_dashboard_template(farmer_client):
+    farmer = farmer_client("+256700000001")
     action_forms = {
         "/farmer/report": 'id="report-form"',
         "/farmer/visit": 'id="visit-form"',
@@ -161,7 +162,7 @@ def test_farmer_actions_share_the_dashboard_template(client):
     }
 
     for path, expected in action_forms.items():
-        response = client.get(path, params={"phone": "+256700000001"})
+        response = farmer.get(path)
         assert response.status_code == 200
         assert expected in response.text
         assert "farmer-action-page" in response.text
@@ -294,8 +295,8 @@ def test_reading_approved_advice_is_logged_without_changing_its_status(client):
     assert len(viewed()) == before
 
 
-def test_crop_calendar_source_link_only_allows_http(client):
-    page = client.get("/farmer/home", params={"phone": "+256700000001"}).text
+def test_crop_calendar_source_link_only_allows_http(farmer_client):
+    page = farmer_client("+256700000001").get("/farmer/home").text
     assert "if (safeURL(entry.source_url))" in page
     assert "source.href = entry.source_url;" in page.split("if (safeURL(entry.source_url))", 1)[1]
 
@@ -328,8 +329,8 @@ def test_sorghum_and_maize_are_saved_as_before(client):
         assert _latest_report(client)["crop"] == crop
 
 
-def test_report_form_shows_a_crop_box_only_for_other(client):
-    page = client.get("/farmer/report", params={"phone": "+256700000006"}).text
+def test_report_form_shows_a_crop_box_only_for_other(farmer_client):
+    page = farmer_client("+256700000006").get("/farmer/report").text
     assert "otherField.hidden = crop.value !== \"\";" in page
 
 
@@ -481,9 +482,12 @@ def test_ussd_report_appears_on_farmer_dashboard(client):
     assert "Visit request: Little food left" in summaries
 
 
-def test_farmer_ussd_page_is_in_the_farmer_section(client):
+def test_ussd_simulator_is_for_officers_and_farmers_see_the_code(client, farmer_client):
+    # The simulator lists real farmers' numbers, so only signed-in officers open it.
     page = client.get("/farmer/ussd", params={"phone": "+256700000009"})
     assert page.status_code == 200
     assert "*384*5951#" in page.text and "+256700000009" in page.text
-    home = client.get("/farmer/home", params={"phone": "+256700000009"}).text
-    assert "/farmer/ussd" in home and "My reports and requests" in home
+    farmer = farmer_client("+256700000009")
+    assert farmer.get("/farmer/ussd", follow_redirects=False).status_code == 303
+    home = farmer.get("/farmer/home").text
+    assert "/farmer/ussd" not in home and "My reports and requests" in home
