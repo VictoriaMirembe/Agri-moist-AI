@@ -72,12 +72,13 @@ def test_officer_pages_render(client):
         assert r.status_code == 200, f"{path} returned {r.status_code}"
 
 
-def test_farmer_pages_render(client):
-    for path in ("/farmer", "/ussd"):
+def test_farmer_pages_render(client, farmer_client):
+    for path in ("/farmer/login", "/ussd"):
         r = client.get(path)
         assert r.status_code == 200, f"{path} returned {r.status_code}"
+    farmer = farmer_client("+256700000001")
     for path in ("/farmer/home", "/farmer/advice", "/farmer/report", "/farmer/visit", "/farmer/followup"):
-        r = client.get(path, params={"phone": "+256700000001"})
+        r = farmer.get(path)
         assert r.status_code == 200, f"{path} returned {r.status_code}"
 
 
@@ -332,8 +333,11 @@ global.clearInterval = (id) => { timers.delete(id); };
 
 
 def test_mark_visited_records_and_logs_the_officer(client):
+    from backend.db.seed import DEMO_OFFICER_PASSWORD
+
+    assert client.post("/api/auth/login", json={"officer_id": 2, "password": DEMO_OFFICER_PASSWORD}).status_code == 200
     flag = client.get("/api/flags", params={"status": "open"}).json()[0]
-    r = client.post(f"/api/flags/{flag['id']}/visited", json={"officer_id": 2})
+    r = client.post(f"/api/flags/{flag['id']}/visited", json={})
     assert r.status_code == 200
     assert r.json() == {"id": flag["id"], "status": "visited", "visited_by": "Lomuria Peter"}
 
@@ -343,19 +347,15 @@ def test_mark_visited_records_and_logs_the_officer(client):
     assert log["actor"] == "2" and log["source"] == "officer"
 
 
-def test_mark_visited_still_accepts_the_original_empty_body(client):
+def test_mark_visited_always_records_the_signed_in_officer(client):
+    # An officer id in the body (even an unknown one) is ignored: the visit is
+    # recorded under whoever is signed in.
     flag = client.get("/api/flags", params={"status": "open"}).json()[0]
-    assert client.post(f"/api/flags/{flag['id']}/visited", json={}).status_code == 200
+    assert client.post(f"/api/flags/{flag['id']}/visited", json={"officer_id": 999}).status_code == 200
     listed = next(f for f in client.get("/api/flags").json() if f["id"] == flag["id"])
-    assert listed["status"] == "visited" and listed["visited_by"] is None
+    assert listed["status"] == "visited" and listed["visited_by"] == "Among Betty"
     log = next(row for row in client.get("/api/logs").json() if row["tool"] == "mark_flag_visited")
-    assert log["actor"] == "officer (not named)"
-
-
-def test_mark_visited_rejects_an_unknown_officer(client):
-    flag = client.get("/api/flags", params={"status": "open"}).json()[0]
-    assert client.post(f"/api/flags/{flag['id']}/visited", json={"officer_id": 999}).status_code == 400
-    assert next(f for f in client.get("/api/flags").json() if f["id"] == flag["id"])["status"] == "open"
+    assert log["actor"] == "1"
 
 
 def test_report_and_flag_actions_use_whilebusy_and_card_errors_not_alerts(client):
@@ -370,7 +370,7 @@ def test_report_and_flag_actions_use_whilebusy_and_card_errors_not_alerts(client
     assert "cardAction(card, () => postJSON(`/api/flags/${id}/visited`, { officer_id:" in approvals
     app_js = (templates.parent.parent / "static" / "app.js").read_text()
     assert "await whileBusy(buttons, request);" in app_js
-    assert 'id="officer"' in client.get("/flags").text  # the Visit flags page now has "Acting as"
+    assert 'id="officer"' not in client.get("/flags").text  # no "Acting as": the signed-in officer acts
 
 
 def test_week_at_a_glance_numbers_match_the_api_lists(client):
