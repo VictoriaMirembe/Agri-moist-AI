@@ -38,3 +38,26 @@ def verify_pin(pin: str, stored: str) -> bool:
         return hmac.compare_digest(_derive(pin, bytes.fromhex(salt_hex), int(n), int(r), int(p)), expected)
     except (ValueError, TypeError):
         return False
+
+
+# Officer web passwords use the same salted scrypt hash, with a length rule instead
+# of the 4-digit rule.
+MIN_PASSWORD_LENGTH = 8
+
+
+def hash_password(password: str) -> str:
+    if len(password or "") < MIN_PASSWORD_LENGTH:
+        raise ValueError(f"A password is at least {MIN_PASSWORD_LENGTH} characters")
+    salt = secrets.token_bytes(16)
+    return f"scrypt${_N}${_R}${_P}${salt.hex()}${_derive(password, salt, _N, _R, _P).hex()}"
+
+
+def verify_password(password: str, stored: str) -> bool:
+    try:
+        scheme, n, r, p, salt_hex, hash_hex = stored.split("$")
+        if scheme != "scrypt" or not password:
+            return False
+        expected = bytes.fromhex(hash_hex)
+        return hmac.compare_digest(_derive(password, bytes.fromhex(salt_hex), int(n), int(r), int(p)), expected)
+    except (ValueError, TypeError):
+        return False
