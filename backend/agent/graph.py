@@ -9,6 +9,8 @@
 # never connects to. Only the approval executor reaches it, after an officer approves.
 from __future__ import annotations
 
+import asyncio
+
 import json
 import re
 from datetime import date, datetime, timedelta, timezone
@@ -18,7 +20,7 @@ from langgraph.graph import END, StateGraph
 from sqlmodel import select
 
 from backend.agent import events
-from backend.agent.mcp_client import ToolClient
+from backend.agent.mcp_client import ToolClient, warm_tools
 from backend.agent.model_client import draft_advice_text
 from backend.core.database import session_scope
 from backend.db.models import District, Household, Run, ToolLog, Village, VisitFlag
@@ -188,22 +190,36 @@ async def gather_node(state: AgentState) -> dict:
     emit_fn: EmitFn = state["_emit"]
     group_id = state["group_id"]
 
-    field_records, fr_err = await _call_with_retry(client, run_id, emit_fn, "get_field_records", group_id=group_id)
-    plot_history, ph_err = await _call_with_retry(client, run_id, emit_fn, "get_plot_history", group_id=group_id)
-    pest_reports, pr_err = await _call_with_retry(client, run_id, emit_fn, "get_pest_reports", group_id=group_id)
-    weather, w_err = await _call_with_retry(
-        client, run_id, emit_fn, "get_weather", latitude=state["village_lat"], longitude=state["village_lon"]
-    )
-    soil_moisture, sm_err = await _call_with_retry(client, run_id, emit_fn, "get_soil_moisture", group_id=group_id)
+    # The five reads and the clock do not depend on each other, so they run at the
+    # same time (the tool server runs each in its own thread); each still gets its
+    # one retry and its own gap if it fails.
+    async def _now() -> tuple[dict | None, str | None]:
+        await emit_fn(run_id, {"type": "tool_call", "tool": "get_current_time", "inputs": {"timezone": "Africa/Kampala"}})
+        try:
+            info = await _logged_now(client, run_id)
+            await emit_fn(run_id, {"type": "tool_result", "tool": "get_current_time", "outputs": info})
+            return info, None
+        except ToolError as exc:
+            await emit_fn(run_id, {"type": "tool_error", "tool": "get_current_time", "error": str(exc)})
+            return None, str(exc)
 
-    await emit_fn(run_id, {"type": "tool_call", "tool": "get_current_time", "inputs": {"timezone": "Africa/Kampala"}})
-    try:
-        now_info = await _logged_now(client, run_id)
-        await emit_fn(run_id, {"type": "tool_result", "tool": "get_current_time", "outputs": now_info})
-        now_err = None
-    except ToolError as exc:
-        await emit_fn(run_id, {"type": "tool_error", "tool": "get_current_time", "error": str(exc)})
-        now_info, now_err = None, str(exc)
+    (
+        (field_records, fr_err),
+        (plot_history, ph_err),
+        (pest_reports, pr_err),
+        (weather, w_err),
+        (soil_moisture, sm_err),
+        (now_info, now_err),
+    ) = await asyncio.gather(
+        _call_with_retry(client, run_id, emit_fn, "get_field_records", group_id=group_id),
+        _call_with_retry(client, run_id, emit_fn, "get_plot_history", group_id=group_id),
+        _call_with_retry(client, run_id, emit_fn, "get_pest_reports", group_id=group_id),
+        _call_with_retry(
+            client, run_id, emit_fn, "get_weather", latitude=state["village_lat"], longitude=state["village_lon"]
+        ),
+        _call_with_retry(client, run_id, emit_fn, "get_soil_moisture", group_id=group_id),
+        _now(),
+    )
 
     crops = sorted(
         {r["crop"] for r in (plot_history or {}).get("history", []) if r.get("crop")}
@@ -211,10 +227,10 @@ async def gather_node(state: AgentState) -> dict:
     )
     crop_calendars: dict[str, dict] = {}
     calendar_errors: dict[str, str] = {}
-    for crop in crops:
-        calendar, err = await _call_with_retry(
-            client, run_id, emit_fn, "get_crop_calendar", zone=state["zone"], crop=crop
-        )
+    calendars = await asyncio.gather(
+        *(_call_with_retry(client, run_id, emit_fn, "get_crop_calendar", zone=state["zone"], crop=crop) for crop in crops)
+    )
+    for crop, (calendar, err) in zip(crops, calendars):
         if calendar:
             crop_calendars[crop] = calendar
         elif err:
@@ -237,6 +253,35 @@ async def gather_node(state: AgentState) -> dict:
         "crop_calendars": crop_calendars,
         "crop_calendar_errors": calendar_errors,
     }
+
+
+_DO_NOT_PLANT = re.compile(r"\b(do not|don't|don’t|never)\s+(try to\s+)?plant\b", re.IGNORECASE)
+
+
+def ensure_planting_instruction(advice: str, crop_calendars: dict) -> str:
+    """When a crop's planting window has closed this year, the farmer must read a plain
+    "Do not plant <crop> now." The model is asked to write it; if its wording only
+    hints ("planting now will not succeed"), this adds the sentence, built from the
+    sourced crop calendar fact. It contains no number, so the number check is unchanged."""
+    closed = sorted(crop for crop, cal in (crop_calendars or {}).items() if cal.get("planting_window_closed_this_year"))
+    missing = [
+        crop for crop in closed
+        if not re.search(rf"\b(do not|don't|don’t|never)\s+(try to\s+)?plant\s+(any\s+)?(new\s+)?{re.escape(crop)}\b", advice, re.IGNORECASE)
+    ]
+    if missing and not (len(closed) == 1 and _DO_NOT_PLANT.search(advice)):
+        crops = " or ".join(missing)
+        return f"{advice.rstrip()} Do not plant {crops} now: the planting window for this season has closed."
+    # The instruction is there; the farmer must also be told why (the window closed),
+    # not only when the next one opens.
+    if closed and not _WINDOW_CLOSED.search(advice):
+        crops = " and ".join(closed)
+        verb = "has" if len(closed) == 1 else "have"
+        noun = "window" if len(closed) == 1 else "windows"
+        return f"{advice.rstrip()} The {crops} planting {noun} {verb} closed for this season."
+    return advice
+
+
+_WINDOW_CLOSED = re.compile(r"\bclosed\b|too late|has passed|have passed", re.IGNORECASE)
 
 
 def split_soil_readings(soil: dict | None, now: datetime | None = None) -> tuple[list[dict], list[dict]]:
@@ -273,7 +318,11 @@ def _soil_facts_and_sources(state: AgentState) -> tuple[dict, list[dict[str, str
         )
     current, stale = split_soil_readings(soil)
     facts = {
-        "source": f"{soil.get('source', 'simulated sensor')} (simulated, not real hardware)",
+        "source": (
+            f"{soil.get('source')} (a weather-model estimate for the area, not a probe in the field)"
+            if "Open-Meteo" in str(soil.get("source"))
+            else f"{soil.get('source', 'simulated sensor')} (simulated, not real hardware)"
+        ),
         "current_readings": [{"household_code": r["household_code"], "moisture_pct": r["moisture_pct"]} for r in current],
         "stale_readings_not_used": [
             {"household_code": r["household_code"], "note": "out of date; not a current reading"} for r in stale
@@ -450,6 +499,7 @@ async def draft_or_flag_node(state: AgentState) -> dict:
 
     await emit_fn(run_id, {"type": "model_call"})
     drafted = draft_advice_text(facts)
+    drafted["advice"] = ensure_planting_instruction(drafted["advice"], crop_calendars)
     await emit_fn(
         run_id,
         {
@@ -520,22 +570,32 @@ async def execute_agent_run(group_id: int, run_id: int) -> None:
     final_state: dict[str, Any] = {}
     error: str | None = None
     try:
-        async with ToolClient() as client:
-            graph = build_graph()
-            initial_state: AgentState = {
-                "group_id": group_id,
-                "run_id": run_id,
-                "_client": client,
-                "_emit": emit_fn,
-            }
-            final_state = await graph.ainvoke(initial_state)
+        initial_state: AgentState = {"group_id": group_id, "run_id": run_id, "_emit": emit_fn}
+        if settings.keep_tool_servers_warm:
+            # Reuse the tool servers kept open between runs (backend/agent/mcp_client.py).
+            initial_state["_client"] = await warm_tools.get()
+            final_state = await build_graph().ainvoke(initial_state)
+        else:
+            async with ToolClient() as client:
+                initial_state["_client"] = client
+                final_state = await build_graph().ainvoke(initial_state)
     except Exception as exc:  # noqa: BLE001 - a failed run must still be recorded and closed
+        if settings.keep_tool_servers_warm:
+            warm_tools.reset()  # a dead tool server is replaced on the next run
         error = str(exc)
         await emit_fn(run_id, {"type": "run_error", "error": error})
         final_state = {"outcome": "failed"}
     finally:
         _finalize_run(run_id, final_state, error=error)
         events.close_run_queue(run_id)
+    # Start translating the new draft now, while it waits for review, so approving it
+    # is instant (backend/approvals/translation_jobs.py).
+    try:
+        from backend.approvals.translation_jobs import pretranslate_run_drafts
+
+        pretranslate_run_drafts(run_id)
+    except Exception:  # noqa: BLE001 - translating later, at approval, still works
+        pass
 
 
 def _finalize_run(run_id: int, state: dict[str, Any], error: str | None) -> None:
