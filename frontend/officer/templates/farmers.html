@@ -1,0 +1,184 @@
+{# Farmers: every registered household (GET /api/farmers), and the forms to add a village (place search via GET /api/places/search, then POST /api/villages), register a farmer with consent and a 4-digit PIN (POST /api/farmers) and reset a PIN (POST /api/farmers/{id}/pin). #}
+{% extends "base.html" %}
+{% block title %}Farmers{% endblock %}
+{% block content %}
+<div class="o-page-head">
+  <div>
+    <p class="o-eyebrow">{{ district.name ~ " District" if district else "Your district" }}</p>
+    <h1>Farmers</h1>
+    <p class="o-lead">Register real farmers here. Each one signs in on the farmer page with their phone number and the PIN you set.</p>
+  </div>
+</div>
+
+<section class="card o-panel">
+  <h2>Registered farmers</h2>
+  <div id="farmer-list" class="muted">Loading...</div>
+</section>
+
+<div class="o-two-col">
+  <section class="card o-panel">
+    <h2>Register a farmer</h2>
+    <form id="farmer-form" class="o-form">
+      <label for="f-village">Village</label>
+      <select id="f-village" required></select>
+      <p class="o-hint" id="no-village" hidden>Add a village first (the form beside this one).</p>
+      <label for="f-group">Group number</label>
+      <input id="f-group" type="number" min="1" step="1" value="1" required>
+      <label for="f-name">Farmer's name</label>
+      <input id="f-name" autocomplete="off" required>
+      <label for="f-phone">Phone number</label>
+      <input id="f-phone" type="tel" inputmode="tel" placeholder="07XX XXX XXX" required>
+      <label for="f-pin">Sign-in PIN (4 digits)</label>
+      <input id="f-pin" inputmode="numeric" pattern="[0-9]{4}" maxlength="4" required>
+      <p class="o-hint">Tell the farmer this PIN in person. It is stored only as a hash.</p>
+      <label for="f-size">Plot size in acres (optional)</label>
+      <input id="f-size" type="number" min="0" step="0.1">
+      <label for="f-crop">Crop this season (optional)</label>
+      <input id="f-crop" list="crop-options" autocomplete="off">
+      <datalist id="crop-options"><option value="sorghum"><option value="maize"><option value="beans"><option value="groundnuts"><option value="cassava"></datalist>
+      <label for="f-planted">Planting date (optional)</label>
+      <input id="f-planted" type="date">
+      <label class="o-check"><input id="f-consent" type="checkbox"> The farmer agreed to have their farm data kept and used for advice.</label>
+      <p id="farmer-msg" role="status"></p>
+      <button class="btn" type="submit">Register farmer</button>
+    </form>
+  </section>
+
+  <section class="card o-panel">
+    <h2>Add a village</h2>
+    <form id="village-search" class="o-form">
+      <label for="v-query">Find the village</label>
+      <div class="o-inline">
+        <input id="v-query" placeholder="e.g. Lokopo">
+        <button class="btn secondary" type="submit">Find</button>
+      </div>
+      <p class="o-hint">Searches GeoNames place names in Uganda (Open-Meteo). The coordinates fetch the real weather and soil moisture for the village.</p>
+      <div id="v-results"></div>
+    </form>
+    <form id="village-form" class="o-form">
+      <label for="v-name">Village name</label>
+      <input id="v-name" required>
+      <label for="v-lat">Latitude</label>
+      <input id="v-lat" type="number" step="0.0001" required>
+      <label for="v-lon">Longitude</label>
+      <input id="v-lon" type="number" step="0.0001" required>
+      <p id="village-msg" role="status"></p>
+      <button class="btn" type="submit">Add village</button>
+    </form>
+  </section>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+const villageSelect = document.getElementById("f-village");
+
+async function loadVillages() {
+  const villages = await getJSON("/api/villages");
+  villageSelect.innerHTML = villages.map(v => `<option value="${v.id}">${escapeHTML(v.name)}</option>`).join("");
+  document.getElementById("no-village").hidden = villages.length > 0;
+}
+
+async function loadFarmers() {
+  const el = document.getElementById("farmer-list");
+  try {
+    const rows = await getJSON("/api/farmers");
+    if (!rows.length) {
+      el.innerHTML = "<p class='o-empty'>No farmers registered yet. Add a village, then register the first farmer.</p>";
+      return;
+    }
+    el.classList.remove("muted");
+    el.innerHTML = `<div class="o-table-wrap"><table class="o-table">
+      <thead><tr><th>Code</th><th>Name</th><th>Phone</th><th>Village</th><th>Group</th><th>Crop</th><th>PIN</th></tr></thead>
+      <tbody>${rows.map(r => `<tr>
+        <td><a href="/groups/${r.group_id}">${escapeHTML(r.code)}</a></td>
+        <td>${escapeHTML(r.name)}</td>
+        <td>${escapeHTML(r.phone)}</td>
+        <td>${escapeHTML(r.village || "")}</td>
+        <td>${r.group_id}</td>
+        <td>${escapeHTML(r.crop || "-")}${r.planted_on ? ` <span class="muted">(planted ${escapeHTML(r.planted_on)})</span>` : ""}</td>
+        <td><button class="btn secondary small" data-pin="${r.household_id}">${r.has_pin ? "Reset PIN" : "Set PIN"}</button></td>
+      </tr>`).join("")}</tbody></table></div>`;
+  } catch (err) { showLoadError(el, err); }
+}
+
+document.getElementById("farmer-list").addEventListener("click", async (e) => {
+  const btn = e.target.closest("[data-pin]");
+  if (!btn) return;
+  const row = btn.closest("tr");
+  if (row.querySelector(".o-pin-edit")) return;
+  const cell = btn.parentElement;
+  cell.innerHTML = `<span class="o-pin-edit"><input inputmode="numeric" maxlength="4" pattern="[0-9]{4}" placeholder="New PIN" aria-label="New 4-digit PIN"> <button class="btn small">Save</button></span>`;
+  const input = cell.querySelector("input");
+  input.focus();
+  cell.querySelector("button").addEventListener("click", async () => {
+    try {
+      await postJSON(`/api/farmers/${btn.dataset.pin}/pin`, { pin: input.value.trim() });
+      cell.textContent = "PIN set";
+    } catch (err) { showError(cell, err); }
+  });
+});
+
+document.getElementById("farmer-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const msg = document.getElementById("farmer-msg");
+  msg.textContent = "";
+  const size = document.getElementById("f-size").value;
+  try {
+    const r = await postJSON("/api/farmers", {
+      village_id: parseInt(villageSelect.value, 10),
+      group_id: parseInt(document.getElementById("f-group").value, 10),
+      name: document.getElementById("f-name").value,
+      phone: document.getElementById("f-phone").value,
+      pin: document.getElementById("f-pin").value.trim(),
+      consent: document.getElementById("f-consent").checked,
+      plot_size_acres: size ? parseFloat(size) : null,
+      crop: document.getElementById("f-crop").value || null,
+      planted_on: document.getElementById("f-planted").value || null,
+    });
+    msg.className = "o-ok";
+    msg.textContent = `Registered as ${r.code} in group ${r.group_id}.`;
+    for (const id of ["f-name", "f-phone", "f-pin", "f-size", "f-crop", "f-planted"]) document.getElementById(id).value = "";
+    document.getElementById("f-consent").checked = false;
+    loadFarmers();
+  } catch (err) { msg.className = "o-err"; msg.textContent = err.message; }
+});
+
+document.getElementById("village-search").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const out = document.getElementById("v-results");
+  out.textContent = "Searching...";
+  try {
+    const places = await getJSON("/api/places/search?q=" + encodeURIComponent(document.getElementById("v-query").value));
+    out.innerHTML = places.length
+      ? `<ul class="o-pick">${places.map((p, i) => `<li><button type="button" class="btn secondary small" data-i="${i}">Use</button> ${escapeHTML(p.name)} <span class="muted">${escapeHTML(p.area)} · ${p.latitude.toFixed(4)}, ${p.longitude.toFixed(4)}</span></li>`).join("")}</ul>`
+      : "<p class='muted'>No place with that name in Uganda. Type the coordinates below.</p>";
+    out.querySelectorAll("[data-i]").forEach(b => b.addEventListener("click", () => {
+      const p = places[parseInt(b.dataset.i, 10)];
+      document.getElementById("v-name").value = p.name;
+      document.getElementById("v-lat").value = p.latitude.toFixed(4);
+      document.getElementById("v-lon").value = p.longitude.toFixed(4);
+    }));
+  } catch (err) { out.textContent = err.message; }
+});
+
+document.getElementById("village-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const msg = document.getElementById("village-msg");
+  try {
+    const v = await postJSON("/api/villages", {
+      name: document.getElementById("v-name").value,
+      latitude: parseFloat(document.getElementById("v-lat").value),
+      longitude: parseFloat(document.getElementById("v-lon").value),
+    });
+    msg.className = "o-ok";
+    msg.textContent = `${v.name} added.`;
+    e.target.reset();
+    await loadVillages();
+    villageSelect.value = String(v.id);
+  } catch (err) { msg.className = "o-err"; msg.textContent = err.message; }
+});
+
+loadVillages();
+loadFarmers();
+</script>
+{% endblock %}
