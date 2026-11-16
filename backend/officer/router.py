@@ -26,6 +26,7 @@ from backend.db.models import (
     Household,
     Observation,
     Officer,
+    OfficerAccount,
     Run,
     ToolLog,
     Village,
@@ -33,7 +34,7 @@ from backend.db.models import (
     VisitFlagVisit,
 )
 from backend.logging.tool_log import ZERO_MODEL_USAGE, model_usage_by_run, model_usage_for_run, run_logged
-from backend.officer.auth import password_ok, require_officer, sign_in, signed_in_officer
+from backend.officer.auth import check_officer_login, require_officer, sign_in, signed_in_officer
 from backend.tools import agrimoist_tools as impl
 from backend.tools.errors import ToolError
 
@@ -52,7 +53,8 @@ _background_runs: set[asyncio.Task] = set()
 # ---------------------------------------------------------------------------
 class VisitRequest(BaseModel):
     household_code: str
-    officer_id: int
+    # Ignored if sent: the visiting officer is always the signed-in officer.
+    officer_id: int | None = None
     crop: str | None = None
     soil_wetness: str | None = None
     rain_last_7_days: str | None = None
@@ -71,7 +73,8 @@ class VisitRequest(BaseModel):
 
 
 @router.post("/visits")
-def record_visit(body: VisitRequest):
+def record_visit(body: VisitRequest, officer: dict = Depends(require_officer)):
+    body.officer_id = officer["officer_id"]
     with session_scope() as session:
         try:
             return run_logged(
@@ -311,11 +314,13 @@ def list_farmer_reports(checked: str | None = None):
 
 
 class CheckReportRequest(BaseModel):
-    officer_id: int
+    officer_id: int | None = None  # ignored: the signed-in officer checks the report
 
 
 @router.post("/farmer-reports/{observation_id}/check")
-def check_farmer_report(observation_id: int, body: CheckReportRequest):
+def check_farmer_report(
+    observation_id: int, body: CheckReportRequest | None = None, officer: dict = Depends(require_officer)
+):
     with session_scope() as session:
         observation = session.get(Observation, observation_id)
         if observation is None:
@@ -326,8 +331,8 @@ def check_farmer_report(observation_id: int, body: CheckReportRequest):
         run_logged(
             session,
             tool="mark_report_checked",
-            inputs={"observation_id": observation_id},
-            actor=str(body.officer_id),
+            inputs={"observation_id": observation_id, "officer_id": officer["officer_id"]},
+            actor=str(officer["officer_id"]),
             source="officer",
             run_id=None,
             func=lambda: {"observation_id": observation_id, "checked": True},
@@ -418,12 +423,14 @@ def _visit_record(session, flag_id: int) -> dict:
 
 
 class MarkVisitedRequest(BaseModel):
-    officer_id: int | None = None  # optional, so the original {} body still works
+    officer_id: int | None = None  # ignored: the signed-in officer made the visit
 
 
 @router.post("/flags/{flag_id}/visited")
-def mark_flag_visited(flag_id: int, body: MarkVisitedRequest | None = None):
-    officer_id = body.officer_id if body else None
+def mark_flag_visited(
+    flag_id: int, body: MarkVisitedRequest | None = None, officer_session: dict = Depends(require_officer)
+):
+    officer_id = officer_session["officer_id"]
     with session_scope() as session:
         flag = session.get(VisitFlag, flag_id)
         if flag is None:
@@ -551,29 +558,39 @@ def pending_summary():
 # Extension officer sign-in (signed session cookie, see backend/officer/auth.py)
 # ---------------------------------------------------------------------------
 class OfficerLoginRequest(BaseModel):
-    officer_id: int = 1
+    # An officer signs in with their own phone number and password. officer_id is
+    # accepted instead of phone for scripts (the evals); the password is still checked.
+    phone: str | None = None
+    officer_id: int | None = None
     password: str = ""
     role: str = "officer"  # the only role there is; anything else is refused
 
 
 @auth_router.post("/login")
 def login_officer(request: Request, body: OfficerLoginRequest):
-    """Sign an extension officer in with the demo password; sets the signed session."""
+    """Sign an extension officer in with their own password; sets the signed session."""
     if body.role != "officer":
         raise HTTPException(status_code=400, detail="Only officers can sign in here.")
-    if not password_ok(body.password):
-        raise HTTPException(status_code=401, detail="Wrong password.")
+    if not body.phone and body.officer_id is None:
+        raise HTTPException(status_code=400, detail="Give your phone number.")
     with session_scope() as session:
-        officer = session.get(Officer, body.officer_id)
+        officer, error = check_officer_login(
+            session, phone=body.phone, officer_id=body.officer_id, password=body.password
+        )
         if officer is None:
-            raise HTTPException(status_code=400, detail=f"No officer with id {body.officer_id}")
-        officer_name = officer.name
-    sign_in(request, body.officer_id, officer_name)
+            raise HTTPException(status_code=401, detail=error)
+        officer_id, officer_name = officer.id, officer.name
+        account = session.get(OfficerAccount, officer.id)
+        is_admin = bool(account and account.is_admin)
+        district = session.get(District, officer.district_id)
+        district_name = district.name if district else None
+    sign_in(request, officer_id, officer_name, is_admin, district_name)
     return {
         "status": "authenticated",
         "role": "officer",
-        "officer_id": body.officer_id,
+        "officer_id": officer_id,
         "officer_name": officer_name,
+        "is_admin": is_admin,
     }
 
 
@@ -594,6 +611,7 @@ def current_officer(request: Request):
         "role": "officer" if officer else None,
         "officer_id": officer["officer_id"] if officer else None,
         "officer_name": officer["officer_name"] if officer else None,
+        "is_admin": officer["is_admin"] if officer else False,
     }
 
 
@@ -720,34 +738,37 @@ def fetch_village_weather(village_name: str, latitude: float, longitude: float) 
         _VILLAGE_WEATHER_CACHE[key] = (now_ts, result)
         return result
     except Exception as exc:
-        # Check if rate-limited: fallback to cached reading or Karamoja defaults
+        # The last real reading for this place if there is one; otherwise say plainly
+        # that the weather is unavailable. Never made-up figures.
         if key in _VILLAGE_WEATHER_CACHE:
             return _VILLAGE_WEATHER_CACHE[key][1]
-        
-        # Karamoja station defaults for Lokopo / Iriiri
-        defaults = {
-            (2.3833, 34.3333): (39.3, 32.0, 31.5, 30, "Partly cloudy"),
-            (2.5333, 34.35): (16.4, 18.1, 29.0, 42, "Mainly clear"),
-        }.get(key, (25.0, 22.0, 30.0, 35, "Fair"))
-
-        fallback_result = {
+        return {
             "village": village_name,
             "latitude": latitude,
             "longitude": longitude,
-            "status": "live",
-            "past_7_days_rain_mm": defaults[0],
-            "next_7_days_rain_mm": defaults[1],
-            "temperature_c": defaults[2],
-            "relative_humidity": defaults[3],
-            "current_precipitation_mm": 0.0,
-            "condition": defaults[4],
-            "weather_code": 1,
-            "recorded_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M"),
-            "source": f"{settings.open_meteo_base_url} (station cached fallback)",
+            "status": "unavailable",
+            "error": f"Open-Meteo could not be reached: {type(exc).__name__}",
+            "past_7_days_rain_mm": None,
+            "next_7_days_rain_mm": None,
+            "temperature_c": None,
+            "relative_humidity": None,
+            "current_precipitation_mm": None,
+            "condition": "Weather unavailable",
+            "weather_code": None,
+            "source": settings.open_meteo_base_url,
             "is_override": False,
         }
-        _VILLAGE_WEATHER_CACHE[key] = (now_ts, fallback_result)
-        return fallback_result
+
+
+def weather_for_villages(villages) -> list[dict[str, Any]]:
+    """Weather for every village, fetched in parallel (one Open-Meteo call each, cached)."""
+    from concurrent.futures import ThreadPoolExecutor
+
+    points = [(v.name, v.latitude, v.longitude) for v in villages]
+    if not points:
+        return []
+    with ThreadPoolExecutor(max_workers=min(8, len(points))) as pool:
+        return list(pool.map(lambda p: fetch_village_weather(*p), points))
 
 
 @router.get("/weather")
@@ -755,15 +776,7 @@ def get_live_weather():
     """Fetch live Open-Meteo weather for all villages in real time."""
     with session_scope() as session:
         villages = session.exec(select(Village)).all()
-        if not villages:
-            villages = [
-                Village(name="Lokopo", latitude=2.3833, longitude=34.3333),
-                Village(name="Iriiri", latitude=2.5333, longitude=34.3500),
-            ]
-        weather_data = [
-            fetch_village_weather(v.name, v.latitude, v.longitude)
-            for v in villages
-        ]
+        weather_data = weather_for_villages(villages)
         return {
             "source": "Open-Meteo Weather API",
             "villages": weather_data,
@@ -778,15 +791,7 @@ def get_live_dashboard():
     with session_scope() as session:
         # 1. Real-time Weather from Open-Meteo
         villages = session.exec(select(Village)).all()
-        if not villages:
-            villages = [
-                Village(name="Lokopo", latitude=2.3833, longitude=34.3333),
-                Village(name="Iriiri", latitude=2.5333, longitude=34.3500),
-            ]
-        weather_list = [
-            fetch_village_weather(v.name, v.latitude, v.longitude)
-            for v in villages
-        ]
+        weather_list = weather_for_villages(villages)
 
         # 2. Drafts awaiting approval - Human in the Loop safeguard
         pending_advice_rows = session.exec(
