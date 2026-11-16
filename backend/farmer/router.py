@@ -6,23 +6,27 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import hmac
 import logging
 import re
 import threading
+from concurrent.futures import Future, ThreadPoolExecutor
+from concurrent.futures import TimeoutError as FutureTimeout
 from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Literal
 
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.concurrency import run_in_threadpool
-from fastapi.responses import FileResponse, PlainTextResponse
+from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse
 from pydantic import BaseModel, Field, ValidationError, field_validator
 from sqlalchemy import text
 from sqlmodel import select
 
 from backend.core.config import settings
 from backend.core.database import session_scope
+from backend.core.phones import normalize_phone
 from backend.db.models import (
     Advice,
     IrrigationProposal,
@@ -37,6 +41,7 @@ from backend.db.models import (
     Officer,
     Plot,
     PlotHistory,
+    ToolLog,
     UssdSession,
     Village,
     VisitFlag,
@@ -44,6 +49,7 @@ from backend.db.models import (
 )
 from backend.agent import model_client
 from backend.logging.tool_log import run_logged
+from backend.officer.auth import farmer_phone_for_request, signed_in_farmer, signed_in_officer
 from backend.officer.ussd import officer_ussd_reply
 from backend.tools import agrimoist_tools as impl
 from backend.tools.errors import ToolError
@@ -59,23 +65,8 @@ PROBLEM_FIELD_MAP = {
 }
 
 
-def _normalize_phone(phone: str) -> str:
-    """Normalise a Uganda phone number to E.164 (+256…) for comparison.
-
-    Handles the most common variants that farmers or officers enter:
-      * +256700000001  (already canonical)
-      * 0700000001     (local format, leading 0)
-      * 256700000001   (no leading +)
-      * 0772 890 123   (spaces)
-      * 07-00-000-001  (dashes)
-    """
-    cleaned = re.sub(r"[\s\-]", "", phone).strip()
-    if cleaned.startswith("0") and len(cleaned) == 10:
-        # local Uganda format 07xxxxxxxx → +25607xxxxxxxx (strip leading 0)
-        cleaned = "+256" + cleaned[1:]
-    elif cleaned.startswith("256") and not cleaned.startswith("+"):
-        cleaned = "+" + cleaned
-    return cleaned
+# Shared with the sign-in and registration pages (backend/core/phones.py).
+_normalize_phone = normalize_phone
 
 
 def _contact_for_phone(session, household: Household, phone: str) -> Contact | None:
@@ -178,7 +169,7 @@ def _save_followup(
 # Farmer reports and visit requests (web)
 # ---------------------------------------------------------------------------
 class FarmerReportRequest(BaseModel):
-    phone: str
+    phone: str = ""  # blank = the signed-in farmer's own number
     problem: str  # pests, no_rain, heavy_rain, crop_sick
     crop: str | None = None  # sorghum, maize, or a crop name the farmer typed under "Other"
     pest: str | None = None  # optional: the pest the farmer picked or named (problem "pests" only)
@@ -204,7 +195,8 @@ def _report_fields(problem: str, pest: str | None) -> dict:
 
 
 @router.post("/api/farmer-reports")
-def create_farmer_report(body: FarmerReportRequest):
+def create_farmer_report(request: Request, body: FarmerReportRequest):
+    body.phone = farmer_phone_for_request(request, body.phone)
     if body.problem not in PROBLEM_FIELD_MAP:
         raise HTTPException(400, f"Unknown problem: {body.problem}")
     with session_scope() as session:
@@ -229,12 +221,13 @@ def create_farmer_report(body: FarmerReportRequest):
 
 
 class VisitRequestBody(BaseModel):
-    phone: str
+    phone: str = ""  # blank = the signed-in farmer's own number
     reason: str
 
 
 @router.post("/api/visit-requests")
-def create_visit_request(body: VisitRequestBody):
+def create_visit_request(request: Request, body: VisitRequestBody):
+    body.phone = farmer_phone_for_request(request, body.phone)
     with session_scope() as session:
         household = _household_for_phone(session, body.phone)
         if household is None:
@@ -256,7 +249,8 @@ def create_visit_request(body: VisitRequestBody):
 
 
 @router.get("/api/farmer/advice")
-def farmer_advice(phone: str):
+def farmer_advice(request: Request, phone: str = ""):
+    phone = farmer_phone_for_request(request, phone)
     with session_scope() as session:
         household = _household_for_phone(session, phone)
         if household is None:
@@ -267,7 +261,8 @@ def farmer_advice(phone: str):
 
 
 @router.get("/api/farmer/updates")
-def farmer_updates(phone: str):
+def farmer_updates(request: Request, phone: str = ""):
+    phone = farmer_phone_for_request(request, phone)
     """What the farmer page polls in the background, so officer decisions (a report
     checked, a visit done, advice approved) appear without a reload. Not logged as
     the farmer reading advice - only opening the page or the advice counts."""
@@ -282,7 +277,8 @@ def farmer_updates(phone: str):
 
 
 @router.get("/api/farmer/profile")
-def farmer_profile(phone: str):
+def farmer_profile(request: Request, phone: str = ""):
+    phone = farmer_phone_for_request(request, phone)
     with session_scope() as session:
         household = _household_for_phone(session, phone)
         if household is None:
@@ -298,7 +294,8 @@ def farmer_profile(phone: str):
 
 
 @router.get("/api/farmer/dashboard")
-def farmer_dashboard(phone: str):
+def farmer_dashboard(request: Request, phone: str = ""):
+    phone = farmer_phone_for_request(request, phone)
     with session_scope() as session:
         household = _household_for_phone(session, phone)
         if household is None:
@@ -451,14 +448,15 @@ def _recent_farmer_requests(session, household: Household, limit: int = 6) -> li
 
 
 class FollowupBody(BaseModel):
-    phone: str
+    phone: str = ""  # blank = the signed-in farmer's own number
     advice_id: int
     followed: Literal["yes", "no", "partly"]
     helped: Literal["yes", "no", "too_early"] | None = None
 
 
 @router.post("/api/farmer/followup")
-def farmer_followup(body: FollowupBody):
+def farmer_followup(request: Request, body: FollowupBody):
+    body.phone = farmer_phone_for_request(request, body.phone)
     with session_scope() as session:
         household = _household_for_phone(session, body.phone)
         if household is None:
@@ -798,10 +796,40 @@ def _canonical_voice_lang(lang: str) -> str:
 
 
 @router.get("/api/farmer/voice-script")
-def get_farmer_voice_script(phone: str = "", lang: str = "en", view: str = "dashboard"):
+def get_farmer_voice_script(request: Request, phone: str = "", lang: str = "en", view: str = "dashboard"):
     """Returns a structured voice narration script for the farmer page in English,
     Karamojong (Ngakarimojong), or Swahili (Kiswahili). Suitable for browser Web Speech
     Synthesis and audio visualizers."""
+    # Farm details are read out only to that farmer (or an officer); anyone else
+    # gets the sign-in wording.
+    phone = farmer_phone_for_request(request, phone) if (phone or signed_in_farmer(request)) else ""
+    script = build_voice_script(phone, lang, view)
+    who = signed_in_farmer(request) or signed_in_officer(request)
+    if who is not None:
+        # Start making every piece's audio now, in parallel, so by the time the
+        # farmer presses Listen (or reaches a piece) it is usually ready.
+        prepare_voice_audio(script["language"], [p["text"] for p in script["pieces"]], _actor(who))
+    return script
+
+
+def _actor(who: dict) -> str:
+    return str(who.get("officer_id")) if "officer_id" in who else "farmer"
+
+
+def _script(norm_lang: str, lang_name: str, view: str, sentences: list[dict[str, str]]) -> dict:
+    return {
+        "language": norm_lang,
+        "language_label": lang_name,
+        "view": view,
+        "sentences": sentences,
+        "pieces": split_for_speech(sentences),
+        "full_script": " ".join(s["text"] for s in sentences),
+    }
+
+
+def build_voice_script(phone: str, lang: str = "en", view: str = "dashboard") -> dict:
+    """The words read aloud for one farmer's page, in one language. phone is "" for
+    the signed-out wording."""
     norm_lang = _canonical_voice_lang(lang)
     lang_name = VOICE_LANG_LABELS.get(norm_lang, "English")
     sentences: list[dict[str, str]] = []
@@ -822,8 +850,7 @@ def get_farmer_voice_script(phone: str = "", lang: str = "en", view: str = "dash
                 "label": "Welcome",
                 "text": "Welcome to the AgriMoist AI farmer portal. Please sign in with your registered phone number to view your farm details, weather forecast, and extension officer advice.",
             })
-        full_text = " ".join(s["text"] for s in sentences)
-        return {"language": norm_lang, "language_label": lang_name, "view": view, "sentences": sentences, "full_script": full_text}
+        return _script(norm_lang, lang_name, view, sentences)
 
     if view == "report":
         if norm_lang == "sw":
@@ -835,8 +862,7 @@ def get_farmer_voice_script(phone: str = "", lang: str = "en", view: str = "dash
         else:
             sentences.append({"label": "Report issue", "text": "Report an issue. Your report will be shared with your extension officer for review."})
             sentences.append({"label": "Options", "text": "Select what you observed: pests, no rain, too much rain, or sick crops. Choose your crop and click Send report."})
-        full_text = " ".join(s["text"] for s in sentences)
-        return {"language": norm_lang, "language_label": lang_name, "view": view, "sentences": sentences, "full_script": full_text}
+        return _script(norm_lang, lang_name, view, sentences)
 
     if view == "visit":
         if norm_lang == "sw":
@@ -847,8 +873,7 @@ def get_farmer_voice_script(phone: str = "", lang: str = "en", view: str = "dash
             sentences.append({"label": "Eboyer", "text": "Kitatam ekaunan nyo ebunere amana, kotere ngikuruk aloma amana kori edis akimuj na edongit."})
         else:
             sentences.append({"label": "Request visit", "text": "Request an extension officer visit. Let your officer know why you need a visit to your farm, such as pests or food security concerns."})
-        full_text = " ".join(s["text"] for s in sentences)
-        return {"language": norm_lang, "language_label": lang_name, "view": view, "sentences": sentences, "full_script": full_text}
+        return _script(norm_lang, lang_name, view, sentences)
 
     if view == "followup":
         if norm_lang == "sw":
@@ -857,8 +882,7 @@ def get_farmer_voice_script(phone: str = "", lang: str = "en", view: str = "dash
             sentences.append({"label": "Akiwotokin", "text": "Akiwotokin naka akisil. Kitatam arai itupit akisil na sek, ka arai kitiakite amana kon."})
         else:
             sentences.append({"label": "Advice follow-up", "text": "Advice follow-up. Share whether you followed the approved advice from your extension officer, and whether it helped your field."})
-        full_text = " ".join(s["text"] for s in sentences)
-        return {"language": norm_lang, "language_label": lang_name, "view": view, "sentences": sentences, "full_script": full_text}
+        return _script(norm_lang, lang_name, view, sentences)
 
     with session_scope() as session:
         household = _household_for_phone(session, phone)
@@ -869,7 +893,7 @@ def get_farmer_voice_script(phone: str = "", lang: str = "en", view: str = "dash
                 text = "Namba kon na emam na egeritai. Inyono ekaunan kon."
             else:
                 text = "This phone number is not registered. Please contact your extension officer."
-            return {"language": norm_lang, "language_label": lang_name, "view": view, "sentences": [{"label": "Notice", "text": text}], "full_script": text}
+            return _script(norm_lang, lang_name, view, [{"label": "Notice", "text": text}])
 
         contact = _contact_for_phone(session, household, phone)
         farmer_name = contact.name if contact else "Farmer"
@@ -896,8 +920,7 @@ def get_farmer_voice_script(phone: str = "", lang: str = "en", view: str = "dash
                     sentences.append({"label": "Akisil", "text": "Emam akisil na ngitet naka ekaunan sek. Ebuni aanyun na erikuno akisil."})
                 else:
                     sentences.append({"label": "Advice", "text": "You have no new approved advice yet. Your officer will send it after checking your farm."})
-            full_text = " ".join(s["text"] for s in sentences)
-            return {"language": norm_lang, "language_label": lang_name, "view": view, "sentences": sentences, "full_script": full_text}
+            return _script(norm_lang, lang_name, view, sentences)
 
         # Dashboard View:
         if norm_lang == "sw":
@@ -993,19 +1016,46 @@ def get_farmer_voice_script(phone: str = "", lang: str = "en", view: str = "dash
         else:
             sentences.append({"label": "Services", "text": "You can use this page to report an issue with your crop, or request an extension officer visit."})
 
-    full_text = " ".join(s["text"] for s in sentences)
-    return {
-        "language": norm_lang,
-        "language_label": lang_name,
-        "view": view,
-        "sentences": sentences,
-        "full_script": full_text,
-    }
+    return _script(norm_lang, lang_name, view, sentences)
+
+
+# Sunbird's time grows with text length, so speech is made in short pieces: the first
+# is a single sentence, the rest up to SPEECH_PIECE_MAX characters. Split only at
+# ". " / "! " / "? " so decimals like 39.3 stay whole. The page reads these pieces.
+SPEECH_PIECE_MAX = 140
+
+
+def split_for_speech(sentences: list[dict[str, str]]) -> list[dict[str, str]]:
+    pieces: list[dict[str, str]] = []
+    for item in sentences:
+        raw = re.split(r"([.!?])\s+", str(item.get("text") or ""))
+        parts = []
+        for i in range(0, len(raw), 2):
+            part = (raw[i] + (raw[i + 1] if i + 1 < len(raw) else "")).strip()
+            if part:
+                parts.append(part)
+        current = ""
+        for part in parts:
+            first_piece = not pieces and not current
+            if current and len(current + " " + part) > SPEECH_PIECE_MAX:
+                pieces.append({"label": item.get("label", ""), "text": current})
+                current = part
+            else:
+                current = f"{current} {part}" if current else part
+            if first_piece and not pieces:
+                pieces.append({"label": item.get("label", ""), "text": current})
+                current = ""
+        if current:
+            pieces.append({"label": item.get("label", ""), "text": current})
+    return pieces
 
 
 class VoiceAudioRequest(BaseModel):
     text: str = Field(min_length=1, max_length=1000)
     lang: str = "en"
+    # Seconds to wait for audio that is still being made. None = until it is done.
+    # The page passes a few seconds so playback never stalls on a slow Sunbird call.
+    wait: float | None = Field(default=None, ge=0, le=120)
 
 
 # Each piece of speech is downloaded from Sunbird once and kept as a file named
@@ -1013,33 +1063,125 @@ class VoiceAudioRequest(BaseModel):
 # keep it in their own cache: listening again downloads nothing.
 VOICE_CACHE_DIR = Path(__file__).resolve().parents[2] / "data" / "voice_cache"
 _VOICE_FILE_NAME = re.compile(r"^[0-9a-f]{32}\.wav$")
-# One lock per piece: a page-load warm-up and a Listen press asking for the same
-# piece at once share one Sunbird call instead of paying for two.
-_VOICE_AUDIO_LOCKS: dict[tuple[str, str], threading.Lock] = {}
-_VOICE_AUDIO_LOCKS_GUARD = threading.Lock()
+# Sunbird takes 15-70 s per piece (measured 2026-11-17), so pieces are made in
+# parallel in the background as soon as the page asks for its script, not one by
+# one when Listen is pressed. One job per piece: a warm-up and a Listen press asking
+# for the same piece share one Sunbird call instead of paying for two.
+VOICE_WORKERS = 6
+_VOICE_POOL = ThreadPoolExecutor(max_workers=VOICE_WORKERS, thread_name_prefix="voice")
+_VOICE_JOBS: dict[str, Future] = {}
+_VOICE_JOBS_GUARD = threading.Lock()
+
+
+def _voice_file_name(lang: str, text: str) -> str:
+    return hashlib.sha256(f"{lang}|{text}".encode("utf-8")).hexdigest()[:32] + ".wav"
+
+
+def _make_voice_file(lang: str, text: str, actor: str) -> bool:
+    path = VOICE_CACHE_DIR / _voice_file_name(lang, text)
+    if path.exists():
+        return True
+    result = model_client.synthesize_speech(text, lang)
+    audio = model_client.download_audio(result["audio_url"]) if result else None
+    if not audio:
+        return False
+    VOICE_CACHE_DIR.mkdir(parents=True, exist_ok=True)
+    partial = path.with_suffix(f".{threading.get_ident()}.part")
+    partial.write_bytes(audio)
+    partial.replace(path)  # never serve a half-written file
+    try:
+        with session_scope() as session:
+            session.add(
+                ToolLog(
+                    tool="synthesize_speech",
+                    inputs=json.dumps({"lang": lang, "chars": len(text)}),
+                    outputs=json.dumps({"file": path.name, "bytes": len(audio)}),
+                    source="sunbird_tts",
+                    actor=actor,
+                )
+            )
+            session.commit()
+    except Exception:  # noqa: BLE001 - the audio is made; a log failure must not lose it
+        pass
+    return True
+
+
+def _voice_job(lang: str, text: str, actor: str) -> Future:
+    name = _voice_file_name(lang, text)
+    with _VOICE_JOBS_GUARD:
+        job = _VOICE_JOBS.get(name)
+        if job is None or (job.done() and (job.exception() is not None or not job.result())):
+            job = _VOICE_POOL.submit(_make_voice_file, lang, text, actor)
+            _VOICE_JOBS[name] = job
+
+            def forget(done: Future, name: str = name) -> None:
+                if done.exception() is None and done.result():
+                    with _VOICE_JOBS_GUARD:
+                        if _VOICE_JOBS.get(name) is done:
+                            del _VOICE_JOBS[name]
+
+            job.add_done_callback(forget)
+    return job
+
+
+def prepare_voice_audio(lang: str, texts: list[str], actor: str = "app") -> None:
+    """Start making audio for each piece that has none yet. Returns at once."""
+    lang = _canonical_voice_lang(lang)
+    if not settings.translator_configured or lang not in model_client.SUNBIRD_VOICES:
+        return
+    for text in texts:
+        text = (text or "").strip()
+        if text and not (VOICE_CACHE_DIR / _voice_file_name(lang, text)).exists():
+            _voice_job(lang, text, actor)
+
+
+def prepare_voice_for_group(group_id: int, langs: tuple[str, ...] = ("kdj", "en")) -> None:
+    """After advice is approved (and translated), make the read-aloud audio for every
+    farmer in the group, so their first Listen plays at once."""
+    if not settings.translator_configured:
+        return
+    with session_scope() as session:
+        phones = [
+            c.phone
+            for h in session.exec(select(Household).where(Household.group_id == group_id)).all()
+            for c in session.exec(select(Contact).where(Contact.household_id == h.id)).all()
+            if c.phone
+        ]
+    for phone in phones:
+        for lang in langs:
+            for view in ("dashboard", "advice"):
+                try:
+                    script = build_voice_script(phone, lang, view)
+                except Exception:  # noqa: BLE001 - best effort only
+                    continue
+                prepare_voice_audio(lang, [p["text"] for p in script["pieces"]])
 
 
 @router.post("/api/farmer/voice-audio")
-def get_farmer_voice_audio(body: VoiceAudioRequest):
+def get_farmer_voice_audio(request: Request, body: VoiceAudioRequest):
     """Speech for one short piece of the voice script, from Sunbird AI's Ugandan TTS
     voices, served from this app. 503 when Sunbird is not configured or fails; the
     page then uses the browser's own voice instead."""
+    # Each call costs a Sunbird request, so only signed-in farmers and officers may
+    # ask, and every new piece of audio is logged (below).
+    who = signed_in_farmer(request) or signed_in_officer(request)
+    if who is None:
+        raise HTTPException(401, "Please sign in first.")
     lang = _canonical_voice_lang(body.lang)
     text = body.text.strip()
-    name = hashlib.sha256(f"{lang}|{text}".encode("utf-8")).hexdigest()[:32] + ".wav"
-    path = VOICE_CACHE_DIR / name
-    with _VOICE_AUDIO_LOCKS_GUARD:
-        lock = _VOICE_AUDIO_LOCKS.setdefault((lang, text), threading.Lock())
-    with lock:
-        if not path.exists():
-            result = model_client.synthesize_speech(text, lang)
-            audio = model_client.download_audio(result["audio_url"]) if result else None
-            if not audio:
-                raise HTTPException(503, "Voice audio is unavailable; use the browser voice.")
-            VOICE_CACHE_DIR.mkdir(parents=True, exist_ok=True)
-            partial = path.with_suffix(".part")
-            partial.write_bytes(audio)
-            partial.replace(path)  # never serve a half-written file
+    name = _voice_file_name(lang, text)
+    if not (VOICE_CACHE_DIR / name).exists():
+        job = _voice_job(lang, text, _actor(who))
+        try:
+            made = job.result(timeout=body.wait)
+        except FutureTimeout:
+            # Still being made: the page reads this piece with the phone's own voice
+            # and asks again next time, when the file is ready.
+            return JSONResponse({"pending": True}, status_code=202)
+        except Exception:  # noqa: BLE001
+            made = False
+        if not made:
+            raise HTTPException(503, "Voice audio is unavailable; use the browser voice.")
     return {"audio_url": f"/api/farmer/voice-audio/{name}", "voice": model_client.SUNBIRD_VOICES[lang][1]}
 
 
