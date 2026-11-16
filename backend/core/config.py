@@ -76,11 +76,33 @@ class Settings(BaseSettings):
     # any channel: the weather and field facts behind it are too old.
     draft_expiry_hours: int = 72
 
-    # Signs officer session cookies. Blank = a random key each start (see backend/main.py).
+    # Signs officer and farmer session cookies. Blank = a random key each start (see
+    # backend/main.py), so everyone signs in again after a restart. Set it on a host.
     session_secret: str = ""
-    # Shared demo password for the officer sign-in page (shown on that page, like the
-    # farmer demo phone numbers). Set your own on a public host.
-    officer_demo_password: str = "napak2026"
+
+    # Made-up Napak households, officers and readings (backend/db/seed.py). OFF by
+    # default: the app starts empty and officers register real farmers. Only the test
+    # suite and scripts/run_evals.py turn it on, each on its own throwaway database.
+    seed_demo_data: bool = False
+
+    # Where soil moisture comes from when a plot has no current reading:
+    # "open-meteo" = Open-Meteo's modelled soil moisture (3-9 cm) at the village's
+    # coordinates (real data, a model estimate, not a probe in the field);
+    # "sensor-only" = only readings already stored (tests and evals use this).
+    soil_source: str = "open-meteo"
+    open_meteo_geocoding_url: str = "https://geocoding-api.open-meteo.com/v1/search"
+
+    # Keep the agent's MCP tool servers running between agent runs (saves several
+    # seconds a run). Tests turn it off so each test starts its own servers.
+    keep_tool_servers_warm: bool = True
+    # Translate drafts and approved advice in a background thread (approval never
+    # waits for the translator). Tests turn it off to check the result right away.
+    translate_in_background: bool = True
+
+    # Wrong passwords/PINs on the web sign-in pages before that account is locked,
+    # and for how long (the USSD PIN has its own settings above).
+    web_login_max_attempts: int = 5
+    web_login_lock_minutes: int = 15
 
     @property
     def model_configured(self) -> bool:
