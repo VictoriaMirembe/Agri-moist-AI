@@ -1,0 +1,38 @@
+{# Full-screen layout for the farmer sign-in page. Same layout as frontend/officer/templates/auth_base.html, with farmer wording. #}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% block title %}Sign in{% endblock %} - AgriMoist AI</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@112..125,600..800&family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&display=swap">
+  <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body class="auth auth-farmer">
+  <div class="auth-shell">
+    <aside class="auth-side" aria-hidden="true">
+      <div class="auth-brand">
+        <span class="auth-brand-mark">A</span>
+        <span>AgriMoist <strong>AI</strong></span>
+      </div>
+      <div class="auth-side-copy">
+        <p class="auth-side-kicker">Farmer portal</p>
+        <p class="auth-side-title">Rain, soil and advice for your farm, checked by your extension officer.</p>
+      </div>
+      <div class="auth-gauge" aria-hidden="true">
+        <span></span><span></span><span></span><span></span><span></span><span></span><span></span>
+      </div>
+    </aside>
+    <main class="auth-main">
+      <div class="auth-brand auth-brand-phone">
+        <span class="auth-brand-mark">A</span>
+        <span>AgriMoist <strong>AI</strong></span>
+      </div>
+      {% block content %}{% endblock %}
+    </main>
+  </div>
+  {% block scripts %}{% endblock %}
+</body>
+</html>
