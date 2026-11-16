@@ -86,12 +86,15 @@ DRAFT_SYSTEM_PROMPT = (
     "copied exactly - a draft with any other number is blocked before review. "
     "Start with the rain and soil-moisture signal (recent rain, the forecast and soil "
     "wetness) and what it means for watering; only then cover pests and planting. "
-    "Soil sensor readings come from a simulated sensor; use only current_readings, and "
+    "Soil moisture readings are described by their source; use only current_readings, and "
     "never give a value for a reading listed as stale (out of date). Quote a sensor "
     "reading exactly as given, decimal included (write 11.2%, never 'about 11%'): a "
     "rounded figure matches no source and the draft is blocked. "
     "If heavy_rain_warning is present, follow it: do not tell farmers to water, "
     "irrigate or add water, even for dry plots - a draft that does is blocked. "
+    "If a crop's planting window has closed this year, say so and give a plain "
+    "instruction in these words: 'Do not plant <crop> now.' Then say when the next "
+    "planting window opens, in plain words. "
     "Never put internal ids or field names in the advice or the why text - no "
     "'observation:12', 'plant_to', 'planting_window_closed_this_year', "
     "'pest_reports_list' or source references; the officer already sees the sources. "
@@ -217,6 +220,31 @@ def _numbers(text: str) -> list[str]:
     return sorted(re.findall(r"\d+(?:\.\d+)?", text))
 
 
+# Numbers and plot codes are swapped for placeholders like [A] before translating and
+# put back after. Sunbird otherwise often writes a number out in Karamojong words, and
+# the number check then has to reject the whole translation; tried on 2026-11-17, a
+# placeholder survived 3 of 3 times where the plain "7" survived 1 of 3.
+_PROTECT = re.compile(r"\b[A-Z]-\d+\b|\d+(?:\.\d+)?(?:\s?(?:mm|%))?")
+
+
+def _protect_numbers(text: str) -> tuple[str, dict[str, str]]:
+    slots: dict[str, str] = {}
+
+    def swap(match: re.Match) -> str:
+        n = len(slots)
+        key = f"[{chr(65 + n % 26)}{n // 26 or ''}]"
+        slots[key] = match.group(0)
+        return key
+
+    return _PROTECT.sub(swap, text), slots
+
+
+def _restore_numbers(text: str, slots: dict[str, str]) -> str:
+    for key, value in slots.items():
+        text = text.replace(key, value)
+    return text
+
+
 def translate_text(text: str, target_language: str) -> dict[str, Any]:
     """Translate approved advice for farmers: Sunbird AI's sunflower-9b first (it is
     trained on Ugandan languages, Karamojong included), then the Groq model as a
@@ -230,10 +258,15 @@ def translate_text(text: str, target_language: str) -> dict[str, Any]:
     tokens = dict(ZERO_TOKENS)  # and its tokens still count towards this translation
     # Sunbird's output varies between calls (it sometimes writes a number out in
     # words), so it gets a second try before the backup.
+    protected, slots = _protect_numbers(text)
     for translate in (_translate_with_sunbird, _translate_with_sunbird, _translate_with_groq):
-        result = translate(text, target_language)
+        result = translate(protected, target_language)
         if result is None:
             continue  # that service has no key configured
+        if result["translated_text"]:
+            # Put the exact numbers back. A placeholder the translator dropped or
+            # repeated leaves the numbers different, and the check below rejects it.
+            result = {**result, "translated_text": _restore_numbers(result["translated_text"], slots)}
         if result["translated_text"] and _numbers(result["translated_text"]) != _numbers(text):
             result = {
                 **result,
