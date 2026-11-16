@@ -273,26 +273,22 @@ async def test_the_agent_records_the_drafting_models_tokens_on_its_own_run(test_
     assert usage["model_cost"] == 0.0
 
 
-def test_translation_tokens_are_in_the_approval_log_entry(client, monkeypatch):
-    from backend.approvals import router as approvals_router
-
-    monkeypatch.setattr(
-        approvals_router,
-        "translate_text",
-        lambda text, lang: {
+def test_translation_tokens_are_in_the_translation_log_entry(client, fake_translator):
+    fake_translator(
+        {
             "translated_text": "(kdj)",
             "model": "sunbird/sunflower-9b",
             "cost": 0.000042,
             "prompt_tokens": 18,
             "completion_tokens": 24,
             "total_tokens": 42,
-        },
+        }
     )
     pending = client.get("/api/approvals", params={"status": "pending_review"}).json()[0]
     approved = client.post(f"/api/approvals/{pending['id']}/approve", json={"officer_id": 1})
     assert approved.status_code == 200, approved.text
 
-    row = next(r for r in client.get("/api/logs").json() if r["tool"] == "approve_advice")
+    row = next(r for r in client.get("/api/logs").json() if r["tool"] == "translate_advice")
     outputs = json.loads(row["outputs"])
     assert outputs["translation_model"] == "sunbird/sunflower-9b"
     assert outputs["translation_cost"] == 0.000042  # already logged before this change
@@ -302,17 +298,11 @@ def test_translation_tokens_are_in_the_approval_log_entry(client, monkeypatch):
     assert "translation_total_tokens" in client.get("/log").text  # visible in the Details fold
 
 
-def test_an_approval_whose_translator_reports_no_tokens_logs_zeros(client, monkeypatch):
+def test_an_approval_whose_translator_reports_no_tokens_logs_zeros(client, fake_translator):
     """A translator that sends no usage must log 0, not crash."""
-    from backend.approvals import router as approvals_router
-
-    monkeypatch.setattr(
-        approvals_router,
-        "translate_text",
-        lambda text, lang: {"translated_text": "(kdj)", "model": "sunbird/sunflower-9b", "cost": 0.0004},
-    )
+    fake_translator({"translated_text": "(kdj)", "model": "sunbird/sunflower-9b", "cost": 0.0004})
     pending = client.get("/api/approvals", params={"status": "pending_review"}).json()[0]
     assert client.post(f"/api/approvals/{pending['id']}/approve", json={"officer_id": 1}).status_code == 200
 
-    row = next(r for r in client.get("/api/logs").json() if r["tool"] == "approve_advice")
+    row = next(r for r in client.get("/api/logs").json() if r["tool"] == "translate_advice")
     assert json.loads(row["outputs"])["translation_total_tokens"] == 0
