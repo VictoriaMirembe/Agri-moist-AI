@@ -34,6 +34,7 @@ from backend.db.models import (
     Village,
     VisitFlag,
 )
+from backend.logging.tool_log import model_usage_by_run
 from backend.officer.auth import (
     password_ok,
     require_officer,
@@ -501,11 +502,19 @@ def log_page(request: Request, run_id: int | None = None):
             query = query.where(ToolLog.run_id == run_id)
         rows = session.exec(query.limit(300)).all()
         runs = session.exec(select(Run).order_by(Run.started_at.desc()).limit(50)).all()
+        # Tokens and model cost per run, read back from each run's draft_advice log row.
+        run_usage = model_usage_by_run(session, [r.id for r in runs if r.id])
         officer_names = _officer_names(session)
     return templates.TemplateResponse(
         request,
         "log.html",
-        {"rows": rows, "runs": runs, "selected_run_id": run_id, "officer_names": officer_names},
+        {
+            "rows": rows,
+            "runs": runs,
+            "run_usage": run_usage,
+            "selected_run_id": run_id,
+            "officer_names": officer_names,
+        },
     )
 
 

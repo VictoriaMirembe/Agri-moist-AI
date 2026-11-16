@@ -9,6 +9,7 @@
 # never connects to. Only the approval executor reaches it, after an officer approves.
 from __future__ import annotations
 
+import json
 import re
 from datetime import date, datetime, timedelta, timezone
 from typing import Any, Awaitable, Callable, TypedDict
@@ -20,7 +21,7 @@ from backend.agent import events
 from backend.agent.mcp_client import ToolClient
 from backend.agent.model_client import draft_advice_text
 from backend.core.database import session_scope
-from backend.db.models import District, Household, Run, Village, VisitFlag
+from backend.db.models import District, Household, Run, ToolLog, Village, VisitFlag
 from backend.logging.tool_log import run_logged
 from backend.core.config import settings
 from backend.tools.agrimoist_tools import HEAVY_RAIN_FACT, is_heavy_rain, soil_reading_is_stale, weather_fact
@@ -117,6 +118,48 @@ async def _logged_now(client: ToolClient, run_id: int, timezone_name: str = "Afr
     if error is not None:
         raise error
     return result
+
+
+# Token counts and cost of the drafting model call. Logging only: they are added to
+# this run's own draft_advice log row, which is written moments earlier by the MCP
+# tool, so the run page, the activity log and GET /api/logs can show them without a
+# new table, column or log entry. Nothing here can change a draft or a decision.
+MODEL_USAGE_FIELDS = ("model", "model_cost", "prompt_tokens", "completion_tokens", "total_tokens")
+
+
+def model_usage_fields(drafted: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "model": drafted.get("model"),
+        "model_cost": drafted.get("cost", 0.0),
+        "prompt_tokens": int(drafted.get("prompt_tokens") or 0),
+        "completion_tokens": int(drafted.get("completion_tokens") or 0),
+        "total_tokens": int(drafted.get("total_tokens") or 0),
+    }
+
+
+def _record_model_usage(run_id: int, drafted: dict[str, Any]) -> None:
+    """Add the drafting model's name, tokens and cost to this run's draft_advice log
+    row. Never raises: a logging problem must not fail a run that has a draft."""
+    try:
+        with session_scope() as session:
+            row = session.exec(
+                select(ToolLog)
+                .where(ToolLog.run_id == run_id, ToolLog.tool == "draft_advice")
+                .order_by(ToolLog.id.desc())
+            ).first()
+            if row is None:
+                return
+            try:
+                outputs = json.loads(row.outputs) if row.outputs else {}
+            except ValueError:
+                return
+            if not isinstance(outputs, dict):
+                return
+            row.outputs = json.dumps({**outputs, **model_usage_fields(drafted)}, default=str)
+            session.add(row)
+            session.commit()
+    except Exception:  # noqa: BLE001 - the draft matters, this line of the log does not
+        pass
 
 
 async def plan_node(state: AgentState) -> dict:
@@ -407,7 +450,15 @@ async def draft_or_flag_node(state: AgentState) -> dict:
 
     await emit_fn(run_id, {"type": "model_call"})
     drafted = draft_advice_text(facts)
-    await emit_fn(run_id, {"type": "model_result", "model": drafted.get("model"), "advice_preview": drafted["advice"][:160]})
+    await emit_fn(
+        run_id,
+        {
+            "type": "model_result",
+            "model": drafted.get("model"),
+            "advice_preview": drafted["advice"][:160],
+            **model_usage_fields(drafted),
+        },
+    )
 
     result, _err = await _call_with_retry(
         client,
@@ -420,6 +471,7 @@ async def draft_or_flag_node(state: AgentState) -> dict:
         sources=sources,
         language="English",
     )
+    _record_model_usage(run_id, drafted)
 
     outcome = "failed"
     advice_id = None

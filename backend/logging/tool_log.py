@@ -5,9 +5,50 @@ from __future__ import annotations
 import json
 from typing import Any, Callable
 
-from sqlmodel import Session
+from sqlmodel import Session, select
 
 from backend.db.models import ToolLog
+
+# The drafting model's name, token counts and cost live as extra fields on each run's
+# draft_advice log row (written by backend.agent.graph._record_model_usage). These
+# helpers read them back for the run page, the activity log and GET /api/runs.
+ZERO_MODEL_USAGE: dict[str, Any] = {
+    "model": None,
+    "model_cost": 0.0,
+    "prompt_tokens": 0,
+    "completion_tokens": 0,
+    "total_tokens": 0,
+}
+
+
+def model_usage_by_run(session: Session, run_ids: list[int]) -> dict[int, dict]:
+    """Model name, tokens and cost for each of these runs, keyed by run id. A run
+    whose log row carries no usage (an older run, or one that never drafted) is left
+    out rather than reported as zero tokens it never spent."""
+    if not run_ids:
+        return {}
+    rows = session.exec(
+        select(ToolLog)
+        .where(ToolLog.tool == "draft_advice", ToolLog.run_id.in_(run_ids))
+        .order_by(ToolLog.id)
+    ).all()
+    usage: dict[int, dict] = {}
+    for row in rows:
+        try:
+            outputs = json.loads(row.outputs) if row.outputs else {}
+        except ValueError:
+            continue
+        if not isinstance(outputs, dict) or "total_tokens" not in outputs:
+            continue
+        usage[row.run_id] = {name: outputs.get(name, default) for name, default in ZERO_MODEL_USAGE.items()}
+    return usage
+
+
+def model_usage_for_run(session: Session, run_id: int | None) -> dict:
+    """One run's model usage, or zeros when the run has none recorded."""
+    if run_id is None:
+        return dict(ZERO_MODEL_USAGE)
+    return model_usage_by_run(session, [run_id]).get(run_id, dict(ZERO_MODEL_USAGE))
 
 
 def _json(value: Any) -> str:

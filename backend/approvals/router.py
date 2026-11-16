@@ -266,7 +266,14 @@ def apply_decision(
         inputs["reason"] = reason
     if translation is not None:
         result["translation_model"] = translation["model"]
-        outputs = {**result, "translation_cost": translation.get("cost", 0.0)}
+        # Logging only: the translator's own token counts next to the cost already logged.
+        outputs = {
+            **result,
+            "translation_cost": translation.get("cost", 0.0),
+            "translation_prompt_tokens": int(translation.get("prompt_tokens") or 0),
+            "translation_completion_tokens": int(translation.get("completion_tokens") or 0),
+            "translation_total_tokens": int(translation.get("total_tokens") or 0),
+        }
     if proposal is not None:
         inputs["irrigation_proposal_id"] = proposal.id
     _log_decision(session, advice, officer, decision, inputs, outputs, run_id=proposal.run_id if proposal else None)
