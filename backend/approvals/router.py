@@ -24,7 +24,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, field_validator
 from sqlmodel import select, update
 
-from backend.agent.model_client import translate_text
+from backend.approvals import translation_jobs
 from backend.approvals.irrigation_executor import execute_approved_proposal, proposal_for
 from backend.core.config import settings
 from backend.core.database import session_scope
@@ -230,11 +230,13 @@ def apply_decision(
     if proposal is not None and decision == "approve":
         values["final_text"] = advice.draft_text  # an instruction to the valve: not translated
     elif decision != "reject":
-        # Translate the final, approved text for farmers. Any translation failure
-        # falls back to showing the English text - it never blocks the approval.
+        # The farmer's translation never holds up the approval: an unchanged draft
+        # uses the translation made in the background when it was drafted; otherwise
+        # the English is shown until the background translation is stored
+        # (backend/approvals/translation_jobs.py). Either way it never blocks.
         values["final_text"] = final_text if decision == "edit_and_approve" else advice.draft_text
-        translation = translate_text(values["final_text"] or "", settings.farmer_language)
-        values["translated_text"] = translation["translated_text"]
+        translation = translation_jobs.stored_translation(session, advice.id, values["final_text"] or "")
+        values["translated_text"] = translation["translated_text"] if translation else None
 
     claimed = session.exec(
         update(Advice)
@@ -264,8 +266,16 @@ def apply_decision(
         inputs["final_text"] = final_text
     if decision == "reject":
         inputs["reason"] = reason
+    if translation is None and decision != "reject" and proposal is None and values.get("final_text"):
+        if translation_jobs.translator_available():
+            translation_jobs.translate_after_approval(advice.id, values["final_text"])
+            result["translation_model"] = "pending (translating in the background; English shown until then)"
+        else:
+            result["translation_model"] = "none (no translator key configured; showing English)"
     if translation is not None:
         result["translation_model"] = translation["model"]
+        if decision != "reject":
+            translation_jobs.prepare_voice_after_approval(advice.id)
         # Logging only: the translator's own token counts next to the cost already logged.
         outputs = {
             **result,
