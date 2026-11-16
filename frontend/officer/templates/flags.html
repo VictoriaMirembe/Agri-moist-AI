@@ -1,4 +1,4 @@
-{# Visits needed: groups that need an officer visit, asked for by farmers or by the AI assistant (GET /api/flags); an officer marks each one as visited, recorded under the "Acting as" officer. #}
+{# Visits needed: groups that need an officer visit, asked for by farmers or by the AI assistant (GET /api/flags); an officer marks each one as visited, recorded under the signed-in officer. #}
 {% extends "base.html" %}
 {% block title %}Visits needed{% endblock %}
 {% block content %}
@@ -8,20 +8,11 @@
     <h1>Visits needed</h1>
     <p class="o-lead">Groups that asked for a visit, or that the AI assistant sent for a visit instead of drafting advice.</p>
   </div>
-  <div class="o-acting">
-    <label for="officer">Acting as</label>
-    <select id="officer">
-      {% for o in officers %}
-      <option value="{{ o.id }}" {% if o.id == request.session.get("officer_id") %}selected{% endif %}>{{ o.name }}</option>
-      {% endfor %}
-    </select>
-  </div>
 </div>
 
 <div id="list" class="muted">Loading...</div>
 
 <script>
-const officerSelect = document.getElementById("officer");
 window.GROUP_VILLAGES = {{ group_villages | tojson }};
 
 function renderFlag(f) {
@@ -41,7 +32,7 @@ async function load() {
 
 function markVisited(id) {
   const card = document.querySelector(`[data-id="${id}"]`);
-  return cardAction(card, () => postJSON(`/api/flags/${id}/visited`, { officer_id: parseInt(officerSelect.value, 10) }), load);
+  return cardAction(card, () => postJSON(`/api/flags/${id}/visited`, {}), load);
 }
 
 load();
