@@ -1,38 +1,23 @@
-{# Officer sign-in: choose your name and give the office password. Every officer screen and officer API needs this signed session. The demo login box shows the password (OFFICER_DEMO_PASSWORD), like the demo phone numbers on the farmer sign-in page. #}
-{% extends "base.html" %}
+{# Officer sign-in: the officer's own phone number and password (OfficerAccount). Every officer screen and officer API needs this signed session. #}
+{% extends "auth_base.html" %}
 {% block title %}Officer sign in{% endblock %}
 {% block content %}
-<section class="o-login">
-  <h1>Sign in to the extension office</h1>
-  <p class="o-lead">Choose your name to review AI advice drafts, farmer messages and visit requests.</p>
+<section class="auth-card" aria-labelledby="auth-heading">
+  <p class="auth-eyebrow">Officer sign in</p>
+  <h1 id="auth-heading">Welcome back</h1>
+  <p class="auth-lead">Sign in to review advice drafts, farmer messages and visit requests.</p>
 
-  <form method="POST" action="/officer/login" id="officer-login-form">
+  <form method="POST" action="/officer/login" class="auth-form" novalidate>
     <input type="hidden" name="next" value="{{ next }}">
-    <label for="officer_id">Officer</label>
-    <select id="officer_id" name="officer_id" required>
-      {% for o in officers %}
-      <option value="{{ o.id }}" {% if o.id == selected_id %}selected{% endif %}>{{ o.name }} ({{ o.role }})</option>
-      {% endfor %}
-    </select>
+    <label for="phone">Phone number</label>
+    <input id="phone" name="phone" type="tel" inputmode="tel" autocomplete="username" placeholder="07XX XXX XXX" value="{{ phone or '' }}" required autofocus>
     <label for="password">Password</label>
     <input id="password" name="password" type="password" autocomplete="current-password" required>
-    {% if error %}<p class="o-login-error" role="alert">{{ error }}</p>{% endif %}
-    <button type="submit" class="btn o-wide">Sign in as this officer</button>
+    {% if error %}<p class="auth-error" role="alert">{{ error }}</p>{% endif %}
+    <button type="submit" class="auth-button">Sign in</button>
   </form>
 
-  <div class="o-demo-login">
-    <p><strong>Demo login</strong> · any officer, password <code>{{ demo_password }}</code></p>
-    <button type="button" class="btn secondary" id="use-demo-login">Sign in with the demo login</button>
-  </div>
-
-  <p class="o-note">Officer screens need a signed-in session on the server. Every approval is recorded under the name you choose here.</p>
+  <p class="auth-help">Forgot your password? Ask your office admin to reset it on the Team page.</p>
+  <p class="auth-switch">Are you a farmer? <a href="/farmer/login">Farmer sign in</a></p>
 </section>
-{% endblock %}
-{% block scripts %}
-<script>
-document.getElementById("use-demo-login").addEventListener("click", () => {
-  document.getElementById("password").value = {{ demo_password | tojson }};
-  document.getElementById("officer-login-form").submit();
-});
-</script>
 {% endblock %}
