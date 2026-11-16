@@ -212,10 +212,6 @@ def _month_day_to_date(month_day: str, year: int) -> date:
 _WEATHER_CACHE: dict[tuple[float, float], tuple[float, dict[str, Any]]] = {}
 _WEATHER_CACHE_TTL_SECONDS = 900  # 15 minutes cache
 
-_KARAMOJA_STATION_DEFAULTS: dict[tuple[float, float], tuple[float, float]] = {
-    (2.3833, 34.3333): (39.3, 32.0),  # Lokopo
-    (2.5333, 34.35): (16.4, 18.1),    # Iriiri
-}
 
 
 def get_weather(*, latitude: float, longitude: float) -> dict[str, Any]:
@@ -273,20 +269,10 @@ def get_weather(*, latitude: float, longitude: float) -> dict[str, Any]:
         _WEATHER_CACHE[key] = (now, result)
         return result
     except httpx.HTTPStatusError as exc:
-        # Rate limit (429) or temporary server error (503): serve cached entry or station baseline
-        if exc.response.status_code == 429:
-            if key in _WEATHER_CACHE:
-                return _WEATHER_CACHE[key][1]
-            defaults = _KARAMOJA_STATION_DEFAULTS.get(key, (25.0, 22.0))
-            fallback_res = {
-                "latitude": latitude,
-                "longitude": longitude,
-                "past_7_days_rain_mm": defaults[0],
-                "next_7_days_rain_mm": defaults[1],
-                "source_ref": f"{settings.open_meteo_base_url} (station cached fallback: Open-Meteo 429 rate limit reached)",
-            }
-            _WEATHER_CACHE[key] = (now, fallback_res)
-            return fallback_res
+        # Rate limit (429) or a server error: the last real reading for this place if
+        # there is one, otherwise a gap. Never made-up figures.
+        if key in _WEATHER_CACHE:
+            return _WEATHER_CACHE[key][1]
         raise ToolError(f"Weather service request failed: {exc}", source=settings.open_meteo_base_url) from exc
     except httpx.HTTPError as exc:
         if key in _WEATHER_CACHE:
@@ -336,7 +322,49 @@ def get_pest_reports(session: Session, *, group_id: int, days: int = 21) -> dict
 # get_soil_moisture - latest SIMULATED soil-moisture reading for each plot in a group
 # ---------------------------------------------------------------------------
 SOIL_SENSOR_SOURCE = "simulated sensor"
+SOIL_MODEL_SOURCE = "Open-Meteo soil model, 9-27 cm"
 SOIL_STALE_AFTER_HOURS = 24
+# A modelled reading is refreshed when the stored one is older than this.
+SOIL_MODEL_REFRESH_HOURS = 3
+
+
+def fetch_modelled_soil_moisture(latitude: float, longitude: float) -> tuple[float, str]:
+    """(volumetric water %, source URL): Open-Meteo's current modelled soil moisture
+    in the 9-27 cm root zone at these coordinates. Real data, but a weather-model
+    estimate for a ~10 km grid cell, not a probe in the farmer's field."""
+    params = {"latitude": latitude, "longitude": longitude, "current": "soil_moisture_9_to_27cm", "timezone": "Africa/Kampala"}
+    try:
+        response = httpx.get(settings.open_meteo_base_url, params=params, timeout=10.0)
+        response.raise_for_status()
+        value = (response.json().get("current") or {}).get("soil_moisture_9_to_27cm")
+    except httpx.HTTPError as exc:
+        raise ToolError(f"Soil moisture service request failed: {exc}", source=settings.open_meteo_base_url) from exc
+    if not isinstance(value, (int, float)):
+        raise ToolError("Soil moisture service returned no value for this place", source=settings.open_meteo_base_url)
+    return round(float(value) * 100, 1), str(response.url)
+
+
+def _refresh_modelled_readings(session: Session, households: list[Household], plots: list[Plot]) -> None:
+    """Store a fresh modelled reading for every plot whose newest reading is missing or
+    older than SOIL_MODEL_REFRESH_HOURS. One request per village."""
+    from backend.db.models import Village
+
+    now = datetime.now(timezone.utc)
+    village_by_household = {h.id: h.village_id for h in households}
+    needs: dict[int, list[Plot]] = {}
+    for plot in plots:
+        newest = session.exec(
+            select(SoilReading).where(SoilReading.plot_id == plot.id).order_by(SoilReading.read_at.desc())
+        ).first()
+        if newest is None or now - _as_utc(newest.read_at) > timedelta(hours=SOIL_MODEL_REFRESH_HOURS):
+            needs.setdefault(village_by_household[plot.household_id], []).append(plot)
+    for village_id, village_plots in needs.items():
+        village = session.get(Village, village_id)
+        pct, url = fetch_modelled_soil_moisture(village.latitude, village.longitude)
+        for plot in village_plots:
+            session.add(SoilReading(plot_id=plot.id, moisture_pct=pct, read_at=now, source=SOIL_MODEL_SOURCE, demo=False))
+    if needs:
+        session.commit()
 
 
 def _as_utc(dt: datetime) -> datetime:
@@ -360,6 +388,8 @@ def get_soil_moisture(session: Session, *, group_id: int) -> dict[str, Any]:
     code_by_household = {h.id: h.code for h in households}
     plots = session.exec(select(Plot).where(Plot.household_id.in_(code_by_household.keys()))).all() if households else []
     code_by_plot = {p.id: code_by_household[p.household_id] for p in plots}
+    if settings.soil_source == "open-meteo" and plots:
+        _refresh_modelled_readings(session, households, plots)
 
     latest: dict[int, SoilReading] = {}
     if plots:
@@ -389,7 +419,7 @@ def get_soil_moisture(session: Session, *, group_id: int) -> dict[str, Any]:
         "readings": readings,
         "plots_without_reading": sorted(code_by_plot[p] for p in code_by_plot if p not in latest),
         "stale_after_hours": SOIL_STALE_AFTER_HOURS,
-        "source": SOIL_SENSOR_SOURCE,
+        "source": SOIL_MODEL_SOURCE if settings.soil_source == "open-meteo" else SOIL_SENSOR_SOURCE,
     }
 
 
@@ -417,7 +447,43 @@ def unsourced_numbers(texts: list[str], sources: list[dict[str, str]]) -> list[s
         for n in _NUMBER.findall(_LIST_MARKER.sub(" ", text or "")):
             if float(n) not in sourced and n not in found:
                 found.append(n)
+        # A measurement written in words ("about eight millimetres of rain") is a
+        # number too. Only words next to a unit count, so "one of the plots" or
+        # "in two places" never block a draft.
+        for words, value in _worded_measurements(text or ""):
+            if value not in sourced and words not in found:
+                found.append(words)
     return found
+
+
+_UNITS_WORDS = {
+    "zero": 0, "one": 1, "two": 2, "three": 3, "four": 4, "five": 5, "six": 6, "seven": 7,
+    "eight": 8, "nine": 9, "ten": 10, "eleven": 11, "twelve": 12, "thirteen": 13,
+    "fourteen": 14, "fifteen": 15, "sixteen": 16, "seventeen": 17, "eighteen": 18, "nineteen": 19,
+}
+_TENS_WORDS = {
+    "twenty": 20, "thirty": 30, "forty": 40, "fifty": 50, "sixty": 60, "seventy": 70, "eighty": 80, "ninety": 90,
+}
+_MEASURE_UNITS = r"(?:mm|millimet(?:re|er)s?|cm|centimet(?:re|er)s?|per\s*cent|percent|%|acres?|hectares?|kg|kilo(?:gram)?s?|litres?|liters?|days?|weeks?|minutes?|hours?)"
+_WORDED = re.compile(
+    rf"\b((?:{'|'.join(_TENS_WORDS)})(?:[\s-](?:{'|'.join(k for k in _UNITS_WORDS if _UNITS_WORDS[k] < 10)}))?"
+    rf"|{'|'.join(sorted(_UNITS_WORDS, key=len, reverse=True))})"
+    rf"(?:\s+point\s+((?:{'|'.join(k for k in _UNITS_WORDS if _UNITS_WORDS[k] < 10)})))?"
+    rf"\s+{_MEASURE_UNITS}(?![a-z])",
+    re.IGNORECASE,
+)
+
+
+def _worded_measurements(text: str) -> list[tuple[str, float]]:
+    """("eight millimetres", 8.0) for each number written in words before a unit."""
+    out = []
+    for match in _WORDED.finditer(text):
+        parts = re.split(r"[\s-]+", match.group(1).lower())
+        value = float(sum(_TENS_WORDS.get(p, 0) + _UNITS_WORDS.get(p, 0) for p in parts))
+        if match.group(2):
+            value += _UNITS_WORDS[match.group(2).lower()] / 10
+        out.append((match.group(0), value))
+    return out
 
 
 # ---------------------------------------------------------------------------
@@ -617,6 +683,7 @@ def irrigation_check(session: Session, *, group_id: int, plot: str) -> dict[str,
         facts.update(
             plot_id=reading["plot_id"], moisture_pct=reading["moisture_pct"],
             soil_reading_ref=reading["source_ref"], soil_read_at=reading["read_at"],
+            soil_source=reading["source"],
         )
         if reading["moisture_pct"] >= settings.irrigation_dry_threshold_pct:
             reasons.append(
@@ -687,7 +754,7 @@ def propose_irrigation(
         status="pending_review",
         draft_text=f"IRRIGATE {plot} {capped} min (simulated valve)",
         why_text=(
-            f"Soil at {plot} is {pct:g}% (simulated sensor, current reading), below "
+            f"Soil at {plot} is {pct:g}% ({check['soil_source']}, current reading), below "
             f"{settings.irrigation_dry_threshold_pct:g}%. Forecast rain is {forecast:g} mm in "
             f"the next 7 days, below {settings.heavy_rain_threshold_mm:g} mm."
         ),
@@ -697,7 +764,7 @@ def propose_irrigation(
     session.commit()
     session.refresh(advice)
     session.add(AdviceSource(
-        advice_id=advice.id, fact=f"Soil moisture at {plot}: {pct}% (simulated sensor, current reading)",
+        advice_id=advice.id, fact=f"Soil moisture at {plot}: {pct}% ({check['soil_source']}, current reading)",
         source_type="soil_sensor", source_ref=check["soil_reading_ref"],
     ))
     session.add(AdviceSource(
