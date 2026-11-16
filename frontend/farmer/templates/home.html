@@ -60,8 +60,7 @@
         <a href="#" data-view-link="report">Report issue</a>
         <a href="#" data-view-link="visit">Ask for a visit</a>
         <a href="#" data-view-link="dashboard">My farm</a>
-        <a href="/farmer/ussd" data-ussd-link>Basic phone (USSD)</a>
-        <a class="farmer-signout" href="#" data-view-link="signin">Sign out</a>
+        <a class="farmer-signout" href="/farmer/logout">Sign out</a>
       </nav>
 
       <!-- Audio player: shown in the page only while the farmer has asked for reading -->
@@ -224,7 +223,6 @@
               <h2 id="ussd-heading">Use a basic phone</h2>
               <p class="farmer-panel-description">Dial this code on any phone to read advice, report a problem or ask for a visit.</p>
               <p class="farmer-ussd-code" id="ussd-code">*384*5951#</p>
-              <a class="farmer-link-button" href="/farmer/ussd" data-ussd-link>Try the USSD menu</a>
             </section>
             <section class="farmer-panel farmer-profile-card" aria-labelledby="profile-heading">
               <p class="farmer-eyebrow">Your details</p>
@@ -341,28 +339,14 @@
         <p id="followup-none" class="farmer-data-note" hidden>You have no approved advice to answer about yet.</p>
       </section>
 
-      <section id="signin-view" class="farmer-signin-card" aria-labelledby="signin-heading" hidden>
-        <a class="farmer-brand farmer-signin-brand" href="#" data-view-link="dashboard">
-          <span class="farmer-brand-mark" aria-hidden="true">A</span>
-          <span>AgriMoist <strong>AI</strong></span>
-        </a>
-        <p class="farmer-eyebrow">Farmer portal</p>
-        <h1 id="signin-heading">Sign in to your farm</h1>
-        <p class="farmer-panel-description">Enter the phone number registered with your extension officer.</p>
-        <form id="sign-in-form" class="farmer-form">
-          <label for="phone">Phone number</label>
-          <input id="phone" type="tel" inputmode="tel" autocomplete="tel" placeholder="+256700000001" required>
-          <p id="signin-error" class="farmer-form-error alert alert-danger" role="alert" hidden></p>
-          <button class="farmer-button farmer-button-primary" type="submit">Continue</button>
-        </form>
-      </section>
     </div>
   </main>
 
 <script>
 const params = new URLSearchParams(window.location.search);
 const isFilePreview = window.location.protocol === "file:";
-let farmerPhone = params.get("phone") || "";
+// The signed-in farmer's phone, from the server session (never from the address bar).
+let farmerPhone = {{ phone | tojson }} || (isFilePreview ? params.get("phone") || "" : "");
 let currentAdviceId = null;
 let activeView = params.get("view") || "dashboard";
 
@@ -373,7 +357,6 @@ if (!isFilePreview) {
     "/farmer/report": "report",
     "/farmer/visit": "visit",
     "/farmer/followup": "followup",
-    "/farmer": "signin",
   };
   activeView = routeViews[window.location.pathname] || activeView;
 }
@@ -389,19 +372,12 @@ document.querySelectorAll("[data-view-link]").forEach((link) => {
   if (isFilePreview) {
     link.href = "?view=" + encodeURIComponent(view) +
       (farmerPhone ? "&phone=" + encodeURIComponent(farmerPhone) : "");
-  } else if (view === "signin") {
-    link.href = "/farmer";
   } else {
-    const route = view === "dashboard" ? "/farmer/home" : "/farmer/" + view;
-    link.href = route + (farmerPhone ? "?phone=" + encodeURIComponent(farmerPhone) : "");
+    link.href = view === "dashboard" ? "/farmer/home" : "/farmer/" + view;
   }
 });
 
-document.querySelectorAll("[data-ussd-link]").forEach((link) => {
-  link.href = "/farmer/ussd" + (farmerPhone ? "?phone=" + encodeURIComponent(farmerPhone) : "");
-});
-
-["dashboard", "advice", "report", "visit", "followup", "signin"].forEach((view) => {
+["dashboard", "advice", "report", "visit", "followup"].forEach((view) => {
   document.getElementById(view + "-view").hidden = view !== activeView;
 });
 
@@ -733,25 +709,6 @@ connectSubmit("followup-form", "followup-error", "followup-done", "/api/farmer/f
   helped: document.getElementById("helped").value || null,
 }));
 
-const signInForm = document.getElementById("sign-in-form");
-signInForm.addEventListener("submit", async (event) => {
-  event.preventDefault();
-  const error = document.getElementById("signin-error");
-  if (isFilePreview) {
-    error.textContent = "Sign-in requires the running AgriMoist AI app. Open the portal there to continue.";
-    error.hidden = false;
-    return;
-  }
-  const phone = document.getElementById("phone").value.trim();
-  try {
-    await getJSON("/api/farmer/profile?phone=" + encodeURIComponent(phone));
-    window.location.href = "/farmer/home?phone=" + encodeURIComponent(phone);
-  } catch (failure) {
-    error.textContent = failure.message || "Could not sign in. Check your phone number and try again.";
-    error.hidden = false;
-  }
-});
-
 // Keep "My reports and requests" and the advice card in step with the officer
 // screens: a report checked, a visit done or new advice approved shows up without
 // a reload. Uses /api/farmer/updates, which is not counted as reading the advice.
@@ -873,6 +830,7 @@ if (voiceLangSelect) {
     // Changing language never starts reading on its own; the farmer presses Listen.
     if (isReading) stopVoice();
     updateVoiceUI();
+    warmVoice();  // start making this language's audio now, before Listen is pressed
   });
 }
 
@@ -1069,35 +1027,62 @@ function splitForSpeech(sentences) {
   return pieces;
 }
 
+// Sunbird needs 15-70 s to make one piece of speech, far too long to wait for after
+// Listen is pressed. So the server starts making every piece the moment the page
+// asks for its script (page load, language change, and right after an officer
+// approves advice), several at once. When Listen reaches a piece, the page waits
+// only a few seconds for its audio; if it is still being made, that piece is read
+// with the phone's own voice and the reading carries on. Next time it is ready.
+const FIRST_PIECE_WAIT_S = 10;
+const NEXT_PIECE_WAIT_S = 6;
+const READING_BUDGET_MS = 45000;  // after this, never wait: finish within a minute
+let readingStartedAt = 0;
+
 function prefetchAhead(index) {
-  for (let i = index; i < index + 3; i++) fetchSentenceAudio(i);
+  // Make sure the next pieces are being made (returns at once; nothing is cached
+  // here, so a piece still "pending" is asked for again when it is reached).
+  for (let i = index; i < Math.min(index + 3, voiceSentences.length); i++) {
+    if (!(i in sentenceAudio)) {
+      postJSON("/api/farmer/voice-audio", { text: voiceSentences[i].text, lang: currentVoiceLang, wait: 0 }).catch(() => {});
+    }
+  }
 }
 
-// Warm-up: when the page opens, quietly prepare the first three pieces (nothing
-// plays), so pressing Listen usually starts at once and keeps going.
+// Warm-up: asking for the script makes the server start every piece's audio.
 async function warmVoice() {
   if (isFilePreview || !sunbirdAvailable) return;
   try {
-    const data = await getJSON(
+    await getJSON(
       "/api/farmer/voice-script?phone=" + encodeURIComponent(farmerPhone) +
       "&lang=" + encodeURIComponent(currentVoiceLang) +
       "&view=" + encodeURIComponent(activeView)
     );
-    for (const piece of splitForSpeech(data.sentences).slice(0, 3)) {
-      postJSON("/api/farmer/voice-audio", { text: piece.text, lang: currentVoiceLang }).catch(() => {});
-    }
   } catch (_) {
     // warm-up is best effort only
   }
 }
 
+function pieceWaitSeconds(index) {
+  const used = Date.now() - readingStartedAt;
+  if (used > READING_BUDGET_MS) return 0;
+  const wait = index === 0 ? FIRST_PIECE_WAIT_S : NEXT_PIECE_WAIT_S;
+  return Math.max(0, Math.min(wait, (READING_BUDGET_MS - used) / 1000));
+}
+
+// Resolves to an audio URL, "pending" (still being made: use the phone's voice for
+// this piece), or null (Sunbird unavailable: phone's voice from now on).
 function fetchSentenceAudio(index) {
   if (!sunbirdAvailable || index >= voiceSentences.length) return Promise.resolve(null);
   if (!(index in sentenceAudio)) {
     sentenceAudio[index] = postJSON("/api/farmer/voice-audio", {
       text: voiceSentences[index].text,
       lang: currentVoiceLang,
-    }).then((d) => d.audio_url || null).catch(() => null);
+      wait: pieceWaitSeconds(index),
+    }).then((d) => {
+      if (d.audio_url) return d.audio_url;
+      delete sentenceAudio[index];
+      return d.pending ? "pending" : null;
+    }).catch(() => null);
   }
   return sentenceAudio[index];
 }
@@ -1133,6 +1118,12 @@ async function speakNextSentence() {
     const url = await fetchSentenceAudio(index);
     if (token !== playToken || !isReading) return;
     if (playerStatus && !isPaused) playerStatus.textContent = (LANG_CONFIG[currentVoiceLang] || LANG_CONFIG.en).playingStatus;
+    if (url === "pending") {
+      // Not made yet: read this piece with the phone's voice and keep going.
+      prefetchAhead(index + 1);
+      speakWithBrowser(currentItem, token);
+      return;
+    }
     if (url) {
       prefetchAhead(index + 1);
       voiceEngine = "sunbird";
@@ -1186,6 +1177,7 @@ async function startVoiceReading(section = null) {
   currentSentenceIndex = 0;
   sunbirdAvailable = !isFilePreview;
   sentenceAudio = {};
+  readingStartedAt = Date.now();
 
   // Some browsers (Safari) only let an audio element play if it first played
   // inside the click; the Sunbird audio arrives seconds later, so unlock it now.
@@ -1216,7 +1208,7 @@ async function startVoiceReading(section = null) {
     stopVoice();
     return;
   }
-  prefetchAhead(0);
+  prefetchAhead(1);
 
   speakNextSentence();
 }
