@@ -1934,3 +1934,105 @@ body.officer .alert.alert.alert-info { --alert-icon: var(--alert-icon-info); bac
   cursor: pointer;
 }
 .alert:has(.alert-close) { padding-right: 2.6rem; }
+
+/* ===========================================================================
+   Sign-in screens (officer and farmer). Full screen, outside both apps: a cobalt
+   side panel with the rain-gauge ticks, and the form on kaolin. Stacks on phones.
+   =========================================================================== */
+body.auth {
+  margin: 0;
+  min-height: 100vh;
+  background: var(--am-kaolin);
+  color: var(--am-ink);
+  font-family: var(--am-text);
+  font-size: 17px;
+}
+.auth-shell { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); min-height: 100vh; }
+.auth-side {
+  background: var(--am-cobalt-dark);
+  color: #fff;
+  padding: 40px 48px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 32px;
+}
+body.auth-farmer .auth-side { background: var(--am-millet); }
+.auth-brand { display: flex; align-items: center; gap: 10px; font-size: 1.15rem; }
+.auth-brand-mark {
+  display: inline-grid; place-items: center;
+  width: 36px; height: 36px; border-radius: 8px;
+  background: #fff; color: var(--am-cobalt-dark);
+  font-family: "Archivo", var(--am-text); font-weight: 800;
+}
+body.auth-farmer .auth-brand-mark { color: var(--am-millet); }
+.auth-side-kicker { margin: 0 0 12px; text-transform: uppercase; letter-spacing: .12em; font-size: .8rem; opacity: .8; }
+.auth-side-title {
+  margin: 0; max-width: 22ch;
+  font-family: "Archivo", var(--am-text); font-stretch: 112%; font-weight: 700;
+  font-size: clamp(1.6rem, 2.6vw, 2.3rem); line-height: 1.15;
+}
+.auth-gauge { display: flex; align-items: flex-end; gap: 10px; height: 64px; }
+.auth-gauge span { flex: 1; background: rgba(255,255,255,.22); border-top: 2px solid rgba(255,255,255,.75); }
+.auth-gauge span:nth-child(1) { height: 30%; } .auth-gauge span:nth-child(2) { height: 55%; }
+.auth-gauge span:nth-child(3) { height: 20%; } .auth-gauge span:nth-child(4) { height: 80%; }
+.auth-gauge span:nth-child(5) { height: 45%; } .auth-gauge span:nth-child(6) { height: 65%; }
+.auth-gauge span:nth-child(7) { height: 35%; }
+
+.auth-main { display: flex; flex-direction: column; justify-content: center; align-items: center; padding: 40px 24px; }
+.auth-brand-phone { display: none; }
+.auth-card { width: 100%; max-width: 420px; }
+.auth-eyebrow { margin: 0 0 6px; color: var(--am-cobalt); font-weight: 700; text-transform: uppercase; letter-spacing: .1em; font-size: .8rem; }
+body.auth-farmer .auth-eyebrow { color: var(--am-millet); }
+.auth-card h1 { margin: 0 0 8px; font-family: "Archivo", var(--am-text); font-stretch: 112%; font-weight: 800; font-size: 1.9rem; line-height: 1.15; }
+.auth-lead { margin: 0 0 24px; color: var(--am-muted); }
+.auth-form { display: flex; flex-direction: column; gap: 6px; }
+.auth-form fieldset { border: 0; padding: 0; margin: 0 0 18px; display: flex; flex-direction: column; gap: 6px; }
+.auth-form legend { font-weight: 700; margin-bottom: 6px; padding: 0; }
+.auth-form label { font-weight: 700; margin-top: 10px; }
+.auth-form input, .auth-form select {
+  font: inherit; width: 100%; padding: 12px 14px;
+  border: 1.5px solid var(--am-line); border-radius: 8px; background: var(--am-surface); color: var(--am-ink);
+}
+.auth-form input:focus, .auth-form select:focus { outline: 3px solid var(--am-cobalt-wash); border-color: var(--am-cobalt); }
+.auth-pin { letter-spacing: .6em; font-size: 1.3rem !important; max-width: 11rem; }
+.auth-hint, .auth-hint-inline { color: var(--am-muted); font-size: .9rem; font-weight: 400; margin: 2px 0 0; }
+.auth-error { margin: 12px 0 0; padding: 10px 12px; border-radius: 8px; background: var(--am-laterite-wash); color: var(--am-laterite); font-weight: 700; }
+.auth-button {
+  margin-top: 20px; padding: 14px 18px; border: 0; border-radius: 8px;
+  background: var(--am-cobalt); color: #fff; font: inherit; font-weight: 700; cursor: pointer; min-height: 52px;
+}
+.auth-button:hover { background: var(--am-cobalt-dark); }
+body.auth-farmer .auth-button { background: var(--am-millet); }
+body.auth-farmer .auth-button:hover { background: #2f5530; }
+.auth-help { margin: 22px 0 0; color: var(--am-muted); font-size: .95rem; }
+.auth-code { font-family: "Archivo", var(--am-text); color: var(--am-ink); }
+.auth-switch { margin: 14px 0 0; padding-top: 14px; border-top: 1px solid var(--am-line); }
+.auth-switch a { color: var(--am-cobalt); font-weight: 700; }
+
+@media (max-width: 760px) {
+  .auth-shell { grid-template-columns: 1fr; }
+  .auth-side { display: none; }
+  .auth-main { justify-content: flex-start; padding: 28px 16px 40px; }
+  .auth-brand-phone { display: flex; align-self: flex-start; margin-bottom: 28px; }
+  .auth-brand-phone .auth-brand-mark { background: var(--am-cobalt-dark); color: #fff; }
+  body.auth-farmer .auth-brand-phone .auth-brand-mark { background: var(--am-millet); }
+}
+
+/* Farmers and Team pages (officer registration) */
+body.officer .o-two-col { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr)); gap: 16px; align-items: start; }
+body.officer .o-form { display: flex; flex-direction: column; gap: 6px; }
+body.officer .o-form label { font-weight: 700; margin-top: 8px; }
+body.officer .o-form .o-check { display: flex; gap: 10px; align-items: flex-start; font-weight: 400; margin-top: 14px; }
+body.officer .o-form > .btn { margin-top: 14px; align-self: flex-start; }
+body.officer .o-inline { display: flex; gap: 8px; }
+body.officer .o-inline input { flex: 1; min-width: 0; }
+body.officer .o-hint { color: var(--am-muted); font-size: .9rem; margin: 2px 0 0; }
+body.officer .o-ok { color: var(--am-millet); font-weight: 700; }
+body.officer .o-err { color: var(--am-laterite); font-weight: 700; }
+body.officer .o-pick { list-style: none; padding: 0; margin: 8px 0 12px; display: flex; flex-direction: column; gap: 6px; }
+body.officer .o-table-wrap { overflow-x: auto; }
+body.officer .btn.small { padding: 4px 10px; min-height: 0; font-size: .9rem; }
+body.officer .o-pin-edit input, body.officer td input { width: 8.5rem; padding: 4px 8px; }
+body.auth-farmer .auth-form input:focus { outline-color: var(--am-millet-wash); border-color: var(--am-millet); }
+body.auth-farmer .auth-switch a { color: var(--am-millet); }
