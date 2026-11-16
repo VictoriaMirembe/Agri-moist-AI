@@ -1,37 +1,23 @@
-{% extends "base.html" %}
-{% block title %}Sign in | AgriMoist AI{% endblock %}
-{% block container_class %}farmer-signin-shell{% endblock %}
+{# Farmer sign-in: the phone number the extension officer registered and the 4-digit PIN they set (FarmerPin). #}
+{% extends "auth_base.html" %}
+{% block title %}Farmer sign in{% endblock %}
 {% block content %}
-<section class="farmer-signin-card" aria-labelledby="signin-heading">
-  <a class="farmer-brand farmer-signin-brand" href="/farmer">
-    <span class="farmer-brand-mark" aria-hidden="true">A</span>
-    <span>AgriMoist <strong>AI</strong></span>
-  </a>
-  <p class="farmer-eyebrow">Farmer portal</p>
-  <h1 id="signin-heading">Sign in to your farm</h1>
-  <p class="farmer-panel-description">Enter the phone number registered with your extension officer.</p>
-  <form id="sign-in-form" class="farmer-form">
-    <label for="phone">Phone number</label>
-    <input id="phone" type="tel" inputmode="tel" autocomplete="tel" placeholder="+256700000001" required>
-    <p id="error" class="farmer-form-error alert alert-danger" role="alert" hidden></p>
-    <button class="farmer-button farmer-button-primary" type="submit">Continue</button>
-  </form>
-  <p class="farmer-signin-note">Demo numbers: +256700000001 to +256700000010.</p>
-</section>
+<section class="auth-card" aria-labelledby="auth-heading">
+  <p class="auth-eyebrow">Farmer sign in</p>
+  <h1 id="auth-heading">Sign in to your farm</h1>
+  <p class="auth-lead">Use the phone number your extension officer registered, and your 4-digit PIN.</p>
 
-<script>
-document.getElementById("sign-in-form").addEventListener("submit", async (e) => {
-  e.preventDefault();
-  const phone = document.getElementById("phone").value.trim();
-  const errorEl = document.getElementById("error");
-  errorEl.hidden = true;
-  try {
-    await getJSON("/api/farmer/profile?phone=" + encodeURIComponent(phone));
-    window.location.href = "/farmer/home?phone=" + encodeURIComponent(phone);
-  } catch (err) {
-    errorEl.textContent = err.message || "Could not sign in. Check your phone number and try again.";
-    errorEl.hidden = false;
-  }
-});
-</script>
+  <form method="POST" action="/farmer/login" class="auth-form" novalidate>
+    <input type="hidden" name="next" value="{{ next }}">
+    <label for="phone">Phone number</label>
+    <input id="phone" name="phone" type="tel" inputmode="tel" autocomplete="tel" placeholder="07XX XXX XXX" value="{{ phone or '' }}" required autofocus>
+    <label for="pin">PIN</label>
+    <input id="pin" name="pin" class="auth-pin" type="password" inputmode="numeric" pattern="[0-9]{4}" maxlength="4" autocomplete="current-password" required>
+    {% if error %}<p class="auth-error" role="alert">{{ error }}</p>{% endif %}
+    <button type="submit" class="auth-button">Sign in</button>
+  </form>
+
+  <p class="auth-help">No PIN, or forgot it? Your extension officer can set a new one. On a basic phone, dial <strong class="auth-code">{{ service_code }}</strong> instead.</p>
+  <p class="auth-switch">Extension officer? <a href="/officer/login">Officer sign in</a></p>
+</section>
 {% endblock %}
