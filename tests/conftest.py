@@ -4,6 +4,7 @@
 # separate MCP server subprocess - see the same temp database too.
 from __future__ import annotations
 
+from backend.db.seed import DEMO_OFFICER_PASSWORD
 import pytest
 from sqlmodel import create_engine
 
@@ -22,6 +23,27 @@ def no_model_key(monkeypatch):
     monkeypatch.setattr(model_client, "_client", None)
     monkeypatch.setenv("SUNBIRD_API_KEY", "")  # nor the real Sunbird translator
     monkeypatch.setattr(settings, "sunbird_api_key", None)
+    # Tests run on the made-up seed data and stored sensor readings only, never on
+    # live soil data, and never on the real (Neon) database.
+    monkeypatch.setenv("SEED_DEMO_DATA", "true")
+    monkeypatch.setattr(settings, "seed_demo_data", True)
+    monkeypatch.setenv("SOIL_SOURCE", "sensor-only")
+    monkeypatch.setattr(settings, "soil_source", "sensor-only")
+    monkeypatch.setattr(settings, "keep_tool_servers_warm", False)
+    monkeypatch.setattr(settings, "translate_in_background", False)
+
+
+@pytest.fixture()
+def fake_translator(monkeypatch):
+    """Pretend a translator is configured and answers with the given result."""
+    from backend.approvals import translation_jobs
+
+    def use(result: dict) -> None:
+        monkeypatch.setattr(translation_jobs, "translator_available", lambda: True)
+        monkeypatch.setattr(translation_jobs, "translate_text", lambda text, lang: dict(result))
+
+    return use
+    monkeypatch.setattr(settings, "soil_source", "sensor-only")
 
 
 @pytest.fixture()
@@ -61,7 +83,7 @@ def client(test_db):
     from backend.core.config import settings
 
     with TestClient(app) as c:
-        r = c.post("/api/auth/login", json={"officer_id": 1, "password": settings.officer_demo_password})
+        r = c.post("/api/auth/login", json={"officer_id": 1, "password": DEMO_OFFICER_PASSWORD})
         assert r.status_code == 200, r.text
         yield c
 
@@ -75,3 +97,27 @@ def unauthenticated_client(test_db):
 
     with TestClient(app) as c:
         yield c
+
+
+@pytest.fixture()
+def farmer_client(test_db):
+    """sign_in(phone) -> a TestClient signed in as that seeded farmer (PIN sign-in),
+    separate from the officer `client`."""
+    from fastapi.testclient import TestClient
+
+    from backend.db.seed import DEMO_FARMER_PIN
+    from backend.main import app
+
+    clients = []
+
+    def sign_in(phone: str) -> TestClient:
+        c = TestClient(app)
+        c.__enter__()
+        clients.append(c)
+        r = c.post("/farmer/login", data={"phone": phone, "pin": DEMO_FARMER_PIN}, follow_redirects=False)
+        assert r.status_code == 303, r.text
+        return c
+
+    yield sign_in
+    for c in clients:
+        c.__exit__(None, None, None)
