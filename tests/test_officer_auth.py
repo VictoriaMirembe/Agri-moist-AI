@@ -4,13 +4,14 @@
 # one in the session - never an officer_id sent in the request body.
 from __future__ import annotations
 
+from backend.db.seed import DEMO_OFFICER_PASSWORD
 import pytest
 from fastapi.testclient import TestClient
 
 from backend.core.config import settings
 from backend.main import app
 
-PASSWORD = settings.officer_demo_password
+PASSWORD = DEMO_OFFICER_PASSWORD
 
 DECISIONS = [
     ("approve", {"officer_id": 1}),
@@ -65,7 +66,7 @@ def test_fake_role_cookie_or_header_is_rejected(client, test_db, cookies, header
 
 def test_sign_in_refuses_other_roles_and_unknown_officers(unauthenticated_client):
     assert unauthenticated_client.post("/api/auth/login", json={"officer_id": 1, "role": "admin", "password": PASSWORD}).status_code == 400
-    assert unauthenticated_client.post("/api/auth/login", json={"officer_id": 9999, "password": PASSWORD}).status_code == 400
+    assert unauthenticated_client.post("/api/auth/login", json={"officer_id": 9999, "password": PASSWORD}).status_code == 401
     assert unauthenticated_client.post("/officer/login", data={"officer_id": "9999", "password": PASSWORD}).status_code == 400
     assert unauthenticated_client.get("/api/auth/me").json()["authenticated"] is False
 
@@ -73,7 +74,7 @@ def test_sign_in_refuses_other_roles_and_unknown_officers(unauthenticated_client
 def test_approval_is_logged_with_the_session_officer_not_the_body(unauthenticated_client):
     client = unauthenticated_client
     # Sign in through the officer sign-in form, as the web page does.
-    r = client.post("/officer/login", data={"officer_id": "2", "password": PASSWORD, "next": "/approvals"}, follow_redirects=False)
+    r = client.post("/officer/login", data={"phone": "0780000002", "password": PASSWORD, "next": "/approvals"}, follow_redirects=False)
     assert r.status_code == 303
     assert "officer_role" not in r.cookies  # no plain role cookie is set any more
 
