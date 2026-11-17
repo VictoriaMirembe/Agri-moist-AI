@@ -197,3 +197,42 @@ def test_live_weather_test_skips_without_network_but_fails_on_other_errors(monke
     monkeypatch.setattr(impl.httpx, "get", bad_response)
     with pytest.raises(ToolError):
         test_get_weather_real_call_has_a_source()
+
+
+def test_weather_falls_back_to_met_norway_and_nasa_power_on_429(monkeypatch):
+    """Render's shared IPs get 429 from Open-Meteo: the same two figures then come
+    from MET Norway (forecast) and NASA POWER (past rain), named in source_ref."""
+    import httpx
+
+    from backend.tools import agrimoist_tools as t
+
+    monkeypatch.setattr(t, "_WEATHER_CACHE", {})
+    monkeypatch.setattr(t, "_OPEN_METEO_BACKOFF_UNTIL", 0.0)
+    monkeypatch.setattr(t.settings, "weather_fail", False)
+    monkeypatch.setattr(t.settings, "weather_override_past_mm", None)
+    monkeypatch.setattr(t.settings, "weather_override_next_mm", None)
+    from datetime import datetime, timedelta, timezone
+
+    now = datetime.now(timezone.utc).replace(minute=0, second=0, microsecond=0)
+    series = [
+        {"time": (now + timedelta(hours=h)).strftime("%Y-%m-%dT%H:%M:%SZ"),
+         "data": {"next_1_hours": {"details": {"precipitation_amount": 0.5}}}}
+        for h in range(4)
+    ]
+    days = {f"2026110{d}": 2.0 for d in range(1, 10)}
+    days["20261109"] = -999.0  # NASA POWER's fill value for days not published yet
+
+    def fake_get(url, *args, **kwargs):
+        request = httpx.Request("GET", url)
+        if "open-meteo" in url:
+            raise httpx.HTTPStatusError("429", request=request, response=httpx.Response(429, request=request))
+        if "met.no" in url:
+            return httpx.Response(200, json={"properties": {"timeseries": series}}, request=request)
+        return httpx.Response(200, json={"properties": {"parameter": {"PRECTOTCORR": days}}}, request=request)
+
+    monkeypatch.setattr(t.httpx, "get", fake_get)
+    result = t.get_weather(latitude=3.05, longitude=30.81)
+    assert result["next_7_days_rain_mm"] == 1.5  # 3 hourly steps counted, the last has no successor
+    assert result["past_7_days_rain_mm"] == 14.0  # last 7 published days, fill value skipped
+    assert "MET Norway" in result["source_ref"] and "NASA POWER" in result["source_ref"]
+    assert t._OPEN_METEO_BACKOFF_UNTIL > 0

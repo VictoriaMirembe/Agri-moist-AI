@@ -215,6 +215,7 @@ _WEATHER_CACHE_TTL_SECONDS = 900  # 15 minutes cache
 
 
 def get_weather(*, latitude: float, longitude: float) -> dict[str, Any]:
+    global _OPEN_METEO_BACKOFF_UNTIL
     if settings.weather_fail:
         raise ToolError(
             "Weather service is unavailable right now (demo failure switch is on).",
@@ -237,6 +238,11 @@ def get_weather(*, latitude: float, longitude: float) -> dict[str, Any]:
         cached_at, cached_val = _WEATHER_CACHE[key]
         if now - cached_at < _WEATHER_CACHE_TTL_SECONDS:
             return cached_val
+
+    if now < _OPEN_METEO_BACKOFF_UNTIL:  # Open-Meteo said 429 recently; don't hammer it
+        return _weather_from_fallback(
+            latitude, longitude, key, now, RuntimeError("Open-Meteo rate limit (429), backing off")
+        )
 
     params = {
         "latitude": latitude,
@@ -268,16 +274,90 @@ def get_weather(*, latitude: float, longitude: float) -> dict[str, Any]:
         }
         _WEATHER_CACHE[key] = (now, result)
         return result
-    except httpx.HTTPStatusError as exc:
-        # Rate limit (429) or a server error: the last real reading for this place if
-        # there is one, otherwise a gap. Never made-up figures.
-        if key in _WEATHER_CACHE:
-            return _WEATHER_CACHE[key][1]
-        raise ToolError(f"Weather service request failed: {exc}", source=settings.open_meteo_base_url) from exc
     except httpx.HTTPError as exc:
+        # Rate limit (429: shared cloud IPs such as Render's run out of Open-Meteo's
+        # free quota) or a server error. Then: the last real reading for this place,
+        # else the same two figures from MET Norway + NASA POWER, else a gap.
+        # Never made-up figures.
+        if isinstance(exc, httpx.HTTPStatusError) and exc.response.status_code == 429:
+            _OPEN_METEO_BACKOFF_UNTIL = now + _OPEN_METEO_BACKOFF_SECONDS
         if key in _WEATHER_CACHE:
             return _WEATHER_CACHE[key][1]
-        raise ToolError(f"Weather service request failed: {exc}", source=settings.open_meteo_base_url) from exc
+        return _weather_from_fallback(latitude, longitude, key, now, exc)
+
+
+_OPEN_METEO_BACKOFF_SECONDS = 600
+_OPEN_METEO_BACKOFF_UNTIL = 0.0
+MET_NORWAY_URL = "https://api.met.no/weatherapi/locationforecast/2.0/compact"
+NASA_POWER_URL = "https://power.larc.nasa.gov/api/temporal/daily/point"
+_FALLBACK_HEADERS = {"User-Agent": "AgriMoistAI/1.0 https://github.com/VictoriaMirembe/Agri-moist-AI"}
+
+
+def _met_norway_next_7_days_mm(latitude: float, longitude: float) -> tuple[float, str]:
+    """Rain forecast for the next 7 days from MET Norway (no key; hourly steps first,
+    then 6-hourly). Each step's amount is counted once."""
+    response = httpx.get(
+        MET_NORWAY_URL, params={"lat": round(latitude, 4), "lon": round(longitude, 4)},
+        headers=_FALLBACK_HEADERS, timeout=10.0,
+    )
+    response.raise_for_status()
+    series = response.json()["properties"]["timeseries"]
+    start = datetime.now(timezone.utc)
+    end = start + timedelta(days=7)
+    times = [datetime.fromisoformat(step["time"].replace("Z", "+00:00")) for step in series]
+    total = 0.0
+    for i, step in enumerate(series):
+        if times[i] >= end or i + 1 >= len(series):
+            break
+        gap_hours = (times[i + 1] - times[i]).total_seconds() / 3600
+        data = step["data"]
+        block = data.get("next_1_hours") if gap_hours <= 1 else data.get("next_6_hours")
+        if block is None:
+            block = data.get("next_6_hours") or data.get("next_1_hours")
+        if block:
+            total += float(block["details"].get("precipitation_amount", 0.0))
+    return round(total, 1), str(response.url)
+
+
+def _nasa_power_past_7_days_mm(latitude: float, longitude: float) -> tuple[float, str]:
+    """Rain over the last 7 days NASA POWER has published (it runs ~2 days behind)."""
+    today = date.today()
+    response = httpx.get(
+        NASA_POWER_URL,
+        params={
+            "parameters": "PRECTOTCORR", "community": "AG", "format": "JSON",
+            "latitude": round(latitude, 4), "longitude": round(longitude, 4),
+            "start": (today - timedelta(days=12)).strftime("%Y%m%d"),
+            "end": today.strftime("%Y%m%d"),
+        },
+        headers=_FALLBACK_HEADERS, timeout=20.0,
+    )
+    response.raise_for_status()
+    daily = response.json()["properties"]["parameter"]["PRECTOTCORR"]
+    values = [v for _, v in sorted(daily.items()) if isinstance(v, (int, float)) and v >= 0]
+    if len(values) < 7:
+        raise ValueError("NASA POWER returned fewer than 7 days of rain")
+    return round(sum(values[-7:]), 1), str(response.url)
+
+
+def _weather_from_fallback(latitude: float, longitude: float, key, now: float, cause: Exception) -> dict[str, Any]:
+    try:
+        next_mm, next_ref = _met_norway_next_7_days_mm(latitude, longitude)
+        past_mm, past_ref = _nasa_power_past_7_days_mm(latitude, longitude)
+    except (httpx.HTTPError, KeyError, ValueError, TypeError) as exc:
+        raise ToolError(
+            f"Weather service request failed: {cause}; backup sources failed too: {exc}",
+            source=settings.open_meteo_base_url,
+        ) from exc
+    result = {
+        "latitude": latitude,
+        "longitude": longitude,
+        "past_7_days_rain_mm": past_mm,
+        "next_7_days_rain_mm": next_mm,
+        "source_ref": f"{next_ref} (forecast, MET Norway) + {past_ref} (past rain, NASA POWER)",
+    }
+    _WEATHER_CACHE[key] = (now, result)
+    return result
 
 
 # ---------------------------------------------------------------------------
