@@ -268,7 +268,7 @@ def test_every_officer_file_starts_with_a_comment():
 
 def test_officer_screens_auto_refresh_from_existing_json_routes(client):
     # Each screen that shows farmer activity re-fetches its data on a timer.
-    for path in ("/", "/approvals", "/farmer-reports", "/flags", "/followups"):
+    for path in ("/", "/approvals", "/farmer-reports", "/flags", "/followups", "/groups/1"):
         assert "autoRefresh(" in client.get(path).text, f"{path} does not auto-refresh"
     home = client.get("/").text
     for element_id in ("home-drafts", "home-flags", "home-reports"):

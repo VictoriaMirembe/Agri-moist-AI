@@ -123,6 +123,8 @@ async function loadDetail() {
   }
 }
 loadDetail();
+// New farmer reports (web and USSD), visits and soil readings appear without a reload.
+autoRefresh(loadDetail);
 
 document.getElementById("draft-btn")?.addEventListener("click", async () => {
   const errorEl = document.getElementById("draft-error");
