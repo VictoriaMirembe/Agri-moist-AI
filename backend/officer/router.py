@@ -6,6 +6,7 @@ from __future__ import annotations
 import asyncio
 from datetime import datetime, timezone
 import json
+import logging
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -40,6 +41,7 @@ from backend.tools.errors import ToolError
 
 # Every officer endpoint needs a signed-in officer; only sign-in itself (auth_router) does not.
 router = APIRouter(prefix="/api", tags=["officer"], dependencies=[Depends(require_officer)])
+logger = logging.getLogger("agrimoist.officer")
 auth_router = APIRouter(prefix="/api/auth", tags=["officer-auth"])
 
 # asyncio only holds a weak reference to a task once nothing else references it, so a
@@ -738,10 +740,37 @@ def fetch_village_weather(village_name: str, latitude: float, longitude: float) 
         _VILLAGE_WEATHER_CACHE[key] = (now_ts, result)
         return result
     except Exception as exc:
-        # The last real reading for this place if there is one; otherwise say plainly
-        # that the weather is unavailable. Never made-up figures.
+        # The last real reading for this place if there is one; else the rain figures
+        # from the backup sources (MET Norway + NASA POWER, used when Open-Meteo
+        # rate-limits Render's shared IPs); otherwise say plainly that the weather is
+        # unavailable. Never made-up figures.
         if key in _VILLAGE_WEATHER_CACHE:
             return _VILLAGE_WEATHER_CACHE[key][1]
+        try:
+            from backend.tools import agrimoist_tools as impl
+
+            backup = impl.get_weather(latitude=latitude, longitude=longitude)
+        except Exception as backup_exc:  # noqa: BLE001
+            logger.warning("village weather for %s failed: %s; backup: %s", village_name, exc, backup_exc)
+        else:
+            result = {
+                "village": village_name,
+                "latitude": latitude,
+                "longitude": longitude,
+                "status": "live",
+                "past_7_days_rain_mm": backup["past_7_days_rain_mm"],
+                "next_7_days_rain_mm": backup["next_7_days_rain_mm"],
+                "temperature_c": None,
+                "relative_humidity": None,
+                "current_precipitation_mm": None,
+                "condition": "Rain from backup forecast",
+                "weather_code": None,
+                "source": backup["source_ref"].split(" ")[0],
+                "source_label": "MET Norway forecast + NASA POWER past rain",
+                "is_override": False,
+            }
+            _VILLAGE_WEATHER_CACHE[key] = (now_ts, result)
+            return result
         return {
             "village": village_name,
             "latitude": latitude,

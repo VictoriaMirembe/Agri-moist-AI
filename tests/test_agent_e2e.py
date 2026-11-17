@@ -203,3 +203,21 @@ async def test_a_failed_clock_call_is_logged_and_still_raised(test_db):
         row = session.exec(select(ToolLog).where(ToolLog.run_id == run_id)).one()
         assert row.tool == "get_current_time" and row.source == "mcp-server-time"
         assert "time server down" in row.error
+
+
+def test_no_food_reading_is_settled_by_a_newer_reading_or_a_done_visit():
+    """A household's old "no food" reading must not flag every draft forever: a newer
+    food reading, or an officer marking a food visit done after it, settles it."""
+    from datetime import datetime, timezone
+
+    from backend.agent.graph import _households_with_no_food
+
+    old = {"household_code": "H-001", "food_left": "none", "observed_on": "2026-11-16T23:33:08+00:00"}
+    newer_ok = {"household_code": "H-001", "food_left": "some", "observed_on": "2026-11-17T09:00:00+00:00"}
+    other = {"household_code": "H-002", "food_left": "none", "observed_on": "2026-11-17T08:00:00+00:00"}
+    no_food_field = {"household_code": "H-003", "food_left": None, "observed_on": "2026-11-17T08:00:00+00:00"}
+
+    assert _households_with_no_food([old, other, no_food_field], None) == ["H-001", "H-002"]
+    assert _households_with_no_food([old, newer_ok, other], None) == ["H-002"]
+    visited = datetime(2026, 11, 17, 7, 0, tzinfo=timezone.utc)
+    assert _households_with_no_food([old, other], visited) == ["H-002"]

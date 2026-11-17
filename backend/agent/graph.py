@@ -23,7 +23,7 @@ from backend.agent import events
 from backend.agent.mcp_client import ToolClient, warm_tools
 from backend.agent.model_client import draft_advice_text
 from backend.core.database import session_scope
-from backend.db.models import District, Household, Run, ToolLog, Village, VisitFlag
+from backend.db.models import District, Household, Run, ToolLog, Village, VisitFlag, VisitFlagVisit
 from backend.logging.tool_log import run_logged
 from backend.core.config import settings
 from backend.tools.agrimoist_tools import HEAVY_RAIN_FACT, is_heavy_rain, soil_reading_is_stale, weather_fact
@@ -352,12 +352,53 @@ _FOOD_WORDS = re.compile(r"\bfood\b", re.IGNORECASE)
 
 def _open_food_visit_requests(group_id: int) -> list[str]:
     """Reasons of this group's open visit flags that mention food - for example a
-    farmer's "H-003 asked for a visit: little food left" sent by USSD or the web."""
+    farmer's "H-003 asked for a visit: little food left" sent by USSD or the web.
+    The assistant's own earlier flags are left out, so a flag cannot re-raise itself."""
     with session_scope() as session:
         flags = session.exec(
-            select(VisitFlag).where(VisitFlag.group_id == group_id, VisitFlag.status == "open")
+            select(VisitFlag).where(
+                VisitFlag.group_id == group_id, VisitFlag.status == "open", VisitFlag.raised_by != "assistant"
+            )
         ).all()
         return [f.reason for f in flags if _FOOD_WORDS.search(f.reason or "")]
+
+
+def _last_food_visit_done(group_id: int) -> datetime | None:
+    """When an officer last marked one of this group's food visit flags as visited."""
+    with session_scope() as session:
+        flags = session.exec(
+            select(VisitFlag).where(VisitFlag.group_id == group_id, VisitFlag.status != "open")
+        ).all()
+        food_flag_ids = [f.id for f in flags if _FOOD_WORDS.search(f.reason or "")]
+        if not food_flag_ids:
+            return None
+        visits = session.exec(select(VisitFlagVisit).where(VisitFlagVisit.flag_id.in_(food_flag_ids))).all()
+        times = [_as_utc(v.visited_at) for v in visits]
+        return max(times) if times else None
+
+
+def _as_utc(value) -> datetime:
+    if isinstance(value, str):
+        value = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    return value if value.tzinfo else value.replace(tzinfo=timezone.utc)
+
+
+def _households_with_no_food(records: list[dict], visited_after: datetime | None) -> list[str]:
+    """Households whose LATEST food reading is "none" and was recorded after the last
+    food visit an officer marked done. A newer reading, or an officer visit made in
+    response, settles an older "no food" reading."""
+    latest: dict[str, dict] = {}
+    for record in records:
+        if not record.get("food_left") or not record.get("observed_on"):
+            continue
+        code = record["household_code"]
+        if code not in latest or _as_utc(record["observed_on"]) > _as_utc(latest[code]["observed_on"]):
+            latest[code] = record
+    return sorted(
+        code
+        for code, record in latest.items()
+        if record["food_left"] == "none" and (visited_after is None or _as_utc(record["observed_on"]) > visited_after)
+    )
 
 
 async def check_urgent_node(state: AgentState) -> dict:
@@ -369,7 +410,7 @@ async def check_urgent_node(state: AgentState) -> dict:
     no_recent_visit = sorted(code for code, days in days_since.items() if days is None or days > 30)
 
     records = field_records.get("records", [])
-    very_little_food = sorted({r["household_code"] for r in records if r.get("food_left") == "none"})
+    very_little_food = _households_with_no_food(records, _last_food_visit_done(state["group_id"]))
 
     food_requests = _open_food_visit_requests(state["group_id"])
 

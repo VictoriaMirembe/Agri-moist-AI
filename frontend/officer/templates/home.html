@@ -63,7 +63,7 @@
         <div><dt>Next 7 days</dt><dd><span class="o-gauge-num">{{ w.next_7_days_rain_mm if w.next_7_days_rain_mm is not none else "–" }}</span> mm</dd></div>
       </dl>
       <p class="o-rain-meta">{% if w.temperature_c is not none %}{{ w.temperature_c }}°C, {% endif %}{{ w.condition }}{% if w.relative_humidity is not none %}, humidity {{ w.relative_humidity }}%{% endif %}</p>
-      <a class="o-rain-source" href="{{ w.source }}" target="_blank" rel="noopener">Open-Meteo reading for {{ w.latitude }}, {{ w.longitude }}</a>
+      <a class="o-rain-source" href="{{ w.source }}" target="_blank" rel="noopener">{{ w.source_label or "Open-Meteo" }} reading for {{ w.latitude }}, {{ w.longitude }}</a>
     </article>
     {% else %}
     <p class="o-empty">No villages yet. <a href="/farmers">Add a village and register farmers</a> to see live rain for each one.</p>
@@ -202,7 +202,7 @@ function renderWeatherCards(weatherList) {
         <div><dt>Next 7 days</dt><dd><span class="o-gauge-num">${w.next_7_days_rain_mm == null ? "–" : escapeHTML(String(w.next_7_days_rain_mm))}</span> mm</dd></div>
       </dl>
       <p class="o-rain-meta">${has(w.temperature_c) ? escapeHTML(String(w.temperature_c)) + "°C, " : ""}${escapeHTML(w.condition || "")}${has(w.relative_humidity) ? ", humidity " + escapeHTML(String(w.relative_humidity)) + "%" : ""}</p>
-      <a class="o-rain-source" href="${safeURL(w.source)}" target="_blank" rel="noopener">Open-Meteo reading for ${escapeHTML(String(w.latitude))}, ${escapeHTML(String(w.longitude))}</a>
+      <a class="o-rain-source" href="${safeURL(w.source)}" target="_blank" rel="noopener">${escapeHTML(w.source_label || "Open-Meteo")} reading for ${escapeHTML(String(w.latitude))}, ${escapeHTML(String(w.longitude))}</a>
     </article>
   `).join("");
 }

@@ -9,6 +9,7 @@
 # are read from existing tables and the log only - nothing here writes data.
 from __future__ import annotations
 
+import asyncio
 import json
 import re
 from datetime import date, datetime, timedelta, timezone
@@ -581,9 +582,14 @@ MCP_WRITE_TOOLS = {
 async def _mcp_status() -> dict:
     from backend.agent.mcp_client import IrrigationGatewayClient, ToolClient
 
-    try:
+    async def _list_servers():
         async with ToolClient() as client:
-            servers = await client.list_servers()
+            return await client.list_servers()
+
+    try:
+        # Capped, so a slow tool-server start shows an error here instead of the
+        # request hanging until Render's proxy gives up with a 502.
+        servers = await asyncio.wait_for(_list_servers(), timeout=20)
         error = None
     except Exception as exc:  # shown on screen, never hidden
         servers, error = [], f"{type(exc).__name__}: {exc}"
