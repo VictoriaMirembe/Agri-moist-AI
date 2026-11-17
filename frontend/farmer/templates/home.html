@@ -35,6 +35,8 @@
             <select id="farmer-audio-lang" class="farmer-lang-select" aria-label="Language selection">
               <option value="en">English (English)</option>
               <option value="kdj">Karamojong (Ngakarimojong)</option>
+              <option value="lug">Luganda (Oluganda)</option>
+              <option value="nyn">Runyankole (Runyankore)</option>
               <option value="sw">Swahili (Kiswahili)</option>
             </select>
             <span class="farmer-lang-arrow" aria-hidden="true">▾</span>
@@ -453,8 +455,11 @@ function renderAdvice(advice) {
   if (preview) preview.textContent = advice.text;
   if (detail) detail.textContent = advice.text;
   const date = advice.date ? advice.date.slice(0, 10) : "";
+  const wanted = LANG_NAMES[farmerLang()] || "English";
   const metadata = (advice.officer_name ? "Approved by " + advice.officer_name + " · " : "") +
-    date + (advice.language && advice.language !== "English" ? " · " + advice.language : "");
+    date + (advice.language && advice.language !== "English" ? " · " + advice.language : "") +
+    (advice.translating ? " · Translating into " + wanted + "…" : "");
+  pollTranslation(advice);
   if (credit && metadata) {
     credit.textContent = metadata;
     credit.hidden = false;
@@ -466,6 +471,26 @@ function renderAdvice(advice) {
     const done = document.getElementById("followup-done");
     if (!done || done.hidden) document.getElementById("followup-form").hidden = false;
   }
+}
+
+function farmerLang() {
+  try { return localStorage.getItem("agrimoist_farmer_lang") || "en"; } catch (_) { return "en"; }
+}
+function farmerQuery() {
+  return "?phone=" + encodeURIComponent(farmerPhone) + "&lang=" + encodeURIComponent(farmerLang());
+}
+const LANG_NAMES = { en: "English", kdj: "Ngakarimojong", lug: "Luganda", nyn: "Runyankole", sw: "Kiswahili" };
+let translationPoll = null;
+// While the advice is being translated it shows in English; check again shortly.
+function pollTranslation(advice) {
+  if (translationPoll) { clearTimeout(translationPoll); translationPoll = null; }
+  if (!advice || !advice.translating || isFilePreview) return;
+  translationPoll = setTimeout(async () => {
+    try {
+      const updates = await getJSON("/api/farmer/updates" + farmerQuery());
+      renderAdvice(updates.advice);
+    } catch (_) { /* the regular refresh tries again */ }
+  }, 5000);
 }
 
 async function loadDashboard() {
@@ -492,8 +517,8 @@ async function loadDashboard() {
   if (saved) renderDashboard(saved.dashboard, saved.advice);
   try {
     const [dashboard, advice] = await Promise.all([
-      getJSON("/api/farmer/dashboard?phone=" + encodeURIComponent(farmerPhone)),
-      getJSON("/api/farmer/advice?phone=" + encodeURIComponent(farmerPhone)),
+      getJSON("/api/farmer/dashboard" + farmerQuery()),
+      getJSON("/api/farmer/advice" + farmerQuery()),
     ]);
     renderDashboard(dashboard, advice);
     saveFarmCopy({ dashboard, advice });
@@ -714,7 +739,7 @@ connectSubmit("followup-form", "followup-error", "followup-done", "/api/farmer/f
 // a reload. Uses /api/farmer/updates, which is not counted as reading the advice.
 async function refreshFarmerUpdates() {
   if (isFilePreview || !farmerPhone) return;
-  const updates = await getJSON("/api/farmer/updates?phone=" + encodeURIComponent(farmerPhone));
+  const updates = await getJSON("/api/farmer/updates" + farmerQuery());
   renderRecentRequests(updates.recent_requests || []);
   renderAdvice(updates.advice);
   const saved = readFarmCopy();
@@ -728,7 +753,7 @@ if (activeView === "dashboard") {
   loadDashboard();
   autoRefresh(refreshFarmerUpdates);
 } else if (!isFilePreview && (activeView === "advice" || activeView === "followup")) {
-  getJSON("/api/farmer/advice?phone=" + encodeURIComponent(farmerPhone))
+  getJSON("/api/farmer/advice" + farmerQuery())
     .then((advice) => {
       renderAdvice(advice);
       saveFarmCopy({ advice });
@@ -788,6 +813,24 @@ const LANG_CONFIG = {
     speechLang: "sw",
     rate: 0.90,
   },
+  lug: {
+    name: "Luganda",
+    tag: "Oluganda",
+    listenBtn: "Wuliriza",
+    playingStatus: "Kisomebwa mu Luganda",
+    pausedStatus: "Kiyimiriziddwa (Luganda)",
+    speechLang: "lg",
+    rate: 0.92,
+  },
+  nyn: {
+    name: "Runyankole",
+    tag: "Runyankore",
+    listenBtn: "Huriiriza",
+    playingStatus: "Nikishomwa omu Runyankore",
+    pausedStatus: "Kyayemerezibwa (Runyankore)",
+    speechLang: "nyn",
+    rate: 0.92,
+  },
   sw: {
     name: "Swahili",
     tag: "Kiswahili",
@@ -799,7 +842,7 @@ const LANG_CONFIG = {
   },
 };
 
-let currentVoiceLang = localStorage.getItem("agrimoist_farmer_lang") || "en";
+let currentVoiceLang = farmerLang();
 if (voiceLangSelect) {
   voiceLangSelect.value = currentVoiceLang;
 }
@@ -826,11 +869,17 @@ function updateVoiceUI() {
 if (voiceLangSelect) {
   voiceLangSelect.addEventListener("change", (e) => {
     currentVoiceLang = e.target.value;
-    localStorage.setItem("agrimoist_farmer_lang", currentVoiceLang);
+    try { localStorage.setItem("agrimoist_farmer_lang", currentVoiceLang); } catch (_) { /* not saved; fine */ }
     // Changing language never starts reading on its own; the farmer presses Listen.
     if (isReading) stopVoice();
     updateVoiceUI();
     warmVoice();  // start making this language's audio now, before Listen is pressed
+    if (!isFilePreview && farmerPhone) {
+      // Remember the choice (advice is made ready in it from now on) and show the
+      // advice in it straight away.
+      postJSON("/api/farmer/language", { lang: currentVoiceLang }).catch(() => {});
+      getJSON("/api/farmer/updates" + farmerQuery()).then((u) => renderAdvice(u.advice)).catch(() => {});
+    }
   });
 }
 
@@ -1012,30 +1061,27 @@ function splitForSpeech(sentences) {
       // The very first piece stays a single sentence so the reader starts fast.
       const firstPiece = pieces.length === 0 && current === "";
       if (current && (current + " " + part).length > SPEECH_PIECE_MAX) {
-        pieces.push({ label: item.label, text: current });
+        pieces.push({ label: item.label, text: current, lang: item.lang });
         current = part;
       } else {
         current = current ? current + " " + part : part;
       }
       if (firstPiece && pieces.length === 0) {
-        pieces.push({ label: item.label, text: current });
+        pieces.push({ label: item.label, text: current, lang: item.lang });
         current = "";
       }
     }
-    if (current) pieces.push({ label: item.label, text: current });
+    if (current) pieces.push({ label: item.label, text: current, lang: item.lang });
   }
   return pieces;
 }
 
-// Sunbird needs 15-70 s to make one piece of speech, far too long to wait for after
-// Listen is pressed. So the server starts making every piece the moment the page
-// asks for its script (page load, language change, and right after an officer
-// approves advice), several at once. When Listen reaches a piece, the page waits
-// only a few seconds for its audio; if it is still being made, that piece is read
-// with the phone's own voice and the reading carries on. Next time it is ready.
-const FIRST_PIECE_WAIT_S = 10;
-const NEXT_PIECE_WAIT_S = 6;
-const READING_BUDGET_MS = 45000;  // after this, never wait: finish within a minute
+// Sunbird needs 15-70 s (more when busy) to make one piece of speech, so the server
+// starts making every piece the moment the page asks for its script (page load,
+// language change, and right after an officer approves advice), several at once,
+// in the language the farmer chose. Only Sunbird's voices are used: a piece still
+// being made is waited for (the words show meanwhile), never read by the phone.
+const PIECE_WAIT_S = 20;  // each request waits this long on the server, then asks again
 let readingStartedAt = 0;
 
 function prefetchAhead(index) {
@@ -1043,7 +1089,7 @@ function prefetchAhead(index) {
   // here, so a piece still "pending" is asked for again when it is reached).
   for (let i = index; i < Math.min(index + 3, voiceSentences.length); i++) {
     if (!(i in sentenceAudio)) {
-      postJSON("/api/farmer/voice-audio", { text: voiceSentences[i].text, lang: currentVoiceLang, wait: 0 }).catch(() => {});
+      postJSON("/api/farmer/voice-audio", { text: voiceSentences[i].text, lang: voiceSentences[i].lang || currentVoiceLang, wait: 0 }).catch(() => {});
     }
   }
 }
@@ -1063,20 +1109,17 @@ async function warmVoice() {
 }
 
 function pieceWaitSeconds(index) {
-  const used = Date.now() - readingStartedAt;
-  if (used > READING_BUDGET_MS) return 0;
-  const wait = index === 0 ? FIRST_PIECE_WAIT_S : NEXT_PIECE_WAIT_S;
-  return Math.max(0, Math.min(wait, (READING_BUDGET_MS - used) / 1000));
+  return PIECE_WAIT_S;
 }
 
-// Resolves to an audio URL, "pending" (still being made: use the phone's voice for
-// this piece), or null (Sunbird unavailable: phone's voice from now on).
+// Resolves to an audio URL, "pending" (still being made: ask again), or null
+// (Sunbird unavailable: the words are shown without sound).
 function fetchSentenceAudio(index) {
   if (!sunbirdAvailable || index >= voiceSentences.length) return Promise.resolve(null);
   if (!(index in sentenceAudio)) {
     sentenceAudio[index] = postJSON("/api/farmer/voice-audio", {
       text: voiceSentences[index].text,
-      lang: currentVoiceLang,
+      lang: voiceSentences[index].lang || currentVoiceLang,
       wait: pieceWaitSeconds(index),
     }).then((d) => {
       if (d.audio_url) return d.audio_url;
@@ -1119,9 +1162,11 @@ async function speakNextSentence() {
     if (token !== playToken || !isReading) return;
     if (playerStatus && !isPaused) playerStatus.textContent = (LANG_CONFIG[currentVoiceLang] || LANG_CONFIG.en).playingStatus;
     if (url === "pending") {
-      // Not made yet: read this piece with the phone's voice and keep going.
+      // Not made yet: keep the words on screen and ask again (the server holds
+      // each request up to PIECE_WAIT_S seconds, so this is not a busy loop).
+      if (playerStatus && !isPaused) playerStatus.textContent = "Preparing the " + ((LANG_CONFIG[currentVoiceLang] || LANG_CONFIG.en).name) + " voice…";
       prefetchAhead(index + 1);
-      speakWithBrowser(currentItem, token);
+      setTimeout(() => { if (token === playToken && isReading) speakNextSentence(); }, 300);
       return;
     }
     if (url) {
@@ -1131,43 +1176,23 @@ async function speakNextSentence() {
       voiceAudio.playbackRate = speeds[speedIndex];
       voiceAudio.onended = () => advanceSentence(token);
       voiceAudio.onerror = () => {
-        if (token === playToken) speakWithBrowser(currentItem, token);
+        if (token === playToken) showWordsOnly(currentItem, token);
       };
       if (!isPaused) {
-        voiceAudio.play().catch(() => speakWithBrowser(currentItem, token));
+        voiceAudio.play().catch(() => showWordsOnly(currentItem, token));
       }
       return;
     }
-    sunbirdAvailable = false;  // no key or Sunbird is down: browser voice for the rest
+    sunbirdAvailable = false;  // no key or Sunbird is down: words only for the rest
   }
-  speakWithBrowser(currentItem, token);
+  showWordsOnly(currentItem, token);
 }
 
-function speakWithBrowser(currentItem, token) {
-  const cfg = LANG_CONFIG[currentVoiceLang] || LANG_CONFIG.en;
-  voiceEngine = "browser";
-
-  if (!("speechSynthesis" in window)) {
-    setTimeout(() => advanceSentence(token), 4500);
-    return;
-  }
-
-  window.speechSynthesis.cancel();
-
-  const utterance = new SpeechSynthesisUtterance(currentItem.text);
-  utterance.lang = cfg.speechLang;
-  utterance.rate = cfg.rate * speeds[speedIndex];
-  utterance.pitch = currentVoiceLang === "kdj" ? 1.05 : 1.0;
-
-  const matchedVoice = getBestVoiceForLang(currentVoiceLang);
-  if (matchedVoice) {
-    utterance.voice = matchedVoice;
-  }
-
-  utterance.onend = () => advanceSentence(token);
-  utterance.onerror = () => advanceSentence(token);
-
-  window.speechSynthesis.speak(utterance);
+// No Sunbird voice available: show each piece for about as long as it takes to read.
+function showWordsOnly(currentItem, token) {
+  voiceEngine = "none";
+  if (playerStatus && !isPaused) playerStatus.textContent = "Voice unavailable right now: showing the words";
+  setTimeout(() => advanceSentence(token), Math.max(2500, currentItem.text.length * 70));
 }
 
 async function startVoiceReading(section = null) {

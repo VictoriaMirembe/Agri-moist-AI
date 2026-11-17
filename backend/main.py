@@ -4,8 +4,9 @@
 # the officer/farmer HTML screens, and the USSD simulator page.
 from __future__ import annotations
 
-import secrets
 import asyncio
+import secrets
+import threading
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -19,8 +20,8 @@ from backend.core.config import settings
 from backend.core.database import init_db, session_scope
 from backend.db.seed import load_reference_data, seed, seed_allowed
 from backend.farmer.pages import router as farmer_pages_router
-from backend.irrigation_server.timer import run_timer, sweep_once
 from backend.farmer.router import router as farmer_router
+from backend.irrigation_server.timer import run_timer, sweep_once
 from backend.officer.pages import api_router as officer_pages_api_router
 from backend.officer.pages import public_router as officer_login_router
 from backend.officer.pages import router as officer_pages_router
@@ -50,6 +51,11 @@ async def lifespan(app: FastAPI):
         # Start the agent's tool servers now, so the first run is quick too.
         prewarm = asyncio.create_task(warm_tools.get())
         prewarm.add_done_callback(lambda t: t.exception())  # a failure only means a cold first run
+    if settings.translate_in_background:
+        # Translate the farmer page into Luganda and Runyankole ahead of time.
+        from backend.farmer.router import warm_farmer_languages
+
+        threading.Thread(target=warm_farmer_languages, daemon=True).start()
     try:
         yield
     finally:

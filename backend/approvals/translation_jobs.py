@@ -82,6 +82,11 @@ def _pretranslate(advice_id: int) -> None:
             if advice is None or advice.status != "pending_review" or not advice.draft_text:
                 return
             text = advice.draft_text
+        # Start Luganda, Runyankole and Swahili too, on their own queue, so they are
+        # usually ready before the officer approves (unchanged drafts reuse them).
+        from backend.agent import translations
+
+        translations.ensure_all_languages(text)
         result = _translate_with_retries(text)
         with session_scope() as session:
             row = session.get(AdviceTranslation, advice_id) or AdviceTranslation(advice_id=advice_id, source_text=text)
@@ -142,7 +147,7 @@ def _translate_after_approval(advice_id: int, text: str) -> None:
 def prepare_voice(advice_id: int) -> None:
     """Make the read-aloud audio of approved advice for its farmers before they open
     the page (Sunbird needs 15-70 s per piece, too long to wait for on Listen)."""
-    if not settings.translator_configured:
+    if not translator_available():
         return
     try:
         from backend.farmer.router import prepare_voice_for_group  # avoids an import cycle
@@ -157,7 +162,7 @@ def prepare_voice(advice_id: int) -> None:
 
 
 def prepare_voice_after_approval(advice_id: int) -> None:
-    if settings.translator_configured and settings.translate_in_background:
+    if translator_available() and settings.translate_in_background:
         threading.Thread(target=prepare_voice, args=(advice_id,), daemon=True).start()
 
 

@@ -6,11 +6,12 @@
 from __future__ import annotations
 
 import hashlib
-import json
 import hmac
+import json
 import logging
 import re
 import threading
+import time
 from concurrent.futures import Future, ThreadPoolExecutor
 from concurrent.futures import TimeoutError as FutureTimeout
 from datetime import date, datetime, timezone
@@ -24,19 +25,21 @@ from pydantic import BaseModel, Field, ValidationError, field_validator
 from sqlalchemy import text
 from sqlmodel import select
 
+from backend.agent import model_client, translations
 from backend.core.config import settings
 from backend.core.database import session_scope
 from backend.core.phones import normalize_phone
 from backend.db.models import (
     Advice,
-    IrrigationProposal,
     Approval,
     Contact,
     CropCalendar,
     District,
+    FarmerLanguage,
     Followup,
     FollowupAnswer,
     Household,
+    IrrigationProposal,
     Observation,
     Officer,
     Plot,
@@ -47,7 +50,6 @@ from backend.db.models import (
     VisitFlag,
     utcnow,
 )
-from backend.agent import model_client
 from backend.logging.tool_log import run_logged
 from backend.officer.auth import farmer_phone_for_request, signed_in_farmer, signed_in_officer
 from backend.officer.ussd import officer_ussd_reply
@@ -91,7 +93,11 @@ def _household_for_phone(session, phone: str) -> Household | None:
     return household if household and household.consent_given else None
 
 
-def _advice_for_group(session, group_id: int) -> dict:
+def _advice_for_group(session, group_id: int, lang: str | None = None) -> dict:
+    """The newest approved advice. lang None keeps the long-standing behaviour (the
+    Karamojong translation when there is one, else English); "en" is always the
+    English; kdj/lug/nyn/sw is that language's stored translation, or the English
+    with translating=True while it is being made in the background."""
     row = session.execute(
         text(
             "SELECT id, status, final_text, translated_text, language, created_at "
@@ -111,12 +117,27 @@ def _advice_for_group(session, group_id: int) -> dict:
         officer_name = officer.name if officer else None
 
     shown_text = row["translated_text"] or row["final_text"]
+    language = settings.farmer_language if row["translated_text"] else (row["language"] or "English")
+    translating = False
+    lang = _canonical_voice_lang(lang) if lang else None
+    if lang == "en":
+        shown_text, language = row["final_text"], "English"
+    elif lang and lang != "en":
+        found = row["translated_text"] if lang == "kdj" else None
+        found = found or translations.lookup(row["final_text"] or "", lang, priority=True)
+        if found:
+            shown_text, language = found, translations.LANGUAGES[lang][0]
+        else:
+            shown_text, language = row["final_text"], "English"
+            translating = translations.available()
     return {
         "has_advice": True,
         "advice_id": row["id"],
         "status": row["status"],
         "text": shown_text,
-        "language": settings.farmer_language if row["translated_text"] else (row["language"] or "English"),
+        "english_text": row["final_text"],
+        "language": language,
+        "translating": translating,
         "officer_name": officer_name,
         "date": str(row["created_at"]),
     }
@@ -249,19 +270,19 @@ def create_visit_request(request: Request, body: VisitRequestBody):
 
 
 @router.get("/api/farmer/advice")
-def farmer_advice(request: Request, phone: str = ""):
+def farmer_advice(request: Request, phone: str = "", lang: str | None = None):
     phone = farmer_phone_for_request(request, phone)
     with session_scope() as session:
         household = _household_for_phone(session, phone)
         if household is None:
             raise HTTPException(404, "This number is not registered. Please ask your extension officer.")
-        info = _advice_for_group(session, household.group_id)
+        info = _advice_for_group(session, household.group_id, lang)
         _log_advice_viewed(session, household, info, "farmer_web")
         return info
 
 
 @router.get("/api/farmer/updates")
-def farmer_updates(request: Request, phone: str = ""):
+def farmer_updates(request: Request, phone: str = "", lang: str | None = None):
     phone = farmer_phone_for_request(request, phone)
     """What the farmer page polls in the background, so officer decisions (a report
     checked, a visit done, advice approved) appear without a reload. Not logged as
@@ -271,9 +292,35 @@ def farmer_updates(request: Request, phone: str = ""):
         if household is None:
             raise HTTPException(404, "This number is not registered. Please ask your extension officer.")
         return {
-            "advice": _advice_for_group(session, household.group_id),
+            "advice": _advice_for_group(session, household.group_id, lang),
             "recent_requests": _recent_farmer_requests(session, household),
         }
+
+
+class FarmerLanguageBody(BaseModel):
+    lang: str
+
+
+@router.post("/api/farmer/language")
+def set_farmer_language(request: Request, body: FarmerLanguageBody):
+    """Remember the language the farmer picked, so approved advice and its voice are
+    made ready in it before they next open the page."""
+    farmer = signed_in_farmer(request)
+    if farmer is None:
+        raise HTTPException(401, "Please sign in first.")
+    lang = _canonical_voice_lang(body.lang)
+    with session_scope() as session:
+        household = _household_for_phone(session, farmer["phone"])
+        if household is None:
+            raise HTTPException(404, "This number is not registered. Please ask your extension officer.")
+        row = session.get(FarmerLanguage, household.id) or FarmerLanguage(household_id=household.id)
+        row.lang, row.updated_at = lang, datetime.now(timezone.utc)
+        session.add(row)
+        session.commit()
+        info = _advice_for_group(session, household.group_id)
+    if lang != "en" and info.get("has_advice"):
+        translations.ensure(info.get("english_text") or "", lang, priority=True)
+    return {"lang": lang}
 
 
 @router.get("/api/farmer/profile")
@@ -365,6 +412,7 @@ def farmer_dashboard(request: Request, phone: str = ""):
             weather = impl.get_weather(latitude=coordinates[0], longitude=coordinates[1])
         except ToolError as exc:
             err_text = str(exc)
+            logger.warning("farmer dashboard weather failed at %s: %s", coordinates, err_text)
             if "429" in err_text or "Too Many Requests" in err_text:
                 weather_error = "Weather service rate limit reached. Retrying automatically..."
             else:
@@ -783,6 +831,8 @@ VOICE_LANG_LABELS = {
     "karamojong": "Ngakarimojong",
     "sw": "Kiswahili",
     "swahili": "Kiswahili",
+    "lug": "Luganda",
+    "nyn": "Runyankole",
 }
 
 
@@ -792,6 +842,10 @@ def _canonical_voice_lang(lang: str) -> str:
         return "sw"
     if cleaned in ("kdj", "karamojong", "ngakarimojong", "ngakarimonjong"):
         return "kdj"
+    if cleaned in ("lug", "luganda", "ganda"):
+        return "lug"
+    if cleaned in ("nyn", "runyankole", "runyankore", "nyankole"):
+        return "nyn"
     return "en"
 
 
@@ -808,12 +862,56 @@ def get_farmer_voice_script(request: Request, phone: str = "", lang: str = "en",
     if who is not None:
         # Start making every piece's audio now, in parallel, so by the time the
         # farmer presses Listen (or reaches a piece) it is usually ready.
-        prepare_voice_audio(script["language"], [p["text"] for p in script["pieces"]], _actor(who))
+        _prepare_script_audio(script, _actor(who))
     return script
+
+
+def _prepare_script_audio(script: dict, actor: str = "app") -> None:
+    by_lang: dict[str, list[str]] = {}
+    for piece in script["pieces"]:
+        by_lang.setdefault(piece.get("lang") or script["language"], []).append(piece["text"])
+    for lang, texts in by_lang.items():
+        prepare_voice_audio(lang, texts, actor)
 
 
 def _actor(who: dict) -> str:
     return str(who.get("officer_id")) if "officer_id" in who else "farmer"
+
+
+def _translated_voice_script(phone: str, lang: str, view: str) -> dict:
+    """Luganda and Runyankole: the English script, sentence by sentence, from the
+    translation store. Names, places and numbers are kept as they are; the advice
+    sentence uses the advice's own translation. A sentence not translated yet is
+    read in English this time (and is being translated for next time)."""
+    english = build_voice_script(phone, "en", view)
+    keep: list[str] = []
+    advice_en = advice_tr = None
+    if phone:
+        with session_scope() as session:
+            household = _household_for_phone(session, phone)
+            if household is not None:
+                contact = _contact_for_phone(session, household, phone)
+                village = session.get(Village, household.village_id)
+                district = session.get(District, village.district_id) if village else None
+                keep += [contact.name if contact else "", village.name if village else "", district.name if district else ""]
+                info = _advice_for_group(session, household.group_id, lang)
+                if info.get("has_advice"):
+                    keep.append(info.get("officer_name") or "")
+                    advice_en = info.get("english_text") or ""
+                    advice_tr = None if info.get("translating") else info.get("text")
+    keep_t = tuple(k for k in keep if k)
+    sentences = []
+    for item in english["sentences"]:
+        text = item["text"]
+        has_advice = bool(advice_en) and advice_en in text
+        if has_advice and not advice_tr:
+            translated = None  # the advice itself is still being translated
+        else:
+            translated = translations.lookup(
+                text, lang, keep_t + ((advice_en,) if has_advice else ()), {advice_en: advice_tr} if has_advice else None
+            )
+        sentences.append({"label": item["label"], "text": translated or text, "lang": lang if translated else "en"})
+    return _script(lang, VOICE_LANG_LABELS[lang], view, sentences)
 
 
 def _script(norm_lang: str, lang_name: str, view: str, sentences: list[dict[str, str]]) -> dict:
@@ -833,6 +931,8 @@ def build_voice_script(phone: str, lang: str = "en", view: str = "dashboard") ->
     norm_lang = _canonical_voice_lang(lang)
     lang_name = VOICE_LANG_LABELS.get(norm_lang, "English")
     sentences: list[dict[str, str]] = []
+    if norm_lang in ("lug", "nyn"):
+        return _translated_voice_script(phone, norm_lang, view)
 
     if view == "signin" or (view == "dashboard" and not phone):
         if norm_lang == "sw":
@@ -901,7 +1001,7 @@ def build_voice_script(phone: str, lang: str = "en", view: str = "dashboard") ->
         district = session.get(District, village.district_id) if village else None
         loc_str = ", ".join(filter(None, [village.name if village else None, district.name if district else None]))
 
-        advice_info = _advice_for_group(session, household.group_id)
+        advice_info = _advice_for_group(session, household.group_id, norm_lang)
 
         if view == "advice":
             if advice_info.get("has_advice"):
@@ -1038,15 +1138,15 @@ def split_for_speech(sentences: list[dict[str, str]]) -> list[dict[str, str]]:
         for part in parts:
             first_piece = not pieces and not current
             if current and len(current + " " + part) > SPEECH_PIECE_MAX:
-                pieces.append({"label": item.get("label", ""), "text": current})
+                pieces.append({"label": item.get("label", ""), "text": current, "lang": item.get("lang")})
                 current = part
             else:
                 current = f"{current} {part}" if current else part
             if first_piece and not pieces:
-                pieces.append({"label": item.get("label", ""), "text": current})
+                pieces.append({"label": item.get("label", ""), "text": current, "lang": item.get("lang")})
                 current = ""
         if current:
-            pieces.append({"label": item.get("label", ""), "text": current})
+            pieces.append({"label": item.get("label", ""), "text": current, "lang": item.get("lang")})
     return pieces
 
 
@@ -1135,26 +1235,61 @@ def prepare_voice_audio(lang: str, texts: list[str], actor: str = "app") -> None
             _voice_job(lang, text, actor)
 
 
-def prepare_voice_for_group(group_id: int, langs: tuple[str, ...] = ("kdj", "en")) -> None:
-    """After advice is approved (and translated), make the read-aloud audio for every
-    farmer in the group, so their first Listen plays at once."""
-    if not settings.translator_configured:
+def prepare_voice_for_group(group_id: int, translate_wait: float = 240.0) -> None:
+    """After advice is approved: translate it, and the farmer page's sentences, into
+    each farmer's chosen language (Karamojong if they never chose), then make the
+    read-aloud audio, so their first look and first Listen are ready at once.
+    Runs in a background thread; it may wait for slow translations."""
+    if not translations.available():
         return
     with session_scope() as session:
-        phones = [
-            c.phone
-            for h in session.exec(select(Household).where(Household.group_id == group_id)).all()
-            for c in session.exec(select(Contact).where(Contact.household_id == h.id)).all()
-            if c.phone
-        ]
-    for phone in phones:
-        for lang in langs:
-            for view in ("dashboard", "advice"):
-                try:
-                    script = build_voice_script(phone, lang, view)
-                except Exception:  # noqa: BLE001 - best effort only
-                    continue
-                prepare_voice_audio(lang, [p["text"] for p in script["pieces"]])
+        wanted: list[tuple[str, str]] = []
+        for h in session.exec(select(Household).where(Household.group_id == group_id)).all():
+            pref = session.get(FarmerLanguage, h.id)
+            lang = pref.lang if pref else "kdj"
+            for c in session.exec(select(Contact).where(Contact.household_id == h.id)).all():
+                if c.phone:
+                    wanted.append((c.phone, lang))
+    scripts = lambda phone, lang: [build_voice_script(phone, lang, view) for view in ("dashboard", "advice")]  # noqa: E731
+    # First pass starts every missing translation; wait for them, then build again.
+    for phone, lang in wanted:
+        try:
+            scripts(phone, lang)
+        except Exception:  # noqa: BLE001 - best effort only
+            logger.exception("building the voice script for %s failed", lang)
+    deadline = time.monotonic() + translate_wait
+    for job in list(translations._JOBS.values()):
+        try:
+            job.result(timeout=max(0.0, deadline - time.monotonic()))
+        except Exception:  # noqa: BLE001
+            pass
+    if not settings.translator_configured:
+        return  # no Sunbird key: no voice to make
+    for phone, lang in wanted:
+        try:
+            for script in scripts(phone, lang):
+                _prepare_script_audio(script)
+        except Exception:  # noqa: BLE001
+            logger.exception("preparing voice for %s failed", lang)
+
+
+def warm_farmer_languages() -> None:
+    """At start-up: translate the farmer page's fixed sentences, and each registered
+    farmer's page, into Luganda and Runyankole, so they show at once. Translated
+    sentences are stored, so this costs nothing after the first time."""
+    if not translations.available():
+        return
+    try:
+        with session_scope() as session:
+            phones = [c.phone for c in session.exec(select(Contact)).all() if c.phone]
+        for lang in ("lug", "nyn"):
+            for view in ("signin", "report", "visit", "followup"):
+                build_voice_script("", lang, view)
+            for phone in phones:
+                for view in ("dashboard", "advice"):
+                    build_voice_script(phone, lang, view)
+    except Exception:  # noqa: BLE001 - best effort only
+        logger.exception("warming farmer languages failed")
 
 
 @router.post("/api/farmer/voice-audio")

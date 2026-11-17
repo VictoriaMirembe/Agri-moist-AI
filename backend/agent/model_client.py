@@ -297,7 +297,7 @@ def _translate_with_sunbird(text: str, target_language: str) -> dict[str, Any] |
             settings.sunbird_api_url.rstrip("/") + "/tasks/translate",
             headers={"Authorization": f"Bearer {settings.sunbird_api_key}"},
             json={"source_language": "eng", "target_language": target, "text": text},
-            timeout=60,
+            timeout=120,
         )
         response.raise_for_status()
         body = response.json()
@@ -331,6 +331,8 @@ SUNBIRD_VOICES = {
     "en": ("eng", "salt_eng_0001"),
     "sw": ("swa", "waxal_swa_0006"),
     "kdj": ("teo", "salt_teo_0001"),
+    "lug": ("lug", "Namuli"),
+    "nyn": ("nyn", "Kabasinga"),
 }
 
 

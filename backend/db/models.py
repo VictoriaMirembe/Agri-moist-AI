@@ -174,6 +174,29 @@ class AdviceTranslation(SQLModel, table=True):
     created_at: datetime = Field(default_factory=utcnow)
 
 
+class TextTranslation(SQLModel, table=True):
+    """One English text in one farmer language, translated once and kept: approved
+    advice and the farmer page's own sentences. Numbers and names are swapped for
+    placeholders ([A], [B]...) before translating, so one stored row serves every
+    farmer and every reading. Never holds unapproved advice."""
+
+    lang: str = Field(primary_key=True)  # kdj, lug, nyn, sw
+    source_hash: str = Field(primary_key=True)  # sha256 of the placeholder text
+    source_text: str
+    translated_text: str
+    model: str = ""
+    created_at: datetime = Field(default_factory=utcnow)
+
+
+class FarmerLanguage(SQLModel, table=True):
+    """The language a farmer chose on their page, so approved advice and its voice
+    can be made ready in that language before they open it."""
+
+    household_id: int = Field(primary_key=True, foreign_key="household.id")
+    lang: str = "en"
+    updated_at: datetime = Field(default_factory=utcnow)
+
+
 class IrrigationProposal(SQLModel, table=True):
     """A proposal to irrigate one plot (SIMULATED valve, no hardware). The decision
     itself lives on its Advice row (status pending_review -> approved / rejected /

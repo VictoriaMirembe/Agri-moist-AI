@@ -141,8 +141,8 @@ def test_farmer_dashboard_loads_registered_profile_and_approved_advice(farmer_cl
 
     assert response.status_code == 200
     assert '<span id="farmer-name">farmer</span>' in response.text
-    assert 'getJSON("/api/farmer/dashboard?phone="' in response.text
-    assert 'getJSON("/api/farmer/advice?phone="' in response.text
+    assert 'getJSON("/api/farmer/dashboard" + farmerQuery())' in response.text
+    assert 'getJSON("/api/farmer/advice" + farmerQuery())' in response.text
     assert 'data-view-link="report"' in response.text
     assert 'data-view-link="visit"' in response.text
     assert "{%" not in response.text
